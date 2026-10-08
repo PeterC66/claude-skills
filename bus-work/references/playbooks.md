@@ -4,9 +4,9 @@ The operative content of runbooks R1–R4 and Pol1, inlined so nobody has to ope
 
 Paths used below:
 
-- `PORTAL` = `C:\Claude\community-bus-maps`
-- `SK` = `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`
-- `BW` = `C:\u3a St Ives\.claude\skills\bus-work\assets`
+- `PORTAL` = `C:\Buses\community-bus-maps`
+- `SK` = `C:\Buses\claude-skills\make-bus-leaflet\assets`
+- `BW` = `C:\Buses\claude-skills\bus-work\assets`
 
 ---
 
@@ -42,7 +42,7 @@ Nothing else on the list matters while this is true: the engine no longer reprod
 **The read-only worklist token cannot tell you which.** `GET /api/maps` gives `currentVersion` against `publishedVersion` and stops there; the draft's content exists only in the live store. Read it over SSH. `<id>` below is the map's numeric id, which is the last segment of the worklist row's own URL — `/app/maps/3` is id `3` — and it is the only placeholder in either block:
 
 ```powershell
-cd "C:\Claude\community-bus-maps"
+cd "C:\Buses\community-bus-maps"
 npm run ssh -- "docker compose exec -T portal node -e \"import('./src/db/index.js').then(m=>{const db=m.db||m.default;for(const r of db.prepare('SELECT id,created_at,major,minor,note,review_state,data_change_json,overrides_json FROM map_version WHERE map_id=<id> ORDER BY id DESC LIMIT 3').all()){console.log(r.id,'v'+r.major+'.'+r.minor,r.created_at,r.review_state,JSON.stringify(r.note));console.log('  data_change:',(r.data_change_json||'NULL').slice(0,200));console.log('  overrides:',(r.overrides_json||'').slice(0,400));}})\""
 ```
 
@@ -51,7 +51,7 @@ npm run ssh -- "docker compose exec -T portal node -e \"import('./src/db/index.j
 **For an overrides-only save, the whole review is a text diff of the two SVGs, and it is worth doing before opening a single image.** It names every label that appeared, disappeared or was truncated, which is exactly the class of change an overrides save can make and the only class it can make. Compare the draft's storage key against the published one — `<old>` and `<new>` are storage keys as they appear on disk, e.g. `v8.0` and `v8.1`, and `<sheet>` is `internal`, `external` or `internal-schematic`:
 
 ```powershell
-cd "C:\Claude\community-bus-maps"
+cd "C:\Buses\community-bus-maps"
 npm run ssh -- "docker compose exec -T portal node -e \"const fs=require('fs');const d='/data/maps/<id>/renders/';const T=v=>(fs.readFileSync(d+v+'/<sheet>.svg','utf8').match(/>([^<>]+)</g)||[]).map(x=>x.slice(1,-1).trim()).filter(Boolean);const a=T('<old>'),b=T('<new>');const A=new Set(a),B=new Set(b);console.log('GONE:',[...A].filter(x=>!B.has(x)).join(' | '));console.log('ADDED:',[...B].filter(x=>!A.has(x)).join(' | '));\""
 ```
 
@@ -62,7 +62,7 @@ npm run ssh -- "docker compose exec -T portal node -e \"const fs=require('fs');c
 **Then look at the sheets, at full resolution, the same as any other review.** The draft is not on the public site, so `Collected_latests` will not have it and the portal preview needs a signed-in session; copy the print JPG out of the store and open it. From the portal repo root, `<id>`, `<new>` and `<sheet>` are as above and `<local path>` is wherever you want the file:
 
 ```powershell
-cd "C:\Claude\community-bus-maps"
+cd "C:\Buses\community-bus-maps"
 npm run ssh -- "docker compose cp portal:/data/maps/<id>/renders/<new>/<sheet>.jpg /tmp/draft.jpg"
 ```
 
@@ -109,7 +109,7 @@ Run the right skill for the item's `kind` — `make-bus-leaflet` (area) or `make
 Stop the dev server first (the importer writes). Then, in `PORTAL`:
 
 ```powershell
-cd "C:\Claude\community-bus-maps"
+cd "C:\Buses\community-bus-maps"
 node scripts/import-map.mjs --request <id> --src "<the S5-render dir>"
 ```
 
@@ -131,7 +131,7 @@ It refuses, before touching anything, if:
 The entire system rests on v1.0 == the shipped leaflet.
 
 ```powershell
-cd "C:\Claude\community-bus-maps"
+cd "C:\Buses\community-bus-maps"
 $env:FIXTURE_DIR = "<the S5-render dir>"; npm run verify:area
 ```
 
@@ -156,7 +156,7 @@ Pre-publish, the object store and v1.0 are disposable: delete the map row and it
    - **SAFE, and the row carries an `unattended` block** (a town, never a place; buses-data OA-426): the whole rebuild is one command, and it is the row's own first `do` step. It runs from any folder, because the script finds its own modules and takes the estate as `--root`. `<Town>` is the town as `Areas/` spells it, or a place map's name as the review lists it (the folder and `--kind place` come from the review, so the same command stages a place), `<scan date>` is the report the row is joined to, and `<who>` is your own session name (`sched-HHMM` for a tick), recorded on every stage it opens; the path below is real rather than a placeholder:
 
      ```bash
-     python3 "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/refresh_town.py" --town "<Town>" --scan <scan date> --apply --by <who>
+     python3 "C:/Buses/claude-skills/make-bus-leaflet/assets/refresh_town.py" --town "<Town>" --scan <scan date> --apply --by <who>
      ```
 
      Leave `--apply` off and it is a dry run that writes nothing and prints what it would change. It patches only the operator names and day strings the feed moved, runs S1, S3, S4 and S5 through the documented stage order, and **refuses rather than half-applying**: a value a person wrote, a label it cannot account for, a blocking build warning or a sheet that will not render each stop it with nothing committed. A non-zero exit is something to read, never something to retry.
@@ -168,16 +168,16 @@ Pre-publish, the object store and v1.0 are disposable: delete the map row and it
    **Then the month's ink review, before anything is staged** (buses-data OA-429). Staging emails the customer, so a sheet whose ink moved is shown to Peter first, on one page for the whole month, and staged only once he has accepted it; a map whose ink did not move, once the build stamp is ignored, goes ahead without him. It runs from any folder, the path is real, and `<scan date>` is the report the rows are joined to; `--town "<Town>,<Town>"` adds towns a person rebuilt to the SAFE ones the grading names, and `--place "<Place>,<Place>"` adds place maps by their folder name, wherever they are filed (buses-data OA-430 item 3) — a place in the review is answered like a town, but `stage_refresh.mjs` refuses it and a person delivers it. A map named once stays in that scan's review, with its answer, through every later collection, so maps rebuilt one at a time can each be named on their own (buses-data OA-430):
 
      ```bash
-     node "C:/u3a St Ives/.claude/skills/bus-work/assets/ink_review.mjs" --scan <scan date>
+     node "C:/Buses/claude-skills/bus-work/assets/ink_review.mjs" --scan <scan date>
      ```
 
      It writes the record and his answers to `_gtfs/ink-review_<scan date>.json` and the page, with before-and-after crops of each change, to `loop/ink-review/<scan date>/index.html`. Peter answers in words — *accept Ramsey*, *hold March, the museum icon is doubled* — and the session records each with `--answer "<Town>" --verdict accept|hold --by <who>`. **The tool commits the record itself** (the one `_gtfs/ink-review_<scan date>.json`, by pathspec, subject `ink-review: …`, never pushed; `--no-commit` opts out), as does `stage_refresh.mjs` after it stages or sends a digest, so the checkout is not left dirty for the tick gate — a commit that cannot be made is named on stderr, with the record still written. **Stage only what `--deliverable` lists under `deliver`.** An answer is about one build: a map rebuilt after it was accepted is waiting again — **unless the rebuild is the same picture** (buses-data OA-584): when the answered build and the current one are both still on disk and every sheet is byte-identical once the footer's `build N.N · date` stamp is neutralised, the answer is carried forward with `after` re-pointed and a `carried: { from, why }` note naming the build it was first given against, so a stamp-only rollout does not ask Peter about one picture again. Ink moved, a sheet added or dropped, or the answered build pruned from disk supersedes as before (`assets/prove-red-ink-review.mjs`, section 5a).
-2. **Stage it**, in `PORTAL` (`C:\Claude\community-bus-maps`):
+2. **Stage it**, in `PORTAL` (`C:\Buses\community-bus-maps`):
 
    - **A town or a place in the month's ink review — use the gated step** (buses-data OA-428). It runs from any folder and the path is real; `<scan date>` is the report the row is joined to, `<Town>` is the town as `Areas/` spells it, `<slug>` is the `slug` the refresh row carries, and `<who>` is your own session name:
 
      ```bash
-     node --env-file="C:/Claude/community-bus-maps/.env" "C:/u3a St Ives/.claude/skills/bus-work/assets/stage_refresh.mjs" --scan <scan date> --town "<Town>" --map <slug> --apply --by <who>
+     node --env-file="C:/Buses/community-bus-maps/.env" "C:/Buses/claude-skills/bus-work/assets/stage_refresh.mjs" --scan <scan date> --town "<Town>" --map <slug> --apply --by <who>
      ```
 
      Leave `--apply` off and it prints the one `npm run deliver` command it would run, and runs nothing. It refuses before anything leaves the laptop if the town is not under `deliver` in `ink_review.mjs --deliverable`, if the newest S5 render is not the build the review compared, or if that build was already staged (a second run would be a second email). After the deliver command it records `staged` on the map in `_gtfs/ink-review_<scan date>.json` and reads the portal back for the update waiting on its customer, which needs `BUSMAPS_URL` and `BUSMAPS_TOKEN` from the portal's `.env` — hence `--env-file` in the command above: without it the command stages, and only then fails to read the portal back. A scheduled tick may run exactly this, for a town under `deliver` and no other (buses-data OA-428). **One email per customer per scan** (buses-data OA-152): the deliver command runs with `--no-notify`, the staging is recorded as owed a digest, and the run that stages the scan's LAST town under `deliver` sends the portal's `notify-update-round.mjs` over ssh for every map owed one and records `notified` beside `staged`; the server groups them by customer. A map Peter has not yet answered does not hold the digest back — accepted later, it goes out in one of its own. To send whatever is owed now — clearing a hold — add `--flush` in place of `--town` and `--map`: `--scan <scan date> --flush`, dry run, then with `--apply --by <who>`. **A non-zero exit is a hold, never a retry**, from either the deliver or the digest: the record may not show what reached the host. It stops at *staged*; publication is the customer's Accept.
@@ -187,7 +187,7 @@ Pre-publish, the object store and v1.0 are disposable: delete the map row and it
 
 Either way it stages *beside* the live map and never touches it, computes a plain-language service-facts diff (routes added/removed, descriptions, stops, operators, validity dates) and prints it. **Read that diff** — it is the sanity check that the regeneration did what the scan said it would.
 
-   **Two side effects of the live form, confirmed over a 13-map pass on 2026-08-18.** Each call **emails the customer** an "update is ready" notification, and each call does its own `docker compose stop/start portal`. A one-map refresh is unremarkable; a whole-estate pass means one email and one short outage *per map*, so warn the customer first and don't run it during anything time-sensitive. Windows absolute paths (`C:/u3a St Ives/…`, spaces and all) are fine as `--src` — `scp` handles the drive letter.
+   **Two side effects of the live form, confirmed over a 13-map pass on 2026-08-18.** Each call **emails the customer** an "update is ready" notification, and each call does its own `docker compose stop/start portal`. A one-map refresh is unremarkable; a whole-estate pass means one email and one short outage *per map*, so warn the customer first and don't run it during anything time-sensitive. Windows absolute paths (`C:/Buses/…`; the old home had spaces in it and they were fine too) are fine as `--src` — `scp` handles the drive letter.
 
 3. **It is then the customer's move**: they see an old-vs-new preview and Accept (their colours + POI toggles re-applied onto the fresh data as a new major version, which then goes through review) or Decline. **Accepting is blocked while a publication awaits review** — the accept returns a **409** ("Withdraw that request before accepting an update") until the open publish request is withdrawn, which is a real step and not a tidy-up. Accepting, withdrawing and changing a map's outputs are **HTTP endpoints only** — there is no UI-free CLI for a single one-off action, and it needs a signed-in admin session, so a lone map is browser work (or the admin console's **Refreshes** tab, `/app/admin`, which carries a link plus Accept/Decline buttons — added 2026-08-10, needs a VPS deploy to reach the live site since it's frontend code). **If you're clearing several staged maps at once — e.g. everything an engine upgrade left behind — see the `bulk-accept-publish` playbook below instead of clicking through each one.**
 4. Refusals worth knowing: a newer refresh **supersedes** any still-pending one (one open per map); the script refuses if the map has no built data yet ("nothing to refresh" — build it first); don't stage a no-op if the diff says nothing changed.
@@ -220,11 +220,11 @@ Collected_latests\Temp_places_internal-schematic\*.jpg
 `community-bus-maps/scripts/accept-publish-batch.mjs` (`npm run accept-publish`, PR #54, 2026-08-19) drives withdraw → accept → submit → approve → live-verify against the public API, for a named set of already-staged maps, in one run. Run from `PORTAL`:
 
 ```powershell
-cd "C:\Claude\community-bus-maps"
+cd "C:\Buses\community-bus-maps"
 npm run accept-publish -- --cookie "<cbm_session value>" --reviewed-by "<your name>" --note "<what this round is>" --yes
 ```
 
-**The `cd` is not decoration.** `npm` looks for `package.json` in the *current* directory, and there is none in the Buses repo — running this from `C:\u3a St Ives\Using AI\Buses` fails with `ENOENT ... Could not read package.json` and nothing else. It happened on 2026-08-19.
+**The `cd` is not decoration.** `npm` looks for `package.json` in the *current* directory, and there is none in the Buses repo — running this from `C:\Buses\buses-data` fails with `ENOENT ... Could not read package.json` and nothing else. It happened on 2026-08-19.
 
 - `<cbm_session value>` — the admin session cookie. Sign in to busmaps.uk as admin, copy it from dev tools (Application/Storage → Cookies), or pass `--mint` instead to have it minted over SSH — same mint-and-revoke pattern as before, **ask Peter's OK each time**, it is not a standing approval.
 - `<your name>` — mandatory. This is the record of who did step 1; the script never looks at a rendered sheet itself, so leaving this out (or filling it in without having actually reviewed anything) defeats the one check in this whole process that has caught a real regression before.
@@ -239,7 +239,7 @@ npm run accept-publish -- --cookie "<cbm_session value>" --reviewed-by "<your na
 **Trust the public API, not the summary line.** The verify step reads `/api/public/maps/<slug>` back; when it says a map failed, confirm before re-running anything, because a broken *check* used to look exactly like a failed publish (fixed in PR #55, but the habit is the point). The quickest independent read:
 
 ```powershell
-cd "C:\Claude\community-bus-maps"
+cd "C:\Buses\community-bus-maps"
 node -e "fetch('https://busmaps.uk/api/public/maps/<slug>?_='+Date.now()).then(r=>r.json()).then(j=>console.log(j.map && j.map.version))"
 ```
 
@@ -288,17 +288,17 @@ The map's shipped build was drawn by an older engine template. Harmless — it i
 **The row is per MAP now, and that is the point.** It used to be a single `engine-stale` row naming every behind town with `rollout.js --all` for a command — an all-or-nothing debt nobody could take a bite out of and a loop tick could not claim at all. Each row is one unit of work that commits coherently, and a place gets one too; places had no staleness row of any kind before. The exact commands come with the row, and these are the shapes they take.
 
 ```powershell
-cd "C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets"
+cd "C:\Buses\claude-skills\make-bus-leaflet\assets"
 node rollout.js --town "St Ives"                    # dry run: what would change
 node rollout.js --town "St Ives" --apply            # writes; minor version bump
 node rollout_places.js --place "High Wycombe Aldi" --apply
 ```
 
-(`--town "St Ives"` for one town; `--place "High Wycombe Aldi"` on `rollout_places.js` for a place. It finds the maps through `--buses`, which defaults to `C:\u3a St Ives\Using AI\Buses`, so only pass that if the tree has moved.) **To see every map's verdict at once, before choosing a row, run the estate-wide dry run in exactly this form**, from any folder, with nothing in front of it and nothing after it: `node "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/rollout.js" --all`. It writes nothing. That string is an allow rule in buses-data's `.claude/settings.local.json`; auto mode sets the broad `Bash(node *)` rule aside, so any other spelling — `node rollout.js --all`, a `cd` in front, a pipe behind — goes to the classifier, which refused it to a loop tick on 2026-09-27 (buses-data `loop/README.md`). `--all --apply` is deliberately not in the rule. The same goes for a CI wait: `gh pr checks <n> --repo <owner/name> --watch`, where `<n>` is the pull request number and `<owner/name>` is the repository, such as `PeterC66/claude-skills`, is allowed only with no output redirect. It creates a new S4 from the current template with the config unchanged, diffs the label set against the previous build, renders S5 and refreshes `_latest`. **It stops before publishing if a label was lost** — that is a real signal, not a nuisance; review the loss rather than reaching for `--force`.
+(`--town "St Ives"` for one town; `--place "High Wycombe Aldi"` on `rollout_places.js` for a place. It finds the maps through `--buses`, which defaults to `C:\Buses\buses-data`, so only pass that if the tree has moved.) **To see every map's verdict at once, before choosing a row, run the estate-wide dry run in exactly this form**, from any folder, with nothing in front of it and nothing after it: `node "C:/Buses/claude-skills/make-bus-leaflet/assets/rollout.js" --all`. It writes nothing. That string is an allow rule in buses-data's `.claude/settings.local.json`; auto mode sets the broad `Bash(node *)` rule aside, so any other spelling — `node rollout.js --all`, a `cd` in front, a pipe behind — goes to the classifier, which refused it to a loop tick on 2026-09-27 (buses-data `loop/README.md`). `--all --apply` is deliberately not in the rule. The same goes for a CI wait: `gh pr checks <n> --repo <owner/name> --watch`, where `<n>` is the pull request number and `<owner/name>` is the repository, such as `PeterC66/claude-skills`, is allowed only with no output redirect. It creates a new S4 from the current template with the config unchanged, diffs the label set against the previous build, renders S5 and refreshes `_latest`. **It stops before publishing if a label was lost** — that is a real signal, not a nuisance; review the loss rather than reaching for `--force`.
 
 **The clock is the PIN, not the live template (buses-data OA-574, A1 of the 2026-10-06 simplification review).** An `engine-rebuild` row is raised only for a map drawn by neither the pinned engine (`engine.lock.json`) nor today's engine, and not for one the weekly shadow rebuild has already shown to be stamp-only: `make-bus-leaflet/assets/pin_clock.js` gives each map one of `current`, `ahead` (drawn by today's engine, which the pin has not adopted), `stamp-only` (behind the pin, but a shadow dry run on exactly the pinned engine, taken after the map was built, said STAMP-STALE), `behind` (a rebuild is owed) or `unstamped`. `status.js` prints the same answer in its Engine column and names the pin in the table heading; its byte gate still regenerates with the live template and asks a behind map the second question under its own engine, so nothing about what is checked has moved, only what is counted as owed. The area fixture's town (`fixture_donor.js`) is asked strictly: it must equal the pin. **Slice 2 (same action) finished the rest:** `--rebuild-stale` is gone from both rollouts and from this row, which now has a dry run and one write; `engine-pin.mjs --bump` takes its donor from `test/fixtures/estate` at the engine's own commit instead of a live town, and refuses unless `loop/shadow-rebuild.json` names the engine being adopted; `prove-red-status.js` borrows its donor from that estate too. Still open: the area fixture's own special case (`fixture_donor.js`, the portal's St Ives copy), which is a portal re-source and not a one-line change.
 
-**And only for a map the public can see (buses-data OA-607, 8 October 2026).** A map the live site's `/api/public/maps` does not list raises no `engine-rebuild` row and is held to no 60-day engine-lag ceiling. It is rebuilt when it is next activated — a refresh, a publish, a letter — because under OA-574 the pin moves weekly, and each move re-raised one hold per hidden map. The worklist names those maps on one line and in `meta.offPortal`, and the board prints them as `ENGINE STALE, OFF THE PORTAL`. The question is asked once, by `make-bus-leaflet/assets/portal_listing.js`, which the S6 limit shares. A list that could not be read (the site down, or `--no-live`) raises every row exactly as before, with a warning, so a failed read never drops a row. A map put back on the portal gets its row at the next worklist run. The falsifier is `npm run test:prove-red-off-portal`, run from `C:\u3a St Ives\.claude\skills\bus-work`; it has no placeholders.
+**And only for a map the public can see (buses-data OA-607, 8 October 2026).** A map the live site's `/api/public/maps` does not list raises no `engine-rebuild` row and is held to no 60-day engine-lag ceiling. It is rebuilt when it is next activated — a refresh, a publish, a letter — because under OA-574 the pin moves weekly, and each move re-raised one hold per hidden map. The worklist names those maps on one line and in `meta.offPortal`, and the board prints them as `ENGINE STALE, OFF THE PORTAL`. The question is asked once, by `make-bus-leaflet/assets/portal_listing.js`, which the S6 limit shares. A list that could not be read (the site down, or `--no-live`) raises every row exactly as before, with a warning, so a failed read never drops a row. A map put back on the portal gets its row at the next worklist run. The falsifier is `npm run test:prove-red-off-portal`, run from `C:\Buses\claude-skills\bus-work`; it has no placeholders.
 
 **A STAMP-STALE verdict is nothing owed, and there is no write to run for it (buses-data OA-574).** A map whose sheets already gate PASS under the live template, with only its `engine` stamp old, answers **STAMP-STALE**; `--apply` leaves it alone and says so, and the weekly shadow rebuild records the verdict, which is what lets `pin_clock.js` excuse the map from the board. Until 2026-09-26 the write was `--apply --force`, then `--apply --rebuild-stale` (buses-data OA-473, so a loop tick need not be handed `--force`); a stamp-only rebuild moved the build stamp and nothing else — Beaconsfield Simpson Centre v1.38 → v1.39 on 2026-09-25 (buses-data `1f8a7382`) was exactly that, and 73 of 254 map commits in the month before OA-574 were like it. The flag is gone and is now an unknown flag, exit 2. **`--force` is still one flag with four meanings in these tools**: rebuild a stamp-stale map, finish an UNRENDERED S4, roll old geometry forward past STALE-INPUTS, and publish past a lost label or a blocking warning; splitting it is A4 of the 2026-10-06 review. A map whose ink would move takes plain `--apply`, a STALE-INPUTS verdict is a data change that goes through the map's build order, and a lost label is reviewed, never forced. `make-bus-leaflet/tools/prove-red-rollout-stamp.js` proves `--apply` writes nothing to a stamp-only map and that the stale stamp masks neither STALE-INPUTS nor UNRENDERED.
 
@@ -308,7 +308,7 @@ node rollout_places.js --place "High Wycombe Aldi" --apply
 
 The map's latest S2 run did not ask Overpass today's landmark question, so any rebuild of it draws only the landmarks that stored pull happens to hold (buses-data OA-499). The question is read from the source of `pois_query()` in `make-bus-leaflet/assets/draft_town.py`, never from a date: the recorded `overpass-pois.txt` of the latest S2 run is split into one token per element type, tag and value, and a token the current query asks for and the recorded one lacks is owed. A run that recorded no query owes everything. The next time the query widens, every town is owed again with no edit to the board. If `pois_query()` cannot be parsed the board prints a warning and raises no row, because an empty list from a broken parser would read as every town being fresh; `npm run test:prove-red-fresh-pull`, run from `bus-work/`, holds that and the wire.
 
-The row is a SESSION row, not a rollout mode: a landmarks-only rollout gates on *no lost label*, which the first March build passed while worse, and after a pull `rollout.js` refuses STALE-INPUTS. So the pull is followed by the build order — S3 pulled, a new S4, crops judged. **A place gets the row too** (OA-499 item 2): its command is `--place` in place of `--town`, and its rebuild goes through `make-place-bus-leaflet`. A place is never owed `highway=bus_stop`, because no place generator draws an OpenStreetMap stop, and the parser reads the bbox MCP's `nwr[...]` lines a place records, so the two Godmanchester places, which asked every category that way and left the stops out on purpose, raise nothing. A place whose latest S2 has no `osm.json` gets no row, because the tool refuses one. Do not take the row for a map whose sheet is with a local reviewer, because a pull changes the sheet under their answer. When a town also has an `engine-rebuild-<map>` row, that row says to take this one first. The commands, run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`, where `<Town>` is the town's folder name under `Areas/`, `<Place>` is a place map's folder name as `status.js` prints it, and `<who>` is `sched-HHMM` for a loop tick or the session's own name otherwise:
+The row is a SESSION row, not a rollout mode: a landmarks-only rollout gates on *no lost label*, which the first March build passed while worse, and after a pull `rollout.js` refuses STALE-INPUTS. So the pull is followed by the build order — S3 pulled, a new S4, crops judged. **A place gets the row too** (OA-499 item 2): its command is `--place` in place of `--town`, and its rebuild goes through `make-place-bus-leaflet`. A place is never owed `highway=bus_stop`, because no place generator draws an OpenStreetMap stop, and the parser reads the bbox MCP's `nwr[...]` lines a place records, so the two Godmanchester places, which asked every category that way and left the stops out on purpose, raise nothing. A place whose latest S2 has no `osm.json` gets no row, because the tool refuses one. Do not take the row for a map whose sheet is with a local reviewer, because a pull changes the sheet under their answer. When a town also has an `engine-rebuild-<map>` row, that row says to take this one first. The commands, run from `C:\Buses\claude-skills\make-bus-leaflet\assets`, where `<Town>` is the town's folder name under `Areas/`, `<Place>` is a place map's folder name as `status.js` prints it, and `<who>` is `sched-HHMM` for a loop tick or the session's own name otherwise:
 
 ```powershell
 python repull_landmarks.py --town "<Town>"
@@ -372,7 +372,7 @@ If it stays unaccepted, it stays unaccepted: the customer owns their published m
 
 `BusMapsUK/bus-map-directory/` is one row per English local transport authority: whether it publishes a bus map of its whole network, whether it publishes town-level maps, and where. Every URL in it belongs to somebody else, so the directory rots on a timescale set by seventy-six councils' website reorganisations rather than by anything we do. Three rows share this playbook, and all three are about `link-check.json`, the dated record the sweep writes.
 
-**`directory-links-due` — the sweep is over a month old, or has never run.** From `C:\u3a St Ives\Using AI\Buses\BusMapsUK\bus-map-directory`, with no placeholders:
+**`directory-links-due` — the sweep is over a month old, or has never run.** From `C:\Buses\buses-data\BusMapsUK\bus-map-directory`, with no placeholders:
 
 ```bash
 node directory.mjs --links

@@ -2,10 +2,10 @@
 """days-vocabulary.py -- every distinct `days` string the estate ships, and what
 `gtfs_refresh_report.parse_days` makes of each one.
 
-Run it from the buses-data repository root (`C:\\u3a St Ives\\Using AI\\Buses`),
+Run it from the buses-data repository root (`C:\\Buses\\buses-data`),
 with no arguments and no placeholders:
 
-    python "C:/u3a St Ives/.claude/skills/make-bus-leaflet/tools/days-vocabulary.py"
+    python "C:/Buses/claude-skills/make-bus-leaflet/tools/days-vocabulary.py"
 
 Pass `--root "<some other Buses folder>"` to read a different estate.
 

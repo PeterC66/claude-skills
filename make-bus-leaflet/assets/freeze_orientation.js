@@ -10,7 +10,7 @@
  *   node freeze_orientation.js --town "March" --release --apply
  *
  * RUN IT FROM: anywhere. Paths are resolved from --buses, which defaults to
- *   C:\u3a St Ives\Using AI\Buses
+ *   C:\Buses\buses-data
  * (override with --buses "<path to the buses-data repo>").
  *
  * WHAT PROBLEM THIS SOLVES. By default a town's internal sheet is rotated by PCA

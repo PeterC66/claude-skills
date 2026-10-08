@@ -12,7 +12,7 @@
 # IMPORT name are different things -- `python-docx` is imported as `docx` -- and
 # test/python/test_dependencies.py joins the two, so the next undeclared import
 # fails a test rather than a build. Install from this folder
-# (C:\u3a St Ives\.claude\skills\make-bus-leaflet), with no placeholders:
+# (C:\Buses\claude-skills\make-bus-leaflet), with no placeholders:
 #
 #     pip install -r requirements.txt
 #

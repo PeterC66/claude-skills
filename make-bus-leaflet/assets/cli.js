@@ -4,7 +4,7 @@
  *
  * OA-224 Tier 3.1. Eleven scripts under assets/ and tools/ each carried their own
  * twenty-line `parseArgs`, and every one of them ended `path.resolve(args.buses ||
- * 'C:/u3a St Ives/Using AI/Buses')` — the laptop as the hard fallback, with no way
+ * '<the laptop path>')` — the laptop as the hard fallback, with no way
  * to say where the estate is on any other machine. `bus-work` already had the right
  * convention (BUSES_DIR, BUSMAPS_PORTAL) and nothing else adopted it. This is that
  * convention, written once, so a fix lands everywhere rather than in the copy the
@@ -29,9 +29,12 @@
 const fs = require('fs');
 const path = require('path');
 
-/* The laptop, named once. Everything else asks for it by function. */
-const LAPTOP_BUSES = 'C:/u3a St Ives/Using AI/Buses';
-const LAPTOP_PORTAL = 'C:/Claude/community-bus-maps';
+/* The laptop, named once. Everything else asks for it by function. Since OA-611 the
+ * estate is three sibling checkouts under one parent, `C:\Buses`, so the two
+ * defaults are siblings too; the constants keep their names because the tests, the
+ * prove-red harness and `bus-work/assets/engine.mjs` all reach them by name. */
+const LAPTOP_BUSES = 'C:/Buses/buses-data';
+const LAPTOP_PORTAL = 'C:/Buses/community-bus-maps';
 
 /*
  * parseArgs — long flags only, a value is the next argument, everything else is

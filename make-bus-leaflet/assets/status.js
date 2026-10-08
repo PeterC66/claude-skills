@@ -24,8 +24,8 @@
  *   ...[--live <base url>] [--no-live]     (deployment drift; see deploymentRow below)
  *   ...[--no-fetch]                        (never refresh origin/main to date an unknown live sha)
  *
- * Defaults (Peter's machine): --buses "C:\u3a St Ives\Using AI\Buses"
- *                              --portal "C:\Claude\community-bus-maps"
+ * Defaults (Peter's machine): --buses "C:\Buses\buses-data"
+ *                              --portal "C:\Buses\community-bus-maps"
  *
  * Zero dependencies (Node core only).
  *

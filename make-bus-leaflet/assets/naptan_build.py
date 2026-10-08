@@ -16,7 +16,7 @@ Rate limit is 200 requests/hour; this script makes one request per ATCO area.
 
 USAGE. Run from anywhere; --out is the only required argument.
 
-  python naptan_build.py --out "C:/u3a St Ives/Using AI/Buses/_gtfs/naptan.sqlite"
+  python naptan_build.py --out "C:/Buses/buses-data/_gtfs/naptan.sqlite"
 
 By default it fetches exactly the ATCO areas our built GTFS datasets actually
 reference -- it opens every `db` in _gtfs/regions.json whose status is "built"

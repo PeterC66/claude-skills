@@ -92,7 +92,7 @@ them gives a different maxOK from the two anchors, and the gap goes both ways --
 St Neots Market Square reads 75 m from the stop and 55 m from the centre, so a
 radius the survey called usable is one this script refuses; High Wycombe High Street
 reads 136 m and 139 m the other way round. Run it from
-`C:/u3a St Ives/Using AI/Buses/Development Docs`; `--all-places` does the lot.
+`C:/Buses/buses-data/Development Docs`; `--all-places` does the lot.
 
 Read a stop-anchored maxOK as an upper bound only, then run this tool at the radius
 you intend and believe its verdict.

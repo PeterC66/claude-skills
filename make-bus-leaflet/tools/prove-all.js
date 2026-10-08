@@ -11,7 +11,7 @@
  * near its change first. A filtered run is never a clean run: its closing line
  * says how many invocations the filter left out. Selecting nothing is exit 2.
  *
- * Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` — the engine's own
+ * Run from `C:\Buses\claude-skills\make-bus-leaflet` — the engine's own
  * folder. `--portal` is the portal checkout, for the steps CI runs against one;
  * it falls back to BUSMAPS_PORTAL and then to the laptop's own checkout, so on
  * this machine there is nothing to type. Exit 0 every invocation passed; 1 at

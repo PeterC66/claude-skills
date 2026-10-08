@@ -93,7 +93,7 @@ def registered_regions():
     import os.path
     here = os.path.dirname(os.path.abspath(__file__))
     sibling = os.path.join(here, "..", "..", "make-bus-leaflet", "assets")
-    for cand in (sibling, r"C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets"):
+    for cand in (sibling, r"C:/Buses/claude-skills/make-bus-leaflet/assets"):
         if os.path.isdir(cand):
             sys.path.insert(0, cand)
             break

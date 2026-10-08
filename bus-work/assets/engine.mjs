@@ -37,8 +37,8 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require_ = createRequire(import.meta.url);
 
-const LAPTOP_BUSES = 'C:/u3a St Ives/Using AI/Buses';
-const LAPTOP_PORTAL = 'C:/Claude/community-bus-maps';
+const LAPTOP_BUSES = 'C:/Buses/buses-data';
+const LAPTOP_PORTAL = 'C:/Buses/community-bus-maps';
 
 /**
  * The make-bus-leaflet assets folder, wherever the skills tree actually lives.
@@ -51,7 +51,7 @@ export function assetsDir() {
   const cands = [
     process.env.BUS_SKILL_ASSETS,
     path.resolve(HERE, '..', '..', 'make-bus-leaflet', 'assets'),
-    'C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets',
+    'C:/Buses/claude-skills/make-bus-leaflet/assets',
     path.join(process.env.USERPROFILE || '', '.claude', 'skills', 'make-bus-leaflet', 'assets'),
   ].filter(Boolean);
   return cands.find((c) => existsSync(path.join(c, 'gate_lib.js')) && existsSync(path.join(c, 'status.js'))) || null;

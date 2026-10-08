@@ -66,7 +66,7 @@
   "roots": [
     {
       "name": "buses",
-      "path": "C:/u3a St Ives/Using AI/Buses",
+      "path": "C:/Buses/buses-data",
       "checkoutDirNames": ["buses-data", "Buses"],
       "extensions": [".md", ".pptx"],
       "excludeDirNames": ["_latest", "_archive", "open-actions"],
@@ -86,7 +86,7 @@
     },
     {
       "name": "portal",
-      "path": "C:/Claude/community-bus-maps",
+      "path": "C:/Buses/community-bus-maps",
       "checkoutDirNames": ["community-bus-maps"],
       "extensions": [".md"],
       "excludeDirNames": ["data", "staged", "_archive", "CHANGELOG.d"],

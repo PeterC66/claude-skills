@@ -78,12 +78,12 @@
  * Usage — every argument below is a real path on this machine, no placeholders:
  *
  *   node assets/render_sweep.js --buses "<Buses dir>"
- *   node assets/render_sweep.js --store "C:/Claude/community-bus-maps/data/maps"
- *   node assets/render_sweep.js --store "..." --portal "C:/Claude/community-bus-maps"
+ *   node assets/render_sweep.js --store "C:/Buses/community-bus-maps/data/maps"
+ *   node assets/render_sweep.js --store "..." --portal "C:/Buses/community-bus-maps"
  *   node assets/render_sweep.js --buses "..." --drop-framing
  *   node assets/render_sweep.js --buses "..." --expect 20
  *
- * Run it from the engine's own folder, C:\u3a St Ives\.claude\skills\make-bus-leaflet.
+ * Run it from the engine's own folder, C:\Buses\claude-skills\make-bus-leaflet.
  *
  * --expect <n> fails when the enumeration finds a different number of maps than
  * you asked for. An enumeration is a silent filter: this repo has already

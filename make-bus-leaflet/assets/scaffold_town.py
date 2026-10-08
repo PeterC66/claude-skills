@@ -11,7 +11,7 @@ geometry is pulled. Everything it produces is a draft.
 
 Usage:
   python scaffold_town.py "Huntingdon" [--region Cambridgeshire] [--centre LAT,LON]
-        [--radius-km 1.6] [--buses-root "C:\\u3a St Ives\\Using AI\\Buses"] [--db PATH]
+        [--radius-km 1.6] [--buses-root "C:\\Buses\\buses-data"] [--db PATH]
 
 Region-agnostic: --db / $CAMBS_GTFS_DB picks the dataset; --buses-root picks where
 town folders live; --region only tunes the geocode + report.

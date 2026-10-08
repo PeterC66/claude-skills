@@ -12,7 +12,7 @@
  * invocation this file finds. It adds no enumeration of its own: the list of
  * harnesses has one owner, and it is this file.
  *
- * Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` — the engine's own
+ * Run from `C:\Buses\claude-skills\make-bus-leaflet` — the engine's own
  * folder. No placeholders.
  *
  * WHY THIS EXISTS (buses-data OA-224, Tier 2.3). This repository accumulates

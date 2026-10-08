@@ -4,11 +4,11 @@
 
 `%TSK%` = town skill assets (shared engine). `%PSK%` = this skill's assets. Worked example folder: `…\Buses\Areas\St Neots\Places\St Neots Tesco Extra\` (v1.0).
 
-**Every block below runs in ONE shell session, started from the buses-data repository root (`C:\u3a St Ives\Using AI\Buses`).** The first block assigns `$PSK` and `$TSK` — the same two paths `%PSK%` and `%TSK%` name in the prose — and `cd`s into the place's parent folder; each block after it continues where the previous one left off, so the `cd`s accumulate and are not repeated. The only other placeholder is the place name itself, which is the map folder's name exactly as `manifest.json` has it.
+**Every block below runs in ONE shell session, started from the buses-data repository root (`C:\Buses\buses-data`).** The first block assigns `$PSK` and `$TSK` — the same two paths `%PSK%` and `%TSK%` name in the prose — and `cd`s into the place's parent folder; each block after it continues where the previous one left off, so the `cd`s accumulate and are not repeated. The only other placeholder is the place name itself, which is the map folder's name exactly as `manifest.json` has it.
 
 ```bash
-PSK="C:/u3a St Ives/.claude/skills/make-place-bus-leaflet/assets"
-TSK="C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets"
+PSK="C:/Buses/claude-skills/make-place-bus-leaflet/assets"
+TSK="C:/Buses/claude-skills/make-bus-leaflet/assets"
 cd ".../Buses/Areas/St Neots/Places"   # or Places/_standalone if the town has no area map
 node "$TSK/stage.js" init "$PWD/St Neots Tesco Extra" "St Neots Tesco Extra"
 cd "St Neots Tesco Extra"
@@ -63,7 +63,7 @@ node "$TSK/stage.js" commit S3 "$S3" --outputs routes.json
 **A PULL NO LONGER LETS AN UNDECLARED FILE CLOBBER ONE ALREADY THERE (2026-08-29, OA-164), AND YOU SHOULD STILL READ WHAT IT SAYS.** `pull` copies the whole run FOLDER, while `commit` and the manifest speak only of the outputs a stage DECLARED, so anything else left lying in a run folder rides along on every pull. Beaconsfield Waitrose's S2 folder from 21 July holds a `routes.json` it never declared — the July draft — and pulling S3 and then S2 put that draft on top of five weeks of curated config. The sheet rebuilt clean, the byte gate said PASS, and the external quietly lost every intermediate stop name, every journey time, its QR code and its `checkedAt`: **the byte gate cannot see this, because `ci-reference` is re-synced from the same run and the sheet is then compared against itself.** A declared output still overwrites; an undeclared extra is copied only where the destination has no such file, and every skip prints `kept the file already there`. **If you see that line, the folder it names is dirty — go and look.** Three places carry such a file today. To ask the whole estate at once, run this from anywhere — the path is a real path on this machine, not a placeholder:
 
 ```bash
-node "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/stray_outputs.js" --buses "C:/u3a St Ives/Using AI/Buses"
+node "C:/Buses/claude-skills/make-bus-leaflet/assets/stray_outputs.js" --buses "C:/Buses/buses-data"
 ```
 
 It reports only the dangerous direction — an EARLY stage holding a file a LATER stage declares — because a downstream folder holding an upstream file is ordinary and everywhere, and listing those would bury the eight real ones in seven hundred lines. It is **reported, not gated**, and `--strict` exits 1 for whoever wants that once the estate is clean.

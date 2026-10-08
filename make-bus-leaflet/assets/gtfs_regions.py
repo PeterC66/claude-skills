@@ -80,7 +80,7 @@ def default_gdir():
     the opposite of assuming which one you meant.
     """
     return os.environ.get("BUSES_GTFS_DIR", os.path.join(
-        r"C:\u3a St Ives", "Using AI", "Buses", "_gtfs"))
+        r"C:\Buses", "buses-data", "_gtfs"))
 
 
 def resolve_db(explicit=None, gdir=None):

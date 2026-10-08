@@ -51,7 +51,7 @@
  *
  * Run it from anywhere, with no placeholders:
  *     node "%SK%\redteam_budget.js" --build "<town or place folder>"
- *     node "%SK%\redteam_budget.js" --estate "C:\u3a St Ives\Using AI\Buses"
+ *     node "%SK%\redteam_budget.js" --estate "C:\Buses\buses-data"
  *     node "%SK%\redteam_budget.js" --estate "<...>" --json
  *
  * EXIT CODES.  0 = a budget is stated and a BUY fits inside what is left.
@@ -279,7 +279,7 @@ function main() {
   const root = flag('estate', null) ? path.resolve(flag('estate')) : findEstateRoot(start);
   if (!root) {
     console.error(`redteam_budget.js: no estate root above ${path.resolve(start)} — nothing there carries ${ESTATE_MARKERS.join(' or ')}.`);
-    console.error('  Pass it: --estate "C:/u3a St Ives/Using AI/Buses"');
+    console.error('  Pass it: --estate "C:/Buses/buses-data"');
     process.exit(2);
   }
   /* THE ONE CLOCK READ IN THIS FILE, and it writes nothing byte-compared. */

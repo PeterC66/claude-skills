@@ -5,7 +5,7 @@
  * Run it from the ROOT OF THE REPOSITORY YOU WANT CHECKED (buses-data), with no
  * placeholders — it reads the repository it is run FROM, never the one it lives in:
  *
- *     node "C:/u3a St Ives/.claude/skills/tools/check-s6-claims.mjs"
+ *     node "C:/Buses/claude-skills/tools/check-s6-claims.mjs"
  *
  * Flags: --root <dir>         check that repository instead of the cwd
  *        --json               print the verdict as one JSON object instead of prose

@@ -5,7 +5,7 @@ description: Run the recurring style, standards, consistency, structure and main
 
 # Review the bus codebases, the same way every time
 
-**What this is for.** On 2026-09-01 a one-off review found that a refactor's rule had been stated and not followed: the main generator regrew 29% in five days under a rule that said new logic goes in a module. The finding was only possible because somebody compared a number in a headline with `wc -l`. This skill makes that comparison routine. Each run reads the previous run's findings, says which are closed, and prints the same counts, so drift is measured rather than felt. The first run and its plan are `Development Docs\codebase-review_2026-09-01.md` in buses-data (`C:\u3a St Ives\Using AI\Buses`), and the evidence shape every later run copies is its companion `codebase-review-findings_2026-09-01.md`.
+**What this is for.** On 2026-09-01 a one-off review found that a refactor's rule had been stated and not followed: the main generator regrew 29% in five days under a rule that said new logic goes in a module. The finding was only possible because somebody compared a number in a headline with `wc -l`. This skill makes that comparison routine. Each run reads the previous run's findings, says which are closed, and prints the same counts, so drift is measured rather than felt. The first run and its plan are `Development Docs\codebase-review_2026-09-01.md` in buses-data (`C:\Buses\buses-data`), and the evidence shape every later run copies is its companion `codebase-review-findings_2026-09-01.md`.
 
 **Cadence, decided by Peter on 2026-09-02:** once after each tier of OA-224 lands, and then fortnightly once Tier 5 is done. The chase is a dated entry `codebase-review` in `Development Docs/commitments.json` in buses-data, which the board prints and bus-work ranks; the last step of every run is to re-date it.
 
@@ -15,22 +15,22 @@ description: Run the recurring style, standards, consistency, structure and main
 
 | Repo | Where | What it holds |
 |---|---|---|
-| buses-data | `C:\u3a St Ives\Using AI\Buses` | map data, the documentation checkers, the backlog, the hooks, CI |
-| claude-skills | `C:\u3a St Ives\.claude\skills` | the engine (`make-bus-leaflet/assets/`), the place skill, bus-work, this skill |
-| community-bus-maps | `C:\Claude\community-bus-maps` | the portal: `src/`, `scripts/`, `engine/` (vendored copies), workflows |
+| buses-data | `C:\Buses\buses-data` | map data, the documentation checkers, the backlog, the hooks, CI |
+| claude-skills | `C:\Buses\claude-skills` | the engine (`make-bus-leaflet/assets/`), the place skill, bus-work, this skill |
+| community-bus-maps | `C:\Buses\community-bus-maps` | the portal: `src/`, `scripts/`, `engine/` (vendored copies), workflows |
 
 ## Procedure
 
-**1. Start from the last run.** Find the newest `Development Docs/codebase-review-findings_<date>.md` and `codebase-review_<date>.md` in buses-data and read the plan's *Where this stands* table and the backlog row it names (OA-224 as at 2026-09-02). Before anything else, look for another session already on it with `git log --oneline --since=midnight`, run from the buses-data root, `C:\u3a St Ives\Using AI\Buses`, with no placeholders — backlog claims were retired by buses-data OA-578 because this shows the same collision.
+**1. Start from the last run.** Find the newest `Development Docs/codebase-review-findings_<date>.md` and `codebase-review_<date>.md` in buses-data and read the plan's *Where this stands* table and the backlog row it names (OA-224 as at 2026-09-02). Before anything else, look for another session already on it with `git log --oneline --since=midnight`, run from the buses-data root, `C:\Buses\buses-data`, with no placeholders — backlog claims were retired by buses-data OA-578 because this shows the same collision.
 
-**2. Measure before anyone reads a line.** Run the measurer from this skill's folder (`C:\u3a St Ives\.claude\skills\review-bus-codebases`); it takes no placeholders and writes nothing. Save its JSON beside the documents so the next run can diff against it:
+**2. Measure before anyone reads a line.** Run the measurer from this skill's folder (`C:\Buses\claude-skills\review-bus-codebases`); it takes no placeholders and writes nothing. Save its JSON beside the documents so the next run can diff against it:
 
 ```bash
 node assets/measure.mjs
 ```
 
 ```bash
-node assets/measure.mjs --json > "C:/u3a St Ives/Using AI/Buses/Development Docs/codebase-review-measures_<date>.json"
+node assets/measure.mjs --json > "C:/Buses/buses-data/Development Docs/codebase-review-measures_<date>.json"
 ```
 
 `<date>` is today as `YYYY-MM-DD`. Compare with the previous JSON by eye or with `diff`; a count that rose is a finding before any reviewer has started. **Exit 2 means a checkout or the ratchet ledger was not found**, and nothing was measured; it never prints zeros for a path it cannot read. Every population it counts comes from `git ls-files`, so a worktree or a stray file inside a checkout is not counted, and its wiring figures are `check-wiring.js`'s own verdict rather than a count of its own. Its test is `npm run test:measure` from this folder, which CI runs.
@@ -58,14 +58,14 @@ Every brief is read-only and says so. Reviewers report in one shape: what to pre
 
 **6. Backlog and commitment.** Update the backlog row's body with what this run found and what is left; file a new row only for work the plan cannot hold. Then re-date the `codebase-review` entry in `Development Docs/commitments.json`: after the next OA-224 tier while tiers remain, otherwise fourteen days from today. Delete-and-re-add is the convention there, not a done flag.
 
-**7. Checks, stamp, commit, memory.** From the buses-data root, `C:\u3a St Ives\Using AI\Buses`, with no placeholders, run the four documentation checkers and the backlog check — two of them live in `claude-skills` since 2026-09-04 (buses-data OA-246) and are named by an absolute path that is real rather than a placeholder, and each reads the repository it is RUN FROM, re-stamp, stage by name, read the staged diff as its own command, and commit with a pathspec. Every command below is run from that folder:
+**7. Checks, stamp, commit, memory.** From the buses-data root, `C:\Buses\buses-data`, with no placeholders, run the four documentation checkers and the backlog check — two of them live in `claude-skills` since 2026-09-04 (buses-data OA-246) and are named by an absolute path that is real rather than a placeholder, and each reads the repository it is RUN FROM, re-stamp, stage by name, read the staged diff as its own command, and commit with a pathspec. Every command below is run from that folder:
 
 ```bash
-node "C:/u3a St Ives/.claude/skills/tools/check-tables.mjs"
+node "C:/Buses/claude-skills/tools/check-tables.mjs"
 ```
 
 ```bash
-node "C:/u3a St Ives/.claude/skills/tools/check-doc-links.mjs"
+node "C:/Buses/claude-skills/tools/check-doc-links.mjs"
 ```
 
 ```bash

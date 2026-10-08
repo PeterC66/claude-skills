@@ -34,7 +34,7 @@
  *
  * Run from anywhere; every argument below is required except --note and --by:
  *
- *   node refresh_review.mjs --map "C:/u3a St Ives/Using AI/Buses/Areas/High Wycombe" \
+ *   node refresh_review.mjs --map "C:/Buses/buses-data/Areas/High Wycombe" \
  *        --scan 2026-08-31 --verdict no-rebuild --by buses-0c \
  *        --note "40 items adjudicated: 12 new September school registrations, ..."
  *

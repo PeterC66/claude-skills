@@ -5,10 +5,10 @@ description: Audit one or two existing bus-leaflet IMAGES for a British town aga
 
 # Audit a bus-leaflet image against the town's stored data
 
-**Names for the parts.** Write every finding in the agreed vocabulary — `C:\u3a St Ives\Using AI\Buses\Documentation\README - Glossary of terms.md` names each element of both sheets and gives it a callout code (`I8`, `E5`), which is far more precise in an audit than describing the thing.
+**Names for the parts.** Write every finding in the agreed vocabulary — `C:\Buses\buses-data\Documentation\README - Glossary of terms.md` names each element of both sheets and gives it a callout code (`I8`, `E5`), which is far more precise in an audit than describing the thing.
 
 ## What this produces
-One deliverable per run: an **`image-audit_<date>.docx`** written into the town's folder (`C:\u3a St Ives\Using AI\Buses\Areas\<Town>\`), plus a short summary in chat. The DOCX is a full checklist of every discrepancy found between the supplied leaflet image(s) and the town's **stored** bus data, each row carrying:
+One deliverable per run: an **`image-audit_<date>.docx`** written into the town's folder (`C:\Buses\buses-data\Areas\<Town>\`), plus a short summary in chat. The DOCX is a full checklist of every discrepancy found between the supplied leaflet image(s) and the town's **stored** bus data, each row carrying:
 
 - **Where** — internal map, external map, or both.
 - **Category** — Service content · POI / landmark · Spelling / consistency / design.
@@ -29,7 +29,7 @@ This is the mirror image of **`make-bus-leaflet`**: that skill builds the maps a
 Read the title text on the image(s) to get the town name (e.g. "Buses within **St Ives**"). Also note any **version / validity stamps** ("from 1st June 2026", "Version 2, Summer 2026") — record them; they matter for the currency judgement. **Confirm the town with the user** before proceeding ("These look like the **St Ives** leaflets — correct?"). If you cannot read a town name, **ask the user for it**. Do not guess silently.
 
 ### 2 · Find the town's stored data (offer to generate if missing)
-Look for `C:\u3a St Ives\Using AI\Buses\Areas\<Town>\manifest.json`. Watch for spelling/disambiguation ("St Ives" vs "St. Ives"; two towns sharing a name). If found, read via the manifest the **latest** of each stage you need (see "What stored data to read" below).
+Look for `C:\Buses\buses-data\Areas\<Town>\manifest.json`. Watch for spelling/disambiguation ("St Ives" vs "St. Ives"; two towns sharing a name). If found, read via the manifest the **latest** of each stage you need (see "What stored data to read" below).
 
 **If there is no folder / no data for that town**, tell the user and **ask whether to generate it now using the `make-bus-leaflet` skill** ("I have no stored bus data for <Town>. Shall I build it first with make-bus-leaflet, then audit your image against it?"). If yes, hand off to make-bus-leaflet (S1→S5), then return here. If no, stop — there is nothing to audit against.
 
@@ -56,12 +56,12 @@ Be specific and cite the source for every finding. When the leaflet and our data
 Assemble the findings into an **`image-audit.json`** (schema in `assets/image-audit.example.json`) and render it:
 
 ```
-python3 "<SK>\gen_image_audit.py" image-audit.json "C:\u3a St Ives\Using AI\Buses\Areas\<Town>\image-audit_<YYYY-MM-DD>.docx"
+python3 "<SK>\gen_image_audit.py" image-audit.json "C:\Buses\buses-data\Areas\<Town>\image-audit_<YYYY-MM-DD>.docx"
 ```
-where `<SK>` = `C:\u3a St Ives\.claude\skills\audit-bus-leaflet\assets`. The generator groups rows, colour-codes by verdict (red = leaflet-error, amber = leaflet-newer / data-stale, grey = comment, green = ok) and writes a landscape A4 table plus a per-category summary. Then give the user a tight chat summary: counts by verdict, the headline discrepancies, and whether a data refresh is advised.
+where `<SK>` = `C:\Buses\claude-skills\audit-bus-leaflet\assets`. The generator groups rows, colour-codes by verdict (red = leaflet-error, amber = leaflet-newer / data-stale, grey = comment, green = ok) and writes a landscape A4 table plus a per-category summary. Then give the user a tight chat summary: counts by verdict, the headline discrepancies, and whether a data refresh is advised.
 
 ## What stored data to read (via the manifest)
-Let `T = C:\u3a St Ives\Using AI\Buses\Areas\<Town>`. Read `T\manifest.json`, then pull the latest:
+Let `T = C:\Buses\buses-data\Areas\<Town>`. Read `T\manifest.json`, then pull the latest:
 
 | Stage | File | Used for |
 |---|---|---|

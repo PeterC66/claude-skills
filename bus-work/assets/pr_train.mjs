@@ -3,7 +3,7 @@
  * pr_train.mjs — moves claude-skills' auto-merge queue along, one pull request
  * at a time, AS THE PERSON RUNNING IT (2026-09-27).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets), with `gh`
+ * From this folder (C:\Buses\claude-skills\bus-work\assets), with `gh`
  * logged in as PeterC66:
  *
  *   node pr_train.mjs                   report what it would do, change nothing

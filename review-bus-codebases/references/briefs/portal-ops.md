@@ -2,7 +2,7 @@
 
 Slice heading in the findings document: **Review 5 — the portal's operations and test tooling**.
 
-Subject: the OPERATIONS and TEST tooling of the BusMaps.uk portal at `C:\Claude\community-bus-maps`: everything in `scripts/` (`test-*.mjs`, `prove-red-*.mjs`, `verify-*.mjs`, `deploy*.mjs`, `backup.mjs`, `deliver-map.mjs`, `import-map.mjs`, `accept-publish-batch.mjs`, `vendor-engine.mjs`, `track-engine.mjs`, `check-vendored.mjs`, `changelog-assemble.mjs`, `scripts/lib/*`, and anything added since), `engine/` (review the vendoring MECHANISM — `vendored.json` and the three scripts around it — not the generator code), `.github/workflows/`, `package.json` scripts, `CHANGELOG.d/` and the changelog assembly, `backups/`, `docs/`. Another reviewer covers `src/`; do not duplicate.
+Subject: the OPERATIONS and TEST tooling of the BusMaps.uk portal at `C:\Buses\community-bus-maps`: everything in `scripts/` (`test-*.mjs`, `prove-red-*.mjs`, `verify-*.mjs`, `deploy*.mjs`, `backup.mjs`, `deliver-map.mjs`, `import-map.mjs`, `accept-publish-batch.mjs`, `vendor-engine.mjs`, `track-engine.mjs`, `check-vendored.mjs`, `changelog-assemble.mjs`, `scripts/lib/*`, and anything added since), `engine/` (review the vendoring MECHANISM — `vendored.json` and the three scripts around it — not the generator code), `.github/workflows/`, `package.json` scripts, `CHANGELOG.d/` and the changelog assembly, `backups/`, `docs/`. Another reviewer covers `src/`; do not duplicate.
 
 Review for:
 

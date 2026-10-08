@@ -27,7 +27,7 @@ import argparse, json, os, sys
 # The town engine's assets: sibling-relative first, the absolute path only as a
 # fallback -- the rule gtfs_chains.py and resolve_place.py follow (OA-232 F10).
 HERE = os.path.dirname(os.path.abspath(__file__))
-for _cand in (r"C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets",
+for _cand in (r"C:/Buses/claude-skills/make-bus-leaflet/assets",
               os.path.join(HERE, "..", "..", "make-bus-leaflet", "assets")):
     if os.path.isdir(_cand):
         sys.path.insert(0, _cand)

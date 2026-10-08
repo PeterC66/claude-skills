@@ -5,7 +5,7 @@
  * Run it from the ROOT OF THE REPOSITORY YOU WANT CHECKED, with no arguments and no
  * placeholders — it reads the repository it is run FROM, never the one it lives in:
  *
- *     node "C:/u3a St Ives/.claude/skills/tools/check-exclusion-fields.mjs"
+ *     node "C:/Buses/claude-skills/tools/check-exclusion-fields.mjs"
  *
  * WHAT IT CHECKS. A town's `verified-services.json` says "we know about this route and
  * deliberately do not draw it" in `notOnLeaflet[]`. Three older spellings —

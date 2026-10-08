@@ -12,11 +12,11 @@
  * the run, never from a document*, and precisely how next month's round record ends
  * up carrying a number somebody remembered.
  *
- * Run it from this folder (C:\u3a St Ives\.claude\skills\bus-work\assets); both
+ * Run it from this folder (C:\Buses\claude-skills\bus-work\assets); both
  * paths below are real on this machine and neither is a placeholder:
  *
- *   node routine_numbers.mjs --buses "C:/u3a St Ives/Using AI/Buses"
- *   node routine_numbers.mjs --buses "C:/u3a St Ives/Using AI/Buses" --json
+ *   node routine_numbers.mjs --buses "C:/Buses/buses-data"
+ *   node routine_numbers.mjs --buses "C:/Buses/buses-data" --json
  *   node routine_numbers.mjs --buses "…" --days 30      the window, default 30
  *
  * TWO OF THE FIVE ARE NOT COMPUTABLE HERE AND THIS SAYS SO RATHER THAN GUESSING.

@@ -5,11 +5,11 @@
  *
  * From any folder, with no placeholders, to see what a tick would do:
  *
- *   node "C:/u3a St Ives/.claude/skills/bus-work/assets/adopt.mjs" --json
+ *   node "C:/Buses/claude-skills/bus-work/assets/adopt.mjs" --json
  *
  * and, as a tick, to do it — `<run name>` is the tick's own `sched-HHMM`:
  *
- *   node "C:/u3a St Ives/.claude/skills/bus-work/assets/adopt.mjs" --apply --by <run name>
+ *   node "C:/Buses/claude-skills/bus-work/assets/adopt.mjs" --apply --by <run name>
  *
  * WHY THIS EXISTS. On 2026-10-01 ticks 00:15, 01:15 and 02:15 all stopped at the
  * dirty-tree check on `.claude/settings.json`. Peter had edited it at 23:21 the

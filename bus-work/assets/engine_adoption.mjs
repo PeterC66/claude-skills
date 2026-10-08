@@ -16,7 +16,7 @@
  * WHAT IT ASKS, of every `.mjs` in this folder:
  *
  *   1. `laptop-path` — does a CODE line carry a path literal off this one
- *      laptop? `C:/u3a St Ives/...`, `C:/Claude/...`, `C:/Users/...`. Comments
+ *      laptop? `C:/Buses/...`, `C:/Claude/...`, `C:/Users/...`. Comments
  *      are blanked first, because a header that documents where the repository
  *      lives is not the same act as a fallback that only works there.
  *
@@ -42,7 +42,7 @@
  * cannot be read, or that holds no `.mjs` at all, exits 2 and says so. A refusal
  * read as an absence measures the instrument instead of the subject.
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node engine_adoption.mjs            # this folder; no placeholders
  *   node engine_adoption.mjs --dir <d>  # any folder, which is what the harness drives
@@ -99,8 +99,10 @@ export const ALLOW = [
   },
 ];
 
-/* `C:/u3a St Ives/...`, `C:\\u3a St Ives\\...`, `C:/Claude/...`, `C:/Users/...` */
-const LAPTOP_RE = /\bC:[\\/]{1,2}(?:u3a St Ives|Claude\b|Users\b)/;
+/* `C:/Buses/...` is the estate since OA-611; `u3a St Ives` and `Claude` are the two
+ * places it used to live and stay in the pattern, so a straggler that still names
+ * the old home is caught rather than excused. `C:/Users/...` is any user profile. */
+const LAPTOP_RE = /\bC:[\\/]{1,2}(?:Buses\b|u3a St Ives|Claude\b|Users\b)/;
 /* `process.argv[2]` and up — NOT `[0]` or `[1]`, which are the main-module guard. */
 const ARGV_INDEX_RE = /process\.argv\s*\[\s*([2-9]\d*)\s*\]/;
 /* `process.argv.slice(1)` and up — `slice(0)` would be the whole command line. */

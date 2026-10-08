@@ -13,7 +13,7 @@
  * THIS REPLACED `gate.sh` ON 2026-09-03 (OA-224 Tier 5, engine-pipeline F19), and
  * the reason is not that a shell script is untidy.
  *
- *   1. It hard-coded `C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets` on
+ *   1. It hard-coded `C:/Buses/claude-skills/make-bus-leaflet/assets` on
  *      line 7 — the laptop as a dependency, in a file whose whole purpose is to
  *      be run against an arbitrary checkout.
  *   2. IT COMPARED WITH A RAW `diff -q`, while every other gate in this engine

@@ -114,26 +114,26 @@ One rule comes with `--staged`: anything asserting a property of the whole **cor
 Run each from anywhere inside whichever repository you are checking — **the repository enclosing the folder you run it in is what decides what it reads**, which since OA-275 is no longer the same as that folder — and the paths below are real paths on this machine, not placeholders:
 
 ```bash
-node "C:/u3a St Ives/.claude/skills/tools/check-file-hygiene.mjs"
+node "C:/Buses/claude-skills/tools/check-file-hygiene.mjs"
 ```
 
 ```bash
-node "C:/u3a St Ives/.claude/skills/tools/check-tables.mjs"
+node "C:/Buses/claude-skills/tools/check-tables.mjs"
 ```
 
 ```bash
-node "C:/u3a St Ives/.claude/skills/tools/check-doc-links.mjs"
+node "C:/Buses/claude-skills/tools/check-doc-links.mjs"
 ```
 
 ```bash
-node "C:/u3a St Ives/.claude/skills/tools/check-doc-acronyms.mjs"
+node "C:/Buses/claude-skills/tools/check-doc-acronyms.mjs"
 ```
 
 **That last one is now a gate in TWO repositories and one remains.** It was green in buses-data and run by hand everywhere else until 2026-09-11, when this repository's own round cleaned or excused its corpus and the two steps went into [`gates.yml`](../.github/workflows/gates.yml)'s `unit` job — the harness first, the check after `check-doc-links.mjs`, both under the `if: ${{ !cancelled() }}` every documentation step here carries. The 69 short forms with nowhere to look across these 45 documents are now 24 definitions in [`.doc-acronyms.json`](../.doc-acronyms.json) and six judgement groups; **it declares no `dirs`, which is the widest scope and not an omission**, exactly as this repository declares no `.doc-tables.json` and no `.doc-links.json`. **The portal is the one left** — 66 short forms across its 153 documents, no glossary and no declaration — and it is a round of its own, because the corpus is cleaned or excused BEFORE the gate lands, never after, since a gate that is red on day one is one somebody mutes in its first week.
 
 `check-tables.mjs` also takes `--tree <dir>`, which walks and checks each folder it finds, each one flat. That is how this repository is checked, because it nests its documents two deep and grows a folder whenever a skill is added; `--root` stays flat because `prove-red-tables.mjs` drives it and asserts an exact row count.
 
-Falsify them first, which is the order to use because a checker pointed at a new corpus is exactly when one that has quietly stopped objecting looks identical to a clean tree. Run these from the repository root (`C:\u3a St Ives\.claude\skills`), with no placeholders:
+Falsify them first, which is the order to use because a checker pointed at a new corpus is exactly when one that has quietly stopped objecting looks identical to a clean tree. Run these from the repository root (`C:\Buses\claude-skills`), with no placeholders:
 
 ```bash
 node tools/prove-red-file-hygiene.mjs

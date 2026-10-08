@@ -37,8 +37,8 @@ Types 1 and 4 are place-and-boarding-plan work; see also `make-place-bus-leaflet
 One file per map, beside `manifest.json`, tracked in git:
 
 ```
-C:\u3a St Ives\Using AI\Buses\Areas\<Town>\local-decisions.json
-C:\u3a St Ives\Using AI\Buses\Areas\<Town>\Places\<Place>\local-decisions.json
+C:\Buses\buses-data\Areas\<Town>\local-decisions.json
+C:\Buses\buses-data\Areas\<Town>\Places\<Place>\local-decisions.json
 ```
 
 It holds every local question raised for that map, answered or not, for the life of the map — it is not a per-run artefact and does not live in a stage folder. That is deliberate: an answer has to outlive the build that asked for it, or next month's refresh asks again. The shape:

@@ -246,9 +246,9 @@ def parse_days(s):
     one day carry a real withdrawal.
 
     Re-measure the vocabulary from the buses-data repository root
-    (`C:\\u3a St Ives\\Using AI\\Buses`), with no placeholders:
+    (`C:\\Buses\\buses-data`), with no placeholders:
 
-        python "C:/u3a St Ives/.claude/skills/make-bus-leaflet/tools/days-vocabulary.py"
+        python "C:/Buses/claude-skills/make-bus-leaflet/tools/days-vocabulary.py"
     """
     if not s: return None
     t=s.strip().lower()

@@ -1,0 +1,25 @@
+{
+  "_about": "Legend text the ENGINE rewrote, declared by the engine pull request that rewrote it (buses-data OA-607). gate_lib.js labelDiff() reads this file: a line lost from a rebuilt sheet is REWORDED rather than LOST only when (1) it is declared in `was` for that sheet, rebuilt whole from the lost fragments if the sheet wraps it; (2) every `now` line of the same entry is on the new sheet, so a declaration applies only once its rewording has happened; and (3) neither the line nor any of its fragments is a string in the map's own S4 data files, old run or new, so a place, road or landmark label can never be excused by a declaration, right or wrong. `was` and `now` hold the text as the generator writes it, before XML escaping. `now` is empty for a pure deletion. `sheets` names the sheet files the entry applies to. An engine PR that rewords text a generator writes adds one entry here (make-bus-leaflet/references/changing-the-engine.md).",
+  "rewordings": [
+    {
+      "pr": "claude-skills #146",
+      "commit": "f117894",
+      "sheets": ["internal.svg", "internal-schematic.svg"],
+      "was": ["Frequent — turn up and go"],
+      "now": ["Frequent — at least every 30 minutes"],
+      "why": "buses-data OA-282: the Frequent Key row says what frequent means rather than promising a wait."
+    },
+    {
+      "pr": "claude-skills #165",
+      "commit": "f242e6f",
+      "sheets": ["external.svg"],
+      "was": [
+        "The panel headed “Operators & services” says who runs it.",
+        "Names printed along a line are its main stops, not every stop.",
+        "A time under a destination is a typical whole journey, not a timetable."
+      ],
+      "now": [],
+      "why": "buses-data OA-437 and OA-443: the How to use this map panel draws the first three derived bullets, and these three are dropped with nothing in their place."
+    }
+  ]
+}

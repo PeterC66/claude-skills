@@ -852,6 +852,39 @@ const MUTATIONS = [
     find: '  /^(Valid from .*|Map v[\\d.]+(?: · .*)?|Map version v?[\\d.]+|(?:build|Draft|Preview) v?[\\d.]+(?: · .*)?)$/;',
     to: '  /^(Valid from .*|Map v[\\d.]+(?: · .*)?)$/;' },
 
+  // buses-data OA-607: a legend line the engine DECLARES it reworded is REWORDED, not
+  // LOST, only on three conditions; each mutant below drops one, and the guard that
+  // matters most (a declaration can never excuse a string in the map's data) has two.
+  { suite: 'gate_lib.test.js', file: 'gate_lib.js',
+    what: 'every lost line is honoured as reworded',
+    find: '    lost: lost.filter((x) => !excused.has(x)),',
+    to: '    lost: [],' },
+
+  { suite: 'gate_lib.test.js', file: 'gate_lib.js',
+    what: 'the data check is ignored, so a declaration can excuse a road',
+    find: '  const ok = claims.filter((c) => !data.has(c.line) && c.parts.every((p) => !data.has(p.t)));',
+    to: '  const ok = claims;' },
+
+  { suite: 'gate_lib.test.js', file: 'gate_lib.js',
+    what: 'a declaration applies before its rewording has happened (now lines not asked)',
+    find: '    if (!(e.now || []).every((n) => tileFrom(decodeText(n), onNew))) continue;',
+    to: '' },
+
+  { suite: 'gate_lib.test.js', file: 'gate_lib.js',
+    what: 'a declaration applies to every sheet, not the ones it names',
+    find: '    if (Array.isArray(e.sheets) && !e.sheets.includes(sheet)) continue;',
+    to: '' },
+
+  { suite: 'gate_lib.test.js', file: 'gate_lib.js',
+    what: 'a lone wrapped fragment is excused without the rest of its declared line',
+    find: '      const parts = tileFrom(decodeText(w), free);',
+    to: '      const parts = free.filter((p) => decodeText(w).includes(p.t));' },
+
+  { suite: 'gate_lib.test.js', file: 'gate_lib.js',
+    what: 'labelDiff stops asking the declarations at all',
+    find: '  const { lost, reworded } = rewordedOf(unmatched, {',
+    to: '  const lost = unmatched, reworded = [], _unused = ({' },
+
   // lane_normals.js - four of these six are repairs that were actually tried
   // and measured on the board before the right one was found, so a suite that
   // survives them is a suite that would have let the wrong fix through.

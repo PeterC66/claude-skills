@@ -232,21 +232,105 @@ function rewrapOf(lost, newLabels) {
   return parts && parts.length >= 2 ? parts : null;
 }
 
+/* LEGEND TEXT THE ENGINE DECLARES IT REWORDED (buses-data OA-607, 2026-10-08).
+ * Legend lines and place labels are the same bare <text> on a sheet, so "ignore the
+ * legend" is not a rule anything can apply; on 8 October three rollouts stopped on
+ * lines the engine itself had rewritten (#146's Frequent row, #165's How to use
+ * bullets). So an engine PR that rewords text DECLARES it in legend_rewordings.json,
+ * and a lost line is REWORDED, not LOST, only when all three hold:
+ *   1. it is declared in `was` for this sheet — rebuilt whole from the lost
+ *      fragments when the sheet wrapped it, so a lone "timetable." is never excused;
+ *   2. every `now` line of that entry is on the new sheet (wrapped or not);
+ *   3. neither the declared line nor any fragment of it is a string anywhere in the
+ *      map's own S4 data files, old run or new. A place, road or landmark label comes
+ *      from that data, so it still stops a rollout whatever the declaration says —
+ *      true by construction rather than by trusting the list.
+ * An unreadable declaration file excuses nothing. Reported in `reworded`, never hidden. */
+const REWORDINGS_FILE = path.join(__dirname, 'legend_rewordings.json');
+const decodeText = (x) => normLabel(String(x).replace(/&(amp|lt|gt|quot|apos|#39|#x27);/g,
+  (_, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'", '#x27': "'" })[e]));
+
+function readRewordings(file = REWORDINGS_FILE) {
+  try { const j = JSON.parse(fs.readFileSync(file, 'utf8')); return Array.isArray(j.rewordings) ? j.rewordings : []; } catch { return []; }
+}
+
+/* `text` rebuilt, in order and on word boundaries, from one or more `pieces` ({ t }); the pieces used, or null. */
+function tileFrom(text, pieces) {
+  const words = text.split(' ').filter(Boolean);
+  const byText = new Map(pieces.map((p) => [p.t, p]));
+  const memo = new Array(words.length + 1).fill(undefined);
+  const seg = (i) => {
+    if (i === words.length) return [];
+    if (memo[i] !== undefined) return memo[i];
+    memo[i] = null;
+    for (let j = words.length; j > i; j--) {
+      const p = byText.get(words.slice(i, j).join(' '));
+      const rest = p && seg(j);
+      if (rest) { memo[i] = [p, ...rest]; break; }
+    }
+    return memo[i];
+  };
+  return words.length ? seg(0) : null;
+}
+
+/* Every string (keys too) in the *.json files of these folders, decoded and normalised. */
+function dataStrings(dirs) {
+  const out = new Set();
+  const walk = (v) => {
+    if (typeof v === 'string') out.add(decodeText(v));
+    else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { out.add(decodeText(k)); walk(x); }
+  };
+  for (const dir of new Set(dirs)) {
+    let names = [];
+    try { names = fs.readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { continue; }
+    for (const n of names) { try { walk(JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8'))); } catch { /* unreadable: not data */ } }
+  }
+  return out;
+}
+
+/* Split `lost` into what is still lost and what an engine declaration rewords. */
+function rewordedOf(lost, { sheet, newLabels, dataDirs, rewordings = readRewordings() }) {
+  const pool = lost.map((raw) => ({ raw, t: decodeText(raw) }));
+  const onNew = newLabels.map((raw) => ({ t: decodeText(raw) }));
+  const claims = [];
+  for (const e of rewordings) {
+    if (Array.isArray(e.sheets) && !e.sheets.includes(sheet)) continue;
+    if (!(e.now || []).every((n) => tileFrom(decodeText(n), onNew))) continue;          // 2. the rewording has happened
+    for (const w of e.was || []) {
+      const free = pool.filter((p) => !claims.some((c) => c.parts.includes(p)));
+      const parts = tileFrom(decodeText(w), free);                                       // 1. declared, rebuilt whole
+      if (parts) claims.push({ line: decodeText(w), parts, pr: e.pr });
+    }
+  }
+  if (!claims.length) return { lost, reworded: [] };
+  const data = dataStrings(dataDirs);
+  const ok = claims.filter((c) => !data.has(c.line) && c.parts.every((p) => !data.has(p.t)));   // 3. no data string
+  const excused = new Set(ok.flatMap((c) => c.parts.map((p) => p.raw)));
+  return {
+    lost: lost.filter((x) => !excused.has(x)),
+    reworded: ok.map((c) => ({ label: c.line, as: c.parts.map((p) => p.raw), pr: c.pr })),
+  };
+}
+
 function labelDiff(oldSvgPath, newSvgPath) {
   if (!fs.existsSync(oldSvgPath) || !fs.existsSync(newSvgPath)) return { lost: [], gained: [], rewrapped: [] };
   const oldLabels = labelSet(fs.readFileSync(oldSvgPath, 'utf8')).filter(x => !VERSION_STAMP_RE.test(x));
   const newLabels = labelSet(fs.readFileSync(newSvgPath, 'utf8')).filter(x => !VERSION_STAMP_RE.test(x));
-  const lost = [], rewrapped = [];
+  const unmatched = [], rewrapped = [];
   for (const x of oldLabels) {
     if (newLabels.includes(x)) continue;
     const parts = rewrapOf(x, newLabels);
     if (parts) rewrapped.push({ label: x, as: parts });
-    else lost.push(x);
+    else unmatched.push(x);
   }
+  const { lost, reworded } = rewordedOf(unmatched, { sheet: path.basename(newSvgPath), newLabels,
+    dataDirs: [path.dirname(oldSvgPath), path.dirname(newSvgPath)] });
   return {
     lost,
     gained: newLabels.filter(x => !oldLabels.includes(x)),
     rewrapped,
+    reworded,
     moved: labelMoves(fs.readFileSync(oldSvgPath, 'utf8'), fs.readFileSync(newSvgPath, 'utf8')),
   };
 }
@@ -873,7 +957,7 @@ function portalFixtureEnv(portalDir, dataDir) {
 }
 
 module.exports = {
-  SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, labelMoves, huesAlikeOnMap, owedOnSheet, rewrapOf, VERSION_STAMP_RE, PLACE_IGNORE,
+  SK, mkTmp, rmTmp, runGenerator, diffSvg, labelSet, labelDiff, labelMoves, huesAlikeOnMap, owedOnSheet, rewrapOf, rewordedOf, readRewordings, VERSION_STAMP_RE, PLACE_IGNORE,
   gate, sameIgnoringLineEndings, findTowns, findPlaces, findSheets, readJson, latestRunDir, unrenderedS4, staleInputs, inputsMoved, dataScriptDrift, dataFeedDrift, EXTERNAL_GENERATOR,
   parseSetPath, applySetPath, portalFixtureEnv,
 };

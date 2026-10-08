@@ -605,6 +605,7 @@ for (const t of selected) {
       // Re-wraps are NOT lost labels and do not stop the rollout, but they are
       // printed: a check that silently forgives is the next --force habit starting.
       if (d.rewrapped && d.rewrapped.length) console.log(`    RE-WRAPPED in ${file}: ` + d.rewrapped.map(r => `${r.label} -> ${r.as.join(' + ')}`).join(' | '));
+      if (d.reworded && d.reworded.length) console.log(`    REWORDED in ${file} (declared in legend_rewordings.json, OA-607): ` + d.reworded.map(r => `${r.label} (${r.pr})`).join(' | '));
       if (d.gained.length) console.log(`    GAINED in ${file}: ${d.gained.join(' | ')}`);
       // Same text, new place (OA-463): the three lines above compare SETS of strings and
       // cannot see it. Reported, never gating.

@@ -39,7 +39,7 @@ const has = (r, key, level) => r.findings.some((f) => f.key === key && (!level |
 async function suite(m, label, verbose) {
   let bad = 0;
   const check = (name, cond) => { if (cond) { if (verbose) console.log(`  ok  ${name}`); } else { bad++; if (verbose) console.error(`  ✗   ${name}`); } };
-  const { analyse, bucketActions, parseAction, frontMatter, localDate, gather, classifyBusWork, promptScripts, parseResources, parseBusWork, passedOver, render } = m;
+  const { analyse, bucketActions, parseAction, frontMatter, localDate, gather, classifyBusWork, promptScripts, parseResources, parseBusWork, passedOver, render, renderCapacity, readInkReview } = m;
 
   // 1. the buckets, and the date edge that decides whether a row is free
   const b = bucketActions([
@@ -218,6 +218,34 @@ async function suite(m, label, verbose) {
   check('the report carries the work verdict and the levers', /CAN A TICK DO WORK\? NOTHING TO DO/.test(text) && /What you can do, most rows first:/.test(text));
   check('the report calls the backlog what it is, not the loop\'s supply', /Backlog \(not the loop's feed/.test(text) && !/free to take/.test(text));
 
+  // 7g. can the ticks clear the finishable refreshes before their changes take effect?
+  // NOW is 3 Oct, so a date of 4 Oct leaves one day: three ticks at the default cadence.
+  const ref = (key, effectiveDate, o = {}) => ({ key, kind: 'refresh', towns: [], unattended: true, effectiveDate, map: key.replace(/^refresh-/, ''), local: false, ...o });
+  const feed = (rows, o = {}) => ({ grades: {}, fixtures: [], reviewed: [], rows, ...o });
+  const three = [ref('refresh-march', '2026-10-04'), ref('refresh-wisbech', '2026-10-04'), ref('refresh-ely', '2026-10-04')];
+  const short = analyse(base({ busWork: feed(three) }));
+  const dl = short.findings.find((x) => x.key === 'refresh-deadline');
+  check('three refreshes owing six units, due tomorrow, at three ticks a day, are AT RISK', has(short, 'refresh-deadline', 'AT RISK') && short.verdict === 'AT RISK');
+  check('the move is /ticks with the computed shortfall', !!dl && /\/ticks 3\b/.test(dl.move));
+  check('the finding names the date, the units and what fires before it', !!dl && /2026-10-04/.test(dl.text) && /6 tick units/.test(dl.text) && /only 3 ticks fire/.test(dl.text));
+  check('the shortfall is a lever too, naming its rows', short.capacity.levers.some((v) => v.move === '`/ticks 3`' && v.refs.includes('refresh-march')));
+  check('the cadence was assumed and the finding says so', short.capacity.deadline.perDaySource === 'assumed' && /assumed/.test(dl.text));
+  const read6 = analyse(base({ busWork: feed(three), perDay: 6 }));
+  check('the README cadence is used when it was read: six a day clears them', !has(read6, 'refresh-deadline') && read6.capacity.deadline.perDay === 6 && read6.capacity.deadline.perDaySource === 'loop/README.md');
+  const week = analyse(base({ busWork: feed([ref('refresh-march', '2026-10-10')]) }));
+  check('a row a week away is in time: no finding, and the report says in time', !has(week, 'refresh-deadline') && /Deadlines .*in time/.test(renderCapacity(week.capacity)));
+  check('the report prints how many ticks short', /Deadlines .*3 ticks short/.test(renderCapacity(short.capacity)));
+  const lateRow = analyse(base({ busWork: feed([ref('refresh-march', '2026-10-02')]) })).findings.find((x) => x.key === 'refresh-deadline');
+  check('a change already in effect is said so, and the move is to catch up, not to be in time', !!lateRow && /1 day ago/.test(lateRow.text) && /no tick fires/.test(lateRow.text) && /1 of them takes effect/.test(lateRow.text) && /\/ticks 2\b/.test(lateRow.move) && /catch up/.test(lateRow.move));
+  check('a refresh row a person must take is not projected', !has(analyse(base({ busWork: feed(three.map((r) => ({ ...r, unattended: false }))) })), 'refresh-deadline'));
+  const review = { maps: [{ map: 'march', status: 'no-ink', after: 'v2', staged: { after: 'v2' } }, { map: 'wisbech', status: 'no-ink', after: 'v2', staged: { after: 'v2' } }] };
+  const staged = analyse(base({ busWork: feed(three, { review }) }));
+  check('maps the ink review shows staged owe nothing, so two staged of three is in time', !has(staged, 'refresh-deadline') && staged.capacity.deadline.units === 2);
+  check('a local refresh owes no staging', analyse(base({ busWork: feed([ref('refresh-local-Chatteris', '2026-10-04', { local: true, map: 'Chatteris' })]) })).capacity.deadline.units === 1);
+  check('without --deep there is no deadline, never a guess', analyse(base()).capacity.deadline === null);
+  const pb = parseBusWork(JSON.stringify({ meta: { upcomingReport: { date: '2026-10-01' } }, items: [{ key: 'refresh-march', unattended: { cmd: 'x' }, effectiveDate: '2026-10-04', map: 'March' }, { key: 'refresh-local-Chatteris', effectiveDate: null, map: 'Chatteris' }] }));
+  check('parseBusWork carries the date, the map, the local flag and the scan', pb.scan === '2026-10-01' && pb.rows[0].effectiveDate === '2026-10-04' && pb.rows[0].map === 'March' && !pb.rows[0].local && pb.rows[1].local && pb.rows[1].effectiveDate === null);
+
   // 8. real directories: gather() and the CLI
   const root = fs.mkdtempSync(path.join(tmp, 'buses-'));
   const oa = path.join(root, 'Development Docs', 'open-actions'); fs.mkdirSync(oa, { recursive: true });
@@ -255,6 +283,12 @@ async function suite(m, label, verbose) {
   check('gather: a checker that exits 1 is drift, and a named file that is not there is missing', f4.prereq.drift === true && f4.prereq.scripts.some((s) => /gone\.mjs$/.test(s.path) && !s.exists) && f4.prereq.scripts.some((s) => /worklist\.mjs$/.test(s.path) && s.exists));
   fs.writeFileSync(checker, 'process.exit(0);\n');
   check('gather: a checker that exits 0 is no drift', gather(root, { now: NOW, probes: { prereq: true } }).prereq.drift === false);
+  check('gather: a README with no cron gives no cadence, for analyse to fall back on', gather(root, { now: NOW }).perDay === null);
+  fs.appendFileSync(path.join(root, 'loop', 'README.md'), '\nThe cadence is three ticks a day (cron `0 4,13,19 * * *`, OA-577).\n');
+  check('gather: the cadence is read from the README cron', gather(root, { now: NOW }).perDay === 3);
+  fs.mkdirSync(path.join(root, '_gtfs'), { recursive: true });
+  fs.writeFileSync(path.join(root, '_gtfs', 'ink-review_2026-10-01.json'), JSON.stringify({ maps: [{ map: 'March' }] }));
+  check('readInkReview reads the review for the scan, and none is null', readInkReview(root, '2026-10-01').maps[0].map === 'March' && readInkReview(root, '2026-09-01') === null && readInkReview(root, null) === null);
   fs.rmSync(path.join(root, 'loop', 'README.md'));
   check('gather: no README prompt block is reported unreadable', gather(root, { now: NOW, probes: { prereq: true } }).prereq.unreadable === true);
 
@@ -327,6 +361,16 @@ const MUTANTS = [
   ['a missing worklist no longer blocks', "add(critical ? 'BLOCKING' : 'AT RISK', 'script-missing'", "add('AT RISK', 'script-missing'"],
   ['a lock-only resource is reported as a finding', 'if (b.lockOnly) continue;', ''],
   ['a real tree bar no longer bars work', "if (b.name === 'buses-tree') treeBarred = true;", ''],
+  // can the ticks clear the refreshes in time
+  ['the deadline finding is never raised', 'if (d.shortfall > 0) {', 'if (false) {'],
+  ['a deadline shortfall is only a note', "add('AT RISK', 'refresh-deadline'", "add('NOTE', 'refresh-deadline'"],
+  ['the lever names a fixed tick count', 'Run \\`/ticks ${d.shortfall}\\` now', 'Run \\`/ticks 1\\` now'],
+  ['the ink review is ignored', 'units: unitsOwed(bw.review || null, r.map, { local: !!r.local })', 'units: 2'],
+  ['the README cadence is ignored', 'const perDay = f.perDay || DEFAULT_TICKS_PER_DAY;', 'const perDay = DEFAULT_TICKS_PER_DAY;'],
+  ['a person\'s refresh row is projected', 'if (r.unattended) out.refresh.push(', 'out.refresh.push('],
+  ['parseBusWork drops the date', 'effectiveDate: r.effectiveDate || null, map: r.map || null', 'effectiveDate: null, map: r.map || null'],
+  ['gather never reads the cadence', "return ticksPerDay(readFileSync(path.join(loopDir, 'README.md'), 'utf8'));", 'return null;'],
+  ['an ink review for another scan is read', '`ink-review_${scan}.json`', "'ink-review_2026-10-01.json'"],
   ['levers are not ranked by rows', '(a.nothing - b.nothing) || (b.rows - a.rows)', '0'],
   ['a checker exit of 1 is no longer drift', 'drift.status === 1 ? true :', 'drift.status === 99 ? true :'],
 ];

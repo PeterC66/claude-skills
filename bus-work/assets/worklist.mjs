@@ -95,6 +95,7 @@ import { unsentLetterItem } from './outbound_letter.mjs';
 import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
 import { readScanState, bodsScanItems, readGtfsDirt, gtfsUncommittedItems } from './bods_scan.mjs';
 import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh } from './refresh_grades.mjs';
+import { earliestEffective, compareRows } from './refresh_deadline.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
@@ -436,7 +437,7 @@ function fromUpcomingReport() {
   const md = readFileSync(file, 'utf8');
   const sections = md.split(/^## /m).slice(1).map((part) => {
     const m = part.match(/^(.+?) — (\d+) upcoming(?:, (\d+) to verify)?\r?\n([\s\S]*)$/);
-    return m ? { town: m[1].trim(), upcoming: Number(m[2]), toVerify: Number(m[3] || 0), body: m[4] } : null;
+    return m ? { town: m[1].trim(), upcoming: Number(m[2]), toVerify: Number(m[3] || 0), body: m[4], effective: earliestEffective(m[4]) } : null;
   }).filter(Boolean);
   return { file, date, ageDays: daysSince(date), sections };
 }
@@ -865,6 +866,9 @@ const townMaps = (town) => {
 if (upcoming) {
   for (const s of upcoming.sections) {
     const maps = townMaps(s.town);
+    // The scan's own earliest date in this section (refresh_deadline.mjs): it orders the
+    // rows inside their rank, and loop_health.mjs projects the queue against it.
+    const when = s.effective ? `, the first taking effect ${s.effective}` : '';
     const localTown = tree.towns.find((t) => t.name.toLowerCase() === s.town.toLowerCase());
     for (const m of maps) {
       if (haveKey(`refresh-${m.slug}`)) continue; // the portal already flagged this one
@@ -874,10 +878,10 @@ if (upcoming) {
       const un = unattendedRefresh(grades, s.town, upcoming.date, { kind: m.kind, assetsDir: SK });
       add({
         key: `refresh-${m.slug}`, rank: 5, type: 'refresh',
-        title: `Refresh "${m.name}" — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'} in ${s.town}`,
+        title: `Refresh "${m.name}" — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'} in ${s.town}${when}`,
         why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.${gradeSentence(grades, s.town, upcoming.date)}`,
         grade: gradeFor(grades, s.town, upcoming.date),
-        unattended: un,
+        unattended: un, effectiveDate: s.effective, map: m.name,
         who: m.customerName || 'unowned', ageDays: upcoming.ageDays, detail: s.body.split('\n').filter((l) => l.trim().startsWith('- ')).slice(0, 6).join('\n'),
         where: appUrl('/app/admin'), runbook: 'R4', skill, subject: s.town, kind: m.kind, slug: m.slug,
         // REMOTE: the target is the live site, so deliver-map.mjs is the only
@@ -901,10 +905,10 @@ if (upcoming) {
       const unLocal = unattendedRefresh(grades, localTown.name, upcoming.date, { kind: 'area', assetsDir: SK });
       add({
         key: `refresh-local-${localTown.name}`, rank: 7, type: 'refresh-local',
-        title: `Refresh the ${localTown.name} leaflet — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'}`,
+        title: `Refresh the ${localTown.name} leaflet — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'}${when}`,
         why: `${localTown.name} has a built leaflet (v${localTown.version}) but no portal map, so nothing flags it. The printed sheet is going stale.${gradeSentence(grades, localTown.name, upcoming.date)}`,
         grade: gradeFor(grades, localTown.name, upcoming.date),
-        unattended: unLocal,
+        unattended: unLocal, effectiveDate: s.effective, map: localTown.name,
         who: '—', ageDays: upcoming.ageDays, runbook: 'R4', skill: 'make-bus-leaflet', subject: localTown.name,
         do: [rebuildStep(unLocal, `Re-run make-bus-leaflet for ${localTown.name} (S1 → S5).`)],
       });
@@ -1482,9 +1486,10 @@ const unsafeHidden = SAFE_ONLY ? shown.filter((i) => i.safety.verdict !== conc.S
 if (SAFE_ONLY) shown = shown.filter((i) => i.safety.verdict === conc.SAFE);
 
 // Demo rows sort BELOW every real row regardless of rank -- a demo publish
-// review is not "someone is blocked", because nobody is.
-shown.sort((a, b) => (a.demo ? 1 : 0) - (b.demo ? 1 : 0)
-  || a.rank - b.rank || (b.ageDays || 0) - (a.ageDays || 0) || a.key.localeCompare(b.key));
+// review is not "someone is blocked", because nobody is. Inside a rank, a refresh
+// row whose changes take effect sooner comes first (refresh_deadline.mjs): every row
+// from one scan has the same age, so before that the order was alphabetical.
+shown.sort(compareRows);
 const limited = args.limit ? shown.slice(0, Number(args.limit)) : shown;
 
 // OA-417. `shown` and not `limited`, and the reasoning is in portal_clicks.mjs.

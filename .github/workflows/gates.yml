@@ -787,6 +787,14 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-loop-health
 
+      # buses-data, 2026-10-08: the effective date that orders the worklist's
+      # refresh rows, and the earliest-deadline-first arithmetic loop-health uses
+      # to say whether three ticks a day can clear them before their changes take
+      # effect. Pure module, built facts only; no disk, no clock, no network.
+      - name: Prove the refresh deadline ordering and projection can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-refresh-deadline
+
       # The push job (buses-data, the 6 October simplification review, B1/B2): the
       # hourly, model-free carrier of local main to origin that replaces step 8's
       # push in the scheduled tick. It drives the REAL git against throwaway bare

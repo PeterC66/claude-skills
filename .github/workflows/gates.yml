@@ -444,6 +444,16 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-gtfs-uncommitted
 
+      # buses-data OA-607 (2026-10-08). A map the live site does not list owes no
+      # engine-rebuild row, and a list nobody could read raises every row as before.
+      # The failure that matters is the SILENT one -- a hidden map dropping a row a
+      # public map is owed -- so each case is paired with its opposite and five
+      # mutants on a scratch copy must each turn one red. A fake site on 127.0.0.1;
+      # no other network.
+      - name: Prove a map off the portal owes no rebuild row, and an unread list drops none
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-off-portal
+
       # buses-data OA-542 (2026-10-01). A scheduled tick may commit an edit Peter
       # finished in the main tree: one a live hold spells out as an exact diff, or
       # a quiet, checker-green document. Every exclusion is a case, then a real

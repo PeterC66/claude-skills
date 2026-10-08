@@ -22,10 +22,16 @@
  * the worklist; nothing here is in the board's `bad`, and `loop_health` reports it as
  * a NOTE. The ceiling decides when a note is raised, not when anything stops.
  *
+ * A MAP OFF THE PORTAL IS HELD TO NO CEILING (OA-607). Given a `listing` from
+ * portal_listing.js, a map the live site does not list leaves `over` for `offPortal`:
+ * the public cannot see it, so it is rebuilt when it is next activated (a refresh, a
+ * publish, a letter), not on the clock. A listing that was not read counts every map
+ * as on the portal, and says so — a failed read never quietly drops a map.
+ *
  * THIS FILE IS OUTSIDE BOTH ENGINE HASHES and must stay there: no generator requires
  * it, so adding it moves no ink. Zero dependencies (Node core only).
  *
- *   node assets/engine_lag.js --buses "<buses-data root>" [--json]
+ *   node assets/engine_lag.js --buses "<buses-data root>" [--json] [--live <base url>] [--no-live]
  */
 'use strict';
 const path = require('node:path');
@@ -63,27 +69,30 @@ function firstMovedAt(root, commit, files) {
 
 /**
  * Measure a list of maps `{ name, engineCommit, place }`. `files` is `{ town: [...], place: [...] }`,
- * absolute paths of each closure. Returns `{ ceiling, measured, over, unknown, rows }`,
- * `over` sorted worst first.
+ * absolute paths of each closure. Returns `{ ceiling, measured, over, unknown, offPortal, listing, rows }`,
+ * `over` sorted worst first. `listing` is portal_listing.read()'s answer, or absent.
  */
-function measure(maps, { skillsRoot, files, nowMs = Date.now(), ceiling = CEILING_DAYS }) {
+function measure(maps, { skillsRoot, files, nowMs = Date.now(), ceiling = CEILING_DAYS, listing }) {
+  const pl = require('./portal_listing.js');
   const cache = new Map();
   const rows = maps.map((m) => {
     const kind = m.place ? 'place' : 'town';
     const key = kind + ':' + m.engineCommit;
     if (!cache.has(key)) cache.set(key, firstMovedAt(skillsRoot, m.engineCommit, files[kind]));
-    const f = cache.get(key);
-    if (f.status === 'unknown') return { name: m.name, days: null, why: f.why };
-    if (f.status === 'current') return { name: m.name, days: 0 };
+    const f = cache.get(key), onPortal = pl.isListed(listing, m.name);
+    if (f.status === 'unknown') return { name: m.name, onPortal, days: null, why: f.why };
+    if (f.status === 'current') return { name: m.name, onPortal, days: 0 };
     const t = Date.parse(f.at);
-    return Number.isFinite(t) ? { name: m.name, days: Math.max(0, Math.floor((nowMs - t) / DAY_MS)), since: f.at.slice(0, 10) }
-      : { name: m.name, days: null, why: 'unreadable commit date ' + f.at };
+    return Number.isFinite(t) ? { name: m.name, onPortal, days: Math.max(0, Math.floor((nowMs - t) / DAY_MS)), since: f.at.slice(0, 10) }
+      : { name: m.name, onPortal, days: null, why: 'unreadable commit date ' + f.at };
   });
   return {
     ceiling,
     measured: rows.filter((r) => r.days !== null).length,
-    over: rows.filter((r) => r.days !== null && r.days > ceiling).sort((a, b) => b.days - a.days),
+    over: rows.filter((r) => r.days !== null && r.days > ceiling && r.onPortal !== false).sort((a, b) => b.days - a.days),
     unknown: rows.filter((r) => r.days === null),
+    offPortal: rows.filter((r) => r.onPortal === false && r.days !== 0),
+    listing: listing ? { measured: pl.split([], listing).measured, why: listing.why || null } : null,
     rows,
   };
 }
@@ -142,6 +151,9 @@ function lines(r) {
     ? '  ' + r.over.length + ' of ' + r.rows.length + ' maps are past the ' + r.ceiling + '-day engine-lag ceiling (look, not red; a rebuild row each): '
       + r.over.map((m) => m.name + ' ' + m.days + 'd').join(', ')
     : '  no map is past the ' + r.ceiling + '-day engine-lag ceiling (' + r.measured + ' of ' + r.rows.length + ' measured)');
+  if (r.offPortal && r.offPortal.length) out.push('  ' + r.offPortal.length + ' off the portal, so held to no ceiling and owed no rebuild until next activated (OA-607): '
+    + r.offPortal.map((m) => m.name + (m.days === null ? ' ?' : ' ' + m.days + 'd')).join(', '));
+  if (r.listing && !r.listing.measured) out.push('  portal listing not read (' + r.listing.why + ') — every map is held to the ceiling, on the portal or not');
   if (r.unknown.length) out.push('  lag unknown for ' + r.unknown.length + ' (not counted as inside the ceiling): ' + r.unknown.map((m) => m.name + ' — ' + m.why).join('; '));
   return out;
 }
@@ -150,10 +162,11 @@ function printSection(r) { for (const l of lines(r)) console.log(l); }
 
 module.exports = { CEILING_DAYS, firstMovedAt, measure, collect, measureTree, engineClosures, repoRoot, lines, printSection };
 
-if (require.main === module) {
+if (require.main === module) (async () => {
   const a = process.argv.slice(2);
-  const i = a.indexOf('--buses');
-  if (i < 0 || !a[i + 1]) { console.error('usage: node engine_lag.js --buses "<buses-data root>" [--json]'); process.exit(2); }
-  const r = measureTree(path.resolve(a[i + 1]));
+  const i = a.indexOf('--buses'), l = a.indexOf('--live');
+  if (i < 0 || !a[i + 1]) { console.error('usage: node engine_lag.js --buses "<buses-data root>" [--json] [--live <base url>] [--no-live]'); process.exit(2); }
+  const listing = await require('./portal_listing.js').read({ liveUrl: l >= 0 ? a[l + 1] : undefined, noLive: a.includes('--no-live') });
+  const r = measureTree(path.resolve(a[i + 1]), { listing });
   if (a.includes('--json')) console.log(JSON.stringify(r, null, 2)); else printSection(r);
-}
+})();

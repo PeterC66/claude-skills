@@ -1113,10 +1113,16 @@ for (const it of freshPull.items) add(it);
  *
  * IT CAN BE A ROW AT ALL ONLY BECAUSE IT IS A CHORE: status.js gates each map
  * against the engine recorded in its own ci-reference, so a behind map's sheets are
- * still proved to reproduce, and being behind is no longer a red.
+ * still proved to reproduce, and being behind is no longer a red. AND ONLY FOR A MAP
+ * THE LIVE SITE LISTS (OA-607): a hidden one is rebuilt when next activated. Asked only
+ * when a map is behind; a list nobody could read raises every row, and says so.
  */
-const engineStale = tree.towns.filter((t) => t.built && t.engineStale).map((t) => ({ row: t, place: false }))
+const behindMaps = tree.towns.filter((t) => t.built && t.engineStale).map((t) => ({ row: t, place: false }))
   .concat((tree.places || []).filter((p) => p.built && p.engineStale).map((p) => ({ row: p, place: true })));
+const portalListing = behindMaps.length ? require(path.join(SK, 'portal_listing.js')) : null;
+const listed = portalListing ? await portalListing.read({ liveUrl: typeof args.live === 'string' ? args.live : DEFAULT_LIVE_URL, noLive: !!args['no-live'] }) : null;
+const { on: engineStale, off: offPortal } = portalListing ? portalListing.split(behindMaps, listed, (e) => e.row.name) : { on: [], off: [] };
+if (listed && !listed.listed) warnings.push(`portal listing not read (${listed.why}) — an engine-rebuild row is raised for every behind map, on the portal or not (OA-607).`);
 for (const { row: mapRow, place } of engineStale) {
   const live = place ? tree.currentPlaceEngine : tree.currentEngine, clock = (place ? tree.pinPlaceEngine : tree.pinEngine) || live; // OA-574: clock = the ADOPTED engine
   const tool = place ? 'rollout_places.js' : 'rollout.js';
@@ -1502,6 +1508,7 @@ const meta = {
   // Which threads declared themselves finished, and what they said. Same
   // argument as `adjudicated` directly above.
   correspondenceSettled,
+  offPortal: offPortal.map((e) => e.row.name), // OA-607: behind, unlisted, so no engine-rebuild row
   // OA-221. A caller reading --json must be able to see the same verdict a
   // person does, and the evidence behind it -- otherwise the two disagree and
   // only one of them gets read.
@@ -1566,6 +1573,7 @@ if (correspondenceSettled.length) {
   }
   console.log('');
 }
+if (offPortal.length) console.log(`  off the portal, so no engine-rebuild row until next activated (OA-607): ${offPortal.map((e) => e.row.name).join(', ')}\n`);
 if (warnings.length) console.log('');
 if (!SHOW_DEMO && demoAll.length) console.log(`  (${demoAll.length} demo-customer row${demoAll.length === 1 ? '' : 's'} hidden — --demo to show)\n`);
 

@@ -13,10 +13,9 @@
  * stale on landing gets one fortnight, because a check red on its first day gets
  * muted.
  *
- * PUBLISHED IS ASKED OF THE LIVE SITE, /api/public/maps — the one place a
- * published version, an active customer, public_listed and not-archived have all
- * been applied (bus-work/assets/town_status.mjs asks the same). A map only built
- * here is not published and its stale S6 stays a chore. --no-live, or a site that
+ * PUBLISHED IS ASKED OF THE LIVE SITE, /api/public/maps, through portal_listing.js
+ * (OA-607), which engine_lag.js and the worklist's rebuild rows ask too. A map only
+ * built here is not published and its stale S6 stays a chore. --no-live, or a site that
  * cannot be reached, leaves the limit NOT MEASURED: printed, never red, the same
  * as the deployment row's `unreachable`. `today` is injectable (status.js
  * --owed-today) so the red can be proved rather than waited for.
@@ -28,7 +27,7 @@ const LIMIT_LANDED = '2026-09-29';
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 function addDays(iso, n) { return new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10); }
-const slugOf = (n) => String(n).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const listing = require('./portal_listing.js');
 
 /** The day of the first S1/S2/S3 run recorded after `s6At`, or null if none is. */
 function staleSince(manifest, s6At) {
@@ -44,10 +43,8 @@ function staleSince(manifest, s6At) {
 /** Pure: judge every stale row against the published list. `published` null = not measured. */
 function judge({ towns = [], places = [], published, why = null, today = todayIso() }) {
   if (!published) return { checked: false, why: why || 'the published list was not read', today, rows: [], overdue: [] };
-  const names = new Set(published.map(p => p.name));
-  const slugs = new Set(published.map(p => p.slug));
   const rows = towns.map(r => ({ r, kind: 'town' })).concat(places.map(r => ({ r, kind: 'place' })))
-    .filter(({ r }) => r.s6Stale && (names.has(r.name) || slugs.has(slugOf(r.name))))
+    .filter(({ r }) => r.s6Stale && listing.isListed({ listed: published }, r.name))
     .map(({ r, kind }) => {
       const from = [r.s6StaleSince, LIMIT_LANDED].filter(d => typeof d === 'string' && ISO.test(d)).sort().pop();
       const due = addDays(from, LIMIT_DAYS);
@@ -56,19 +53,11 @@ function judge({ towns = [], places = [], published, why = null, today = todayIs
   return { checked: true, why: null, today, rows, overdue: rows.filter(x => x.overdue) };
 }
 
-/** Read the live list, then judge. Never throws: a failure is `checked: false`. */
-async function measure({ towns, places, liveUrl, noLive = false, today }) {
+/** Read the live list (or take the one `given`, as status.js does), then judge. Never throws: a failure is `checked: false`. */
+async function measure({ towns, places, liveUrl, noLive = false, today, given }) {
   const t = typeof today === 'string' && ISO.test(today) ? today : todayIso();
-  if (noLive) return judge({ towns, places, published: null, why: '--no-live', today: t });
-  try {
-    const res = await fetch(liveUrl + '/api/public/maps', { signal: AbortSignal.timeout(8000), redirect: 'follow' });
-    const body = await res.json();
-    const list = Array.isArray(body) ? body : (body && (body.maps || body.data));
-    if (!res.ok || !Array.isArray(list)) return judge({ towns, places, published: null, why: 'the public maps API answered ' + res.status + ' without a list', today: t });
-    return judge({ towns, places, published: list.map(p => ({ name: p.name, slug: p.slug })), today: t });
-  } catch (e) {
-    return judge({ towns, places, published: null, why: 'could not reach ' + liveUrl + ' — ' + String(e.message || e), today: t });
-  }
+  const l = given || await listing.read({ liveUrl, noLive });
+  return judge({ towns, places, published: l.listed, why: l.why, today: t });
 }
 
 function isRed(m) { return !!(m && m.checked && m.overdue.length); }

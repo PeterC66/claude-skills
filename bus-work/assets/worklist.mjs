@@ -866,9 +866,7 @@ const townMaps = (town) => {
 if (upcoming) {
   for (const s of upcoming.sections) {
     const maps = townMaps(s.town);
-    // The scan's own earliest date in this section (refresh_deadline.mjs): it orders the
-    // rows inside their rank, and loop_health.mjs projects the queue against it.
-    const when = s.effective ? `, the first taking effect ${s.effective}` : '';
+    const when = s.effective ? `, the first taking effect ${s.effective}` : ''; // the scan's own earliest date (refresh_deadline.mjs)
     const localTown = tree.towns.find((t) => t.name.toLowerCase() === s.town.toLowerCase());
     for (const m of maps) {
       if (haveKey(`refresh-${m.slug}`)) continue; // the portal already flagged this one
@@ -1485,10 +1483,7 @@ let shown = SHOW_DEMO ? items : items.filter((i) => !i.demo);
 const unsafeHidden = SAFE_ONLY ? shown.filter((i) => i.safety.verdict !== conc.SAFE).length : 0;
 if (SAFE_ONLY) shown = shown.filter((i) => i.safety.verdict === conc.SAFE);
 
-// Demo rows sort BELOW every real row regardless of rank -- a demo publish
-// review is not "someone is blocked", because nobody is. Inside a rank, a refresh
-// row whose changes take effect sooner comes first (refresh_deadline.mjs): every row
-// from one scan has the same age, so before that the order was alphabetical.
+// Demo rows last, then rank, then the sooner effective date: refresh_deadline.mjs says why.
 shown.sort(compareRows);
 const limited = args.limit ? shown.slice(0, Number(args.limit)) : shown;
 

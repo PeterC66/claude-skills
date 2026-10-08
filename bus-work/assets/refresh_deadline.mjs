@@ -57,7 +57,8 @@ export function earliestEffective(body) {
 }
 
 /**
- * The worklist's row order. Demo rows last; then rank; then, inside one rank, a row
+ * The worklist's row order. Demo rows last, whatever their rank, because a demo publish
+ * review is not "someone is blocked": nobody is. Then rank; then, inside one rank, a row
  * with an effective date before one without, and the sooner date first; then the
  * older row; then the key, so the order never depends on the order rows were added.
  */

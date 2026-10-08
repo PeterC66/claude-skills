@@ -63,7 +63,7 @@ test('the version stamp never counts as content lost or gained', () => tmp(dir =
   // what made a scratch build report a false LOST/GAINED pair on 2026-08-09.
   const older = put(dir, 'old.svg', SVG.replace('Valid from Summer 2026', 'Valid from Spring 2026'));
   const newer = put(dir, 'new.svg', SVG);
-  assert.deepStrictEqual(G.labelDiff(older, newer), { lost: [], gained: [], rewrapped: [], moved: [] });
+  assert.deepStrictEqual(G.labelDiff(older, newer), { lost: [], gained: [], rewrapped: [], reworded: [], moved: [] });
   assert.ok(G.VERSION_STAMP_RE.test('Map v2.1 · 2026-08-10'), 'the pre-2026-08-10 stamp format is still recognised');
 }));
 
@@ -129,6 +129,71 @@ test('a destination that genuinely disappears still stops the rollout', () => tm
   assert.deepStrictEqual(d.lost.sort(), ['Uxbridge', 'Wood Green Animal Shelter']);
   assert.deepStrictEqual(d.rewrapped, []);
 }));
+
+/* buses-data OA-607: legend lines the ENGINE declares it reworded (legend_rewordings.json).
+ * Every case is a pair with a refusal, because the lost-label guard is one of the gates
+ * the 2026-10-06 review would not have softened without one. Two run folders, as a
+ * rollout has: the old S4 and the new, each with its sheet beside its data. */
+const runs = (dir, oldTexts, newTexts, sheet = 'internal.svg', data = { 'roads_geo.json': { roads: [{ name: 'Broad Piece' }] } }) => {
+  const svg = (ts) => ts.map((t, i) => '<text x="10" y="' + (20 + 10 * i) + '">' + t + '</text>').join('\n');
+  const out = {};
+  for (const [k, ts] of [['old', oldTexts], ['new', newTexts]]) {
+    fs.mkdirSync(path.join(dir, k), { recursive: true });
+    for (const [n, j] of Object.entries(data)) fs.writeFileSync(path.join(dir, k, n), JSON.stringify(j));
+    out[k] = put(path.join(dir, k), sheet, svg(ts));
+  }
+  return G.labelDiff(out.old, out.new);
+};
+const FREQ_WAS = 'Frequent — turn up and go', FREQ_NOW = 'Frequent — at least every 30 minutes';
+
+test('OA-607: a declared legend line on its own is REWORDED, not LOST, and is reported', () => tmp(dir => {
+  const d = runs(dir, [FREQ_WAS, 'Soham'], [FREQ_NOW, 'Soham']);
+  assert.deepStrictEqual(d.lost, []);
+  assert.deepStrictEqual(d.reworded.map(r => [r.label, r.pr]), [[FREQ_WAS, 'claude-skills #146']]);
+}));
+
+test('OA-607: a declared line beside a lost ROAD still stops on the road', () => tmp(dir => {
+  const d = runs(dir, [FREQ_WAS, 'Broad Piece'], [FREQ_NOW]);
+  assert.deepStrictEqual(d.lost, ['Broad Piece']);
+  assert.strictEqual(d.reworded.length, 1);
+}));
+
+test('OA-607: a declared line whose replacement is NOT on the new sheet stops', () => tmp(dir => {
+  const d = runs(dir, [FREQ_WAS], ['Something else']);
+  assert.deepStrictEqual(d.lost, [FREQ_WAS]);
+  assert.deepStrictEqual(d.reworded, []);
+}));
+
+test('OA-607: an UNDECLARED legend line stops, and a declared one on the wrong sheet stops', () => tmp(dir => {
+  assert.deepStrictEqual(runs(path.join(dir, 'a'), ['Every bus stops at the bus station'], ['Soham']).lost, ['Every bus stops at the bus station']);
+  assert.deepStrictEqual(runs(path.join(dir, 'b'), [FREQ_WAS], [FREQ_NOW], 'external.svg').lost, [FREQ_WAS], '#146 declared the internal sheets only');
+}));
+
+test('OA-607: a declaration naming a ROAD is refused by the data, whatever it says', () => tmp(dir => {
+  fs.mkdirSync(path.join(dir, 'old'), { recursive: true }); fs.mkdirSync(path.join(dir, 'new'), { recursive: true });
+  for (const k of ['old', 'new']) fs.writeFileSync(path.join(dir, k, 'roads_geo.json'), JSON.stringify({ roads: [{ name: 'Broad Piece' }] }));
+  const r = G.rewordedOf(['Broad Piece'], { sheet: 'internal.svg', newLabels: ['Soham'], dataDirs: [path.join(dir, 'old'), path.join(dir, 'new')],
+    rewordings: [{ pr: 'a wrong declaration', sheets: ['internal.svg'], was: ['Broad Piece'], now: [] }] });
+  assert.deepStrictEqual(r.lost, ['Broad Piece']);
+  assert.deepStrictEqual(r.reworded, []);
+  const clean = G.rewordedOf(['Broad Piece'], { sheet: 'internal.svg', newLabels: ['Soham'], dataDirs: [path.join(dir, 'nowhere')],
+    rewordings: [{ pr: 'x', sheets: ['internal.svg'], was: ['Broad Piece'], now: [] }] });
+  assert.deepStrictEqual(clean.lost, [], 'CONTROL: the same declaration with no data behind it is honoured, so it is the data that refused');
+}));
+
+test('OA-607: wrapped bullets are excused only when the lost fragments rebuild the WHOLE declared line', () => tmp(dir => {
+  const was = ['The panel headed “Operators &amp; services” says who runs it.', 'A time under a destination is a typical whole journey, not a', 'timetable.'];
+  const d = runs(path.join(dir, 'a'), [...was, 'Soham'], ['Soham'], 'external.svg');
+  assert.deepStrictEqual(d.lost, []);
+  assert.deepStrictEqual(d.reworded.map(r => r.as.length).sort(), [1, 2]);
+  const lone = runs(path.join(dir, 'b'), ['timetable.', 'Soham'], ['Soham'], 'external.svg');
+  assert.deepStrictEqual(lone.lost, ['timetable.'], 'a fragment that rebuilds no declared line stays LOST');
+}));
+
+test('OA-607: an unreadable declaration file excuses nothing, and the seeded file names #146 and #165', () => {
+  assert.deepStrictEqual(G.readRewordings(path.join(os.tmpdir(), 'no-such-rewordings.json')), []);
+  assert.deepStrictEqual(G.readRewordings().map(e => e.pr), ['claude-skills #146', 'claude-skills #165']);
+});
 
 test('a re-wrap must RECONSTRUCT the name, not merely reuse its words', () => {
   /* The rule is deliberately narrower than "the words are all still there

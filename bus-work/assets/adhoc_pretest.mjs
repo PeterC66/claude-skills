@@ -7,7 +7,7 @@
  *
  *   node adhoc_pretest.mjs [--buses <buses-data root>] [--json]
  *
- * `--buses` defaults to the Buses repository on this machine, as in engine.mjs.
+ * `--buses` resolves as everywhere else in this folder (engine.mjs).
  * It reads and prints; it never moves, writes or commits. It always exits 0.
  *
  * WHY. A prompt is written on one day and reached by the ad-hoc loop on another.
@@ -48,8 +48,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-const DEFAULT_BUSES = 'C:/u3a St Ives/Using AI/Buses';
+import { parseArgs, resolveBuses } from './engine.mjs';
 
 /** The backticked conditions on the first `**<label>:**` line, or null if there is no such line. */
 export function conditionsOf(text, label) {
@@ -141,11 +140,9 @@ export function pretestAll(buses) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
-  const a = process.argv.slice(2);
-  const i = a.indexOf('--buses');
-  const buses = i >= 0 ? a[i + 1] : DEFAULT_BUSES;
-  const rows = pretestAll(buses);
-  if (a.includes('--json')) console.log(JSON.stringify(rows, null, 2));
+  const args = parseArgs(process.argv.slice(2));
+  const rows = pretestAll(resolveBuses(args));
+  if (args.json) console.log(JSON.stringify(rows, null, 2));
   else if (!rows.length) console.log('adhoc/ready/ is empty or absent.');
   else for (const r of rows) console.log(`${r.verdict.padEnd(10)} ${r.name} — ${r.why}`);
 }

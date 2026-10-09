@@ -173,6 +173,23 @@ node loop_health.mjs --buses "C:/Buses/buses-data"
 
 Its falsification harnesses are `npm run test:prove-red-loop-health` and, for the date, the order and the arithmetic, `npm run test:prove-red-refresh-deadline`, both in `bus-work`; each breaks its module one line at a time and requires the same assertions to go red.
 
+## Committing named paths — `commit_paths.mjs` (buses-data OA-617)
+
+**One script does the sequence every session used to hand-assemble:** stage by name, review the diff, commit by pathspec, read the commit back by content. Write the message to a file with the Write tool (nothing in it then passes through a shell), then run it twice, from anywhere. Placeholders: `<repo>` is the repository or worktree root, `<branch>` the branch it must be on, `<file>` the message file, `<path>` a file inside `<repo>` (never a folder or a pattern), `<token>` what the first run prints. The first run commits nothing and prints the paths, `git diff HEAD` of them and a review token; read the diff, then:
+
+```bash
+node "C:/Buses/claude-skills/bus-work/assets/commit_paths.mjs" --repo "<repo>" --branch <branch> --message-file "<file>" -- "<path>" "<path>"
+node "C:/Buses/claude-skills/bus-work/assets/commit_paths.mjs" --repo "<repo>" --branch <branch> --message-file "<file>" --apply --reviewed <token> -- "<path>" "<path>"
+```
+
+**It refuses, and commits nothing, when** the token no longer matches (a path, the branch, HEAD or the message changed since you read the diff), a path is a folder, a pattern or outside the repository, somebody else has already staged a named path, or the checkout is not on `<branch>` at the start or just before the commit. It commits through `spawnSync` with the output captured, so a backtick in the message is text and no pipe can kill a hook mid-refusal, and it never pushes. **It then reads the commit back:** subject, parent, the changed-file list equal to the paths, a clean `git status` for them, and each path's committed blob equal to the reviewed one, or every reviewed added line present where the pre-commit hook rewrote it. The two document-stamp lines are the only tolerated difference. If the commit lands and the read-back fails, the first line is `COMMITTED <sha> - READ-BACK FAILED` and `--json` carries `committed: true`: the commit is in the history, so repair it with a new commit and never commit again.
+
+**A restamp leaves git's index one stamp behind, and the script repairs it.** A pathspec commit builds git's real index before the pre-commit hook runs, so when the hook restamps a document the commit and the working tree carry the new stamp and the index keeps the old one (`MM`); a later bare commit would put the old stamp back. Measured on 9 October 2026 against buses-data's own hook. Where a named path is staged and its working tree already equals HEAD, the script resets that index entry and says so.
+
+**An untrack or a file-mode change is committed with `--index`**, because it has no working-tree content a pathspec could carry. Run `git rm --cached "<path>"` or `git update-index --chmod=+x "<path>"` first; `--index` then requires the staged set to be exactly the named paths, refuses a staged change of content, commits bare and reads back that the index is clean and the path is gone from HEAD, or has the reviewed mode. Exit 0: reported, or committed and read back. 1: a hook refused, or the read-back failed. 2: refused before any commit. 3: git's index is locked, try again.
+
+Its tests are `npm run test:commit-paths`, and `npm run test:prove-red-commit-paths` removes or weakens each `@guard:` line of the script in a scratch copy and requires the matching cases to go red. Both are in `bus-work`.
+
 ## Before you push — `preflight.mjs` answers *what would go red if I pushed now*
 
 **Run it once per ROUND, before the first push of a change that reaches map data, the engine or a workflow** (buses-data OA-343, from Peter on 2026-09-14: *I want us to avoid the system being in a BROKEN state*). Landing OA-338 left `buses-data` `main` red for about seven hours and met four independent blockers one at a time — byte-gate control diff, portal vendoring drift, the deployment row BEHIND, the portal's own `verify:area` on a stale committed fixture. Every one of them was true before the first push and answerable on this laptop in under two minutes, and three CI round trips were spent discovering them in sequence. From anywhere, with the repository written into the command rather than stated beside it, and with no placeholders:

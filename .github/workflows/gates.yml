@@ -660,6 +660,22 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-adhoc-pretest
 
+      # buses-data OA-617 (2026-10-09): commit_paths.mjs commits named paths from a diff the
+      # caller was shown and reads the commit back by content. Real throwaway repositories,
+      # real hooks where a case needs one to refuse or to rewrite what it was handed (the
+      # document stamp does), and an injected git where the world must change between two
+      # calls. No network, no estate.
+      - name: Test that the commit script commits only what was reviewed and reads it back
+        working-directory: skills/bus-work
+        run: npm run test:commit-paths
+
+      # The twin of the step above: one scratch copy per `@guard:` line in commit_paths.mjs,
+      # that line removed or weakened, and the cases it owns must go red. Also joins the tags
+      # in the source to the mutant list both ways, so a guard cannot be added unfalsified.
+      - name: Prove each guard in the commit script can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-commit-paths
+
       # buses-data OA-153 (2026-09-10): town_status.mjs answers "what is the status
       # of <map>?" and three of its four answers are NEGATIVES -- not on the public
       # site, no thread names it, nothing outstanding -- which look identical whether

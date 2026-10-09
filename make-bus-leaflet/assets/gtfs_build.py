@@ -8,7 +8,7 @@ Download the East Anglia GTFS (covers Cambridgeshire + Peterborough):
 
 Then:
   python gtfs_build.py --zip itm_east_anglia_gtfs.zip \
-      --out "C:/u3a St Ives/Using AI/Buses/_gtfs/cambridgeshire.sqlite"
+      --out "C:/Buses/buses-data/_gtfs/cambridgeshire.sqlite"
 
 Filters to trips that call at any Cambridgeshire (ATCO 0500*) or Peterborough
 (0570*) stop, keeping FULL route chains incl. out-of-county termini. Result ~80 MB.

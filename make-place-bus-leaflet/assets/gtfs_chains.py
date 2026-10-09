@@ -35,7 +35,7 @@ import sqlite3, sys, json, argparse, os
 # checkout (OA-232 Tier 3.1, satellite F10). Insert order is reversed because
 # sys.path.insert(0, ...) puts each new entry in front of the last.
 HERE = os.path.dirname(os.path.abspath(__file__))
-for _cand in (r"C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets",
+for _cand in (r"C:/Buses/claude-skills/make-bus-leaflet/assets",
               os.path.join(HERE, "..", "..", "make-bus-leaflet", "assets")):
     if os.path.isdir(_cand):
         sys.path.insert(0, _cand)

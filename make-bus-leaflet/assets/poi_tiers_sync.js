@@ -4,7 +4,7 @@
  * town's own source data, and say what that would change before writing it.
  * buses-data OA-233 (2026-09-05).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets):
+ * From this folder (C:\Buses\claude-skills\make-bus-leaflet\assets):
  *
  *   node poi_tiers_sync.js --town "High Wycombe"                    # dry run: print the diff, write nothing
  *   node poi_tiers_sync.js --town "High Wycombe" --apply            # write a NEW S3 run carrying the merge
@@ -15,7 +15,7 @@
  * (default: the BUSES_DIR convention in cli.js). `--url` and `--token` name a
  * portal and its read-only OPERATOR_TOKEN; when absent they are read from
  * BUSMAPS_URL / BUSMAPS_TOKEN, and failing that from the portal checkout's own
- * .env (`--portal DIR`, default C:\Claude\community-bus-maps). `--note` is the
+ * .env (`--portal DIR`, default C:\Buses\community-bus-maps). `--note` is the
  * S3 commit note under --apply; without it one is written for you. `--map-id`
  * overrides the town -> portal map match. Nothing else is a parameter.
  *

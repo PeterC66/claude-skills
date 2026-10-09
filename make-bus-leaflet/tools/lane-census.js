@@ -5,11 +5,11 @@
  * defect being repaired — a bundle of routes swapping sides, or a lane stepping
  * in and out for one segment — is one quality_metrics.js cannot see at all.
  *
- * Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` — the engine's own
+ * Run from `C:\Buses\claude-skills\make-bus-leaflet` — the engine's own
  * folder, not the buses-data repository:
  *
- *   node tools/lane-census.js --buses "C:/u3a St Ives/Using AI/Buses"
- *   node tools/lane-census.js --buses "C:/u3a St Ives/Using AI/Buses" --ribbon
+ *   node tools/lane-census.js --buses "C:/Buses/buses-data"
+ *   node tools/lane-census.js --buses "C:/Buses/buses-data" --ribbon
  *
  * `--buses` names the buses-data root (BUSES_DIR or the laptop default stand in
  * for it). `--ribbon` forces `design.laneRibbon: true` into a scratch copy of

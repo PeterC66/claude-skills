@@ -89,7 +89,7 @@
  * argument here that names a path on a particular machine:
  *
  *     node tools/estate-fixture.js --seed --map "Areas/March" \
- *        --from "C:/u3a St Ives/Using AI/Buses"
+ *        --from "C:/Buses/buses-data"
  *
  * EXIT CODES are the house rule: 0 in step, 1 BEHIND (a finding), 2 used wrongly.
  */

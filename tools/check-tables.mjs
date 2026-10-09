@@ -36,7 +36,7 @@
 //
 // Run it from anywhere inside the repository you are checking. The
 // path below is a real path on this machine, not a placeholder:
-//   node "C:/u3a St Ives/.claude/skills/tools/check-tables.mjs"
+//   node "C:/Buses/claude-skills/tools/check-tables.mjs"
 //
 // Exits non-zero and names the file and line when a table is malformed, so it can
 // be run before a commit that touched a document.

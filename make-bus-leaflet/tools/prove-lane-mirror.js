@@ -5,7 +5,7 @@
  * pre-2026-08-26 behaviour the fix removed — and ask whether the measure can
  * tell the two apart. If it cannot, it is not an instrument.
  *
- * Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` — the engine's own
+ * Run from `C:\Buses\claude-skills\make-bus-leaflet` — the engine's own
  * folder, not the buses-data repository. No placeholders; run it exactly as written:
  *
  *   node tools/prove-lane-mirror.js

@@ -39,8 +39,8 @@
  * reads them). That takes the fixture from about 7.5 MB to about 2.8 MB.
  *
  * Run it from anywhere; every path below is derived. No placeholders:
- *     node "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/refresh_area_fixture.js" --check
- *     node "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/refresh_area_fixture.js" --apply
+ *     node "C:/Buses/claude-skills/make-bus-leaflet/assets/refresh_area_fixture.js" --check
+ *     node "C:/Buses/claude-skills/make-bus-leaflet/assets/refresh_area_fixture.js" --apply
  *
  *     --check    say what would change and write nothing (the default)
  *     --apply    restage the fixture
@@ -116,7 +116,7 @@ for (const b of removed) console.log(`    removed : ${b}   (in the fixture, not 
 
 if (!APPLY) {
   console.log(`\n  BEHIND — ${moved} file(s) differ. Re-run with --apply, then from the PORTAL repo`);
-  console.log(`  (C:\\Claude\\community-bus-maps) confirm both gates still pass against the COMMITTED`);
+  console.log(`  (C:\\Buses\\community-bus-maps) confirm both gates still pass against the COMMITTED`);
   console.log(`  fixture — with FIXTURE_DIR unset, so you are testing this folder and not whatever`);
   console.log(`  your .env points at:`);
   console.log(`      npm run verify:area && npm run verify:defaults`);
@@ -131,7 +131,7 @@ fs.mkdirSync(fixDir, { recursive: true });
 for (const b of wanted) fs.copyFileSync(path.join(src, b), path.join(fixDir, b));
 
 console.log(`\n  RESTAGED — ${wanted.length} file(s) from ${path.basename(src)}.`);
-console.log(`  Now, from the PORTAL repo (C:\\Claude\\community-bus-maps), with FIXTURE_DIR unset:`);
+console.log(`  Now, from the PORTAL repo (C:\\Buses\\community-bus-maps), with FIXTURE_DIR unset:`);
 console.log(`      npm run verify:area && npm run verify:defaults`);
 console.log(`  Then commit with a note saying WHICH ENGINE CHANGE moved the bytes. A fixture`);
 console.log(`  refresh with no explanation is indistinguishable from one that hid a regression.`);

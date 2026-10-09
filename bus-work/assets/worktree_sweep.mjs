@@ -3,7 +3,7 @@
  * worktree_sweep.mjs — remove the worktrees whose work is already on main, and
  * the empty folders sessions leave behind (built 2026-09-23, at Peter's request).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node worktree_sweep.mjs            report only — says what it WOULD remove, removes nothing
  *   node worktree_sweep.mjs --apply    removes what the report says, and nothing else

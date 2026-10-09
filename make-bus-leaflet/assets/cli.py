@@ -1,7 +1,7 @@
 """cli.py -- the Python half of the one estate resolver.
 
 OA-224 Tier 3.1, and the sibling of `cli.js`. Six argparse scripts here declared
-`default=r"C:\\u3a St Ives\\Using AI\\Buses"` on `--root` or `--buses-root`, which
+`default=r"<the laptop path>"` on `--root` or `--buses-root`, which
 is the laptop as the hard fallback with no way to say where the estate is on any
 other machine. The order is the one `references/conventions.md` states under
 "Flags" and the one `cli.js` implements: the flag, then `BUSES_DIR`, then the
@@ -24,8 +24,8 @@ import os
 
 # The laptop, named once. Kept in the forward-slash form `cli.js` uses; os.path
 # handles both on Windows and nothing here is compared as a string.
-LAPTOP_BUSES = "C:/u3a St Ives/Using AI/Buses"
-LAPTOP_PORTAL = "C:/Claude/community-bus-maps"
+LAPTOP_BUSES = "C:/Buses/buses-data"
+LAPTOP_PORTAL = "C:/Buses/community-bus-maps"
 
 
 def resolve_buses(value=None, env=None):

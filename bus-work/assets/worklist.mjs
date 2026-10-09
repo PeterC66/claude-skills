@@ -59,8 +59,8 @@
  * fourth. Anything whose title, reason or customer carries "(demo)" is demo.
  *
  * Sources, and where each flag/env comes from:
- *   --portal DIR   BUSMAPS_PORTAL   default C:\Claude\community-bus-maps
- *   --buses  DIR   BUSES_DIR        default C:\u3a St Ives\Using AI\Buses
+ *   --portal DIR   BUSMAPS_PORTAL   default C:\Buses\community-bus-maps
+ *   --buses  DIR   BUSES_DIR        default C:\Buses\buses-data
  *   --url    URL   BUSMAPS_URL      set => talk HTTP to a remote portal instead
  *                                   of opening the local SQLite
  *   --token  TOK   BUSMAPS_TOKEN    the portal's OPERATOR_TOKEN, sent as an

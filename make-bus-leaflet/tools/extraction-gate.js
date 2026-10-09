@@ -78,7 +78,7 @@ const arg = (name, dflt) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
 const BUSES = resolveBuses({ buses: arg('buses') });
-const PORTAL = arg('portal', 'C:/Claude/community-bus-maps');
+const PORTAL = arg('portal', 'C:/Buses/community-bus-maps');
 const BASE = path.resolve(arg('file', path.join(SK, 'tools', '.extraction-gate-baseline.json')));
 const SWAP = {};
 argv.forEach((a, i) => {

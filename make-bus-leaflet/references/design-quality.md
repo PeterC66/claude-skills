@@ -579,7 +579,7 @@ Everything above is written about the town sheets, and until 2026-08-16 that is 
 Never on one town. Every judgement in this document was made by rebuilding all eight and looking at the table. **Folder:** doesn't matter — the command names the generator by an absolute path, so run it from anywhere. The `--patch` argument is the design key to vary, and it is the only placeholder:
 
 ```bash
-node "C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets/preview_design.js" --all --patch '{"design":{"iconInk":"charcoal"}}'
+node "C:/Buses/claude-skills/make-bus-leaflet/assets/preview_design.js" --all --patch '{"design":{"iconInk":"charcoal"}}'
 ```
 
 `preview_design.js` builds every sheet from the latest committed S4 data with a `routes.json` patch applied, measures before and after, and reports which label strings were gained and lost — writing nothing under `Areas/`. `--render` for JPGs, `--keep` to leave the workspace so a generator can be re-run by hand with `DBG_LABELS=1`. When the numbers look right, `adopt_config.js` commits the patch as a new S3 per town and `rollout.js --force` renders it; the full sequence, and the reason `--force` is not optional, is in [changing-the-engine.md](changing-the-engine.md) §2b.

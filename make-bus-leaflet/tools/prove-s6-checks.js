@@ -28,7 +28,7 @@
  *     npm run test:prove-s6
  *     node tools/prove-s6-checks.js --keep     leave the temp dirs on disk
  *     node tools/prove-s6-checks.js --buses "<path to the Buses repo>"
- * `--buses` defaults to C:\u3a St Ives\Using AI\Buses and is only needed if the
+ * `--buses` defaults to C:\Buses\buses-data and is only needed if the
  * data repo is checked out somewhere else.
  */
 'use strict';

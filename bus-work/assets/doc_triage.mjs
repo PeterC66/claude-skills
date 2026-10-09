@@ -62,7 +62,7 @@
  * or dies, this says so and refuses; a triage that silently drops one of its
  * halves would report "nothing to do" about a question it never asked.
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node doc_triage.mjs                 run all three, stamp, draft if needed
  *   node doc_triage.mjs --dry-run       report only; write neither file

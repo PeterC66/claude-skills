@@ -21,8 +21,8 @@ Every place internal sheet draws a red arrow aimed at the place's marker, the sq
 
 ## Command
 ```bash
-TSK="C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets" \
-  node "C:/u3a St Ives/.claude/skills/make-place-bus-leaflet/assets/build_internal_place.js"
+TSK="C:/Buses/claude-skills/make-bus-leaflet/assets" \
+  node "C:/Buses/claude-skills/make-place-bus-leaflet/assets/build_internal_place.js"
 ```
 Runs `gen_internal.js` with `cwd` = run dir and `LEAFLET_DIR`/`SKILL_ASSETS` set so it reads the run dir and resolves `icons.js`. Writes `internal.svg`.
 
@@ -43,8 +43,8 @@ Reuses the town skill's `internalRoads` model with **zero new drawing code**. Th
 
 **Command**
 ```bash
-TSK="C:/u3a St Ives/.claude/skills/make-bus-leaflet/assets" \
-  node "C:/u3a St Ives/.claude/skills/make-place-bus-leaflet/assets/build_internal_place_roads.js" [marginKm]
+TSK="C:/Buses/claude-skills/make-bus-leaflet/assets" \
+  node "C:/Buses/claude-skills/make-place-bus-leaflet/assets/build_internal_place_roads.js" [marginKm]
 ```
 Needs in the run dir (pulled from S2): `routes.json`, `atco2ll.json`, `atco2name.json`, `routes_intown_atco.json`, **`routes_full_atco.json`**, and the osm/river stubs. Writes `roads_geo.json`, `routes_paths.json`, `internal.svg`.
 

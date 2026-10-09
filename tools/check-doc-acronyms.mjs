@@ -32,7 +32,7 @@
 //
 // Run it from anywhere inside the repository you are checking. The path below is
 // a real path on this machine, not a placeholder:
-//   node "C:/u3a St Ives/.claude/skills/tools/check-doc-acronyms.mjs"
+//   node "C:/Buses/claude-skills/tools/check-doc-acronyms.mjs"
 //
 // Exits 1 and names each undefined short form with where it is used; exits 2 if
 // the declaration does not parse or names something that is not there.

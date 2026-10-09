@@ -74,7 +74,7 @@ None of the three least-squares terms is a planarity constraint, and there is no
 **The check is `assets/schematic_crossings.js`,** and it is exact rather than an impression: step 6 keeps each route's `pts` array index-for-index, so the schematic and geographic `routes_paths.json` are directly comparable and "did this stage introduce a self-crossing?" is a set difference. Each new crossing is scored by how far apart the two strands really are **on the ground**, because a bus doubling back at a turning circle also makes a new crossing and says nothing false; the default threshold is 150 m and it was measured, not chosen (over all nine schematics a cluster's separation runs 0 5 9 18 19 21 76 87 | 272 403 409 456, and 150 sits in the gap). Run it from `make-bus-leaflet`; there are no placeholders in the first form, and `--dir` takes an S4 run folder:
 
 ```bash
-node assets/schematic_crossings.js --buses "C:/u3a St Ives/Using AI/Buses"
+node assets/schematic_crossings.js --buses "C:/Buses/buses-data"
 ```
 
 It is outside the engine hash closure on purpose, so it costs no rollout, and **both rollout tools call it** and write what it says into `build-warnings.txt` as a non-blocking WARN. It is not in `status.js` and cannot be: `ci-reference/` mirrors an S4 run and carries no `schematic/` workspace, so a fresh clone has nothing to read. `npm run test:prove-red-schematic-crossings` breaks it twenty ways.

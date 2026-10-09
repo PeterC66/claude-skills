@@ -38,12 +38,12 @@
  *
  *   node town_status.mjs "Ramsey"
  *   node town_status.mjs "High Wycombe High Street"
- *   node town_status.mjs Ramsey --buses "C:/u3a St Ives/Using AI/Buses"
+ *   node town_status.mjs Ramsey --buses "C:/Buses/buses-data"
  *   node town_status.mjs Ramsey --offline          # skip the live site, say so
  *
  *   --buses <dir>   the buses-data checkout. Default: the BUSES_DIR environment
  *                   variable, else the repository this file's own tree sits beside,
- *                   else C:/u3a St Ives/Using AI/Buses
+ *                   else C:/Buses/buses-data
  *   --url <base>    portal base. Default https://busmaps.uk
  *   --offline       do not touch the network; the visibility section reports
  *                   "not checked" rather than guessing, and cannot set exit 1

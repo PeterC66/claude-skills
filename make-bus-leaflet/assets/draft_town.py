@@ -45,7 +45,7 @@ Where it still differs from a human-run S1/S2, and why:
 
 Usage:
   python draft_town.py "<Town>" [--region Cambridgeshire] [--centre lat,lon]
-      [--radius-km 1.6] [--buses-root "C:\\u3a St Ives\\Using AI\\Buses"] [--db PATH]
+      [--radius-km 1.6] [--buses-root "C:\\Buses\\buses-data"] [--db PATH]
       [--max-edge-km 2.5]
 """
 import argparse, json, math, os, re, shutil, sqlite3, subprocess, sys, time

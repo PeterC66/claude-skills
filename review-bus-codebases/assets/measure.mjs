@@ -4,7 +4,7 @@
 //   node assets/measure.mjs            # a table
 //   node assets/measure.mjs --json     # the same numbers as JSON, for saving beside the review
 //
-// Run from this skill's folder, C:\u3a St Ives\.claude\skills\review-bus-codebases.
+// Run from this skill's folder, C:\Buses\claude-skills\review-bus-codebases.
 // Reads three checkouts and writes nothing. Their locations come from BUSES_DIR,
 // SKILLS_DIR and BUSMAPS_PORTAL, or --buses / --skills / --portal, and only then
 // from the laptop defaults printed below — the review itself counts laptop-path
@@ -102,7 +102,7 @@ export function measure({ BUSES, SKILLS, PORTAL, now = new Date() }) {
   note.copies = 'independent implementations; each should fall to one';
 
   // ---- 3. the laptop as a dependency -------------------------------------------
-  const laptop = /u3a St Ives|C:\/Claude\/|C:\\Claude\\/;
+  const laptop = /u3a St Ives|C:\/Buses\/|C:\\Buses\\|C:\/Claude\/|C:\\Claude\\/;
   const busesCode = tracked(BUSES, '.', { exts: ['.js', '.mjs', '.py', '.ps1'], skip: ['Areas', 'Places', '_archive', 'Temp', '_gtfs'] });
   const skillsCode = tracked(SKILLS, '.', { exts: ['.js', '.mjs', '.py'], skip: ['design-preview'] });
   const portalCode = tracked(PORTAL, '.', { exts: ['.js', '.mjs'], skip: ['data', 'backups'] });
@@ -219,9 +219,9 @@ function wiringVerdict(SKILLS) {
 function main() {
   const argv = process.argv.slice(2);
   const flag = (n) => { const i = argv.indexOf('--' + n); return i < 0 ? null : argv[i + 1]; };
-  const BUSES = flag('buses') || process.env.BUSES_DIR || 'C:/u3a St Ives/Using AI/Buses';
-  const SKILLS = flag('skills') || process.env.SKILLS_DIR || 'C:/u3a St Ives/.claude/skills';
-  const PORTAL = flag('portal') || process.env.BUSMAPS_PORTAL || 'C:/Claude/community-bus-maps';
+  const BUSES = flag('buses') || process.env.BUSES_DIR || 'C:/Buses/buses-data';
+  const SKILLS = flag('skills') || process.env.SKILLS_DIR || 'C:/Buses/claude-skills';
+  const PORTAL = flag('portal') || process.env.BUSMAPS_PORTAL || 'C:/Buses/community-bus-maps';
   const out = measure({ BUSES, SKILLS, PORTAL });
   if (!out.ok) { console.error('measure.mjs: ' + out.why); process.exit(2); }
   const { result, note } = out;

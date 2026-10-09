@@ -87,7 +87,7 @@ Beaconsfield reading amber is a **true positive**, not a mis-set threshold: its 
 
 **Rung 2c is not like the others, and that is deliberate.** Rungs 0, 1, 2 and 2b are all things this project can do to a town on its own — curate the service list, bundle co-running lines, suppress the core, thin the stops — so each one is re-scored on the real geometry and prints a predicted band. Rung 2c is *ask somebody who lives there which points of interest matter*, and its `after` is **null on purpose**: a modelled saving there would be this project guessing the answer to the one question it has decided it cannot answer, and a number in that column would be quoted. `finalBand` is therefore read off the last rung that was actually modelled, never off the end of the ladder.
 
-Rung 2c prints the command that produces the worksheet to ask with. Run it from the engine's own assets folder (`C:\u3a St Ives\.claude\skills\make-bus-leaflet\assets`); `--map` names a folder under the buses-data checkout and is not a placeholder:
+Rung 2c prints the command that produces the worksheet to ask with. Run it from the engine's own assets folder (`C:\Buses\claude-skills\make-bus-leaflet\assets`); `--map` names a folder under the buses-data checkout and is not a placeholder:
 
 ```bash
 node poi_worksheet.js --map "Areas/High Wycombe"

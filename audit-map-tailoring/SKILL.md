@@ -5,7 +5,7 @@ description: Audit how much of every BusMaps.uk map is still configured by hand 
 
 # Audit map tailoring — what is still done by hand, and whose it should be
 
-**What this is for.** Peter's goal, stated on 2026-09-22: *all our generation automatic as far as possible, and any tailoring directed solely by the customer.* This skill measures the distance to that goal and nothing else. The first run and its record are `Development Docs/config-tailoring-audit_2026-09-22.md` in buses-data (`C:\u3a St Ives\Using AI\Buses`); every later run copies its section structure, reads its section 5 list, and says which items are closed, still open or changed before adding new ones.
+**What this is for.** Peter's goal, stated on 2026-09-22: *all our generation automatic as far as possible, and any tailoring directed solely by the customer.* This skill measures the distance to that goal and nothing else. The first run and its record are `Development Docs/config-tailoring-audit_2026-09-22.md` in buses-data (`C:\Buses\buses-data`); every later run copies its section structure, reads its section 5 list, and says which items are closed, still open or changed before adding new ones.
 
 **When to run it.** After an engine change meant to remove hand tailoring (the items in the previous record's section 7), and before planning the next one. No cadence is set; if Peter sets one, add a dated `config-tailoring-audit` entry to `Development Docs/commitments.json` and re-date it as the last step.
 
@@ -27,8 +27,8 @@ All in this skill's `assets/`, all read-only except `draft_towns.mjs` and `draft
 
 ## Procedure
 
-1. **Start in a buses-data worktree** for the record (`git worktree add .claude/worktrees/<name> -b work/<name>` from `C:\u3a St Ives\Using AI\Buses`, then `git config core.hooksPath .githooks` in it), and read the previous record in full — above all its sections 5 and 7.
-2. **Get a current drafter.** Make a detached `claude-skills` worktree at `origin/main` and use ITS `make-bus-leaflet/assets` as `<assets folder>`: `git -C "C:/u3a St Ives/.claude/skills" fetch origin`, then `git -C "C:/u3a St Ives/.claude/skills" worktree add --detach "C:/u3a St Ives/.claude/skills-wt/<name>" origin/main`. The shared checkout can be behind — on 2026-09-22 it was one commit short of the drafter fix the audit was meant to measure.
+1. **Start in a buses-data worktree** for the record (`git worktree add .claude/worktrees/<name> -b work/<name>` from `C:\Buses\buses-data`, then `git config core.hooksPath .githooks` in it), and read the previous record in full — above all its sections 5 and 7.
+2. **Get a current drafter.** Make a detached `claude-skills` worktree at `origin/main` and use ITS `make-bus-leaflet/assets` as `<assets folder>`: `git -C "C:/Buses/claude-skills" fetch origin`, then `git -C "C:/Buses/claude-skills" worktree add --detach "C:/Buses/claude-skills-wt/<name>" origin/main`. The shared checkout can be behind — on 2026-09-22 it was one commit short of the drafter fix the audit was meant to measure.
 3. **Run the three quick readers** — `inventory.mjs --json <file outside the repo>`, `history.mjs`, `places.mjs` — from this skill's `assets/`.
 4. **Re-draft the towns** with `draft_towns.mjs` in the FOREGROUND (the Bash tool's 10-minute limit: pass `--town` in batches of two or three). Then `compare_drafts.mjs`. **Re-draft the places** with `draft_places.mjs` into a second scratch root, and read `places.mjs --drafts <that root>` beside step 3's `places.mjs`: step 3 says how the maps WERE drafted, this says how the current drafter does (OA-438, 2026-09-26: 44 of 92 names survive, against 7).
 5. **Ask Peter to run the portal command** that `portal_query.mjs` prints, and read its output from his paste or the Terminal panel. Do not read the laptop's `portal.sqlite` instead.

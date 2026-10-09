@@ -2,7 +2,7 @@
 
 Slice heading in the findings document: **Review 4 — the portal's application source**.
 
-Subject: the APPLICATION SOURCE of the BusMaps.uk portal at `C:\Claude\community-bus-maps` (repo community-bus-maps, Node 22+, Fastify 5, ESM, sqlite). Your scope is `src/` (every module), `views/`, `public/`, `Dockerfile`, `compose.yaml`, `Caddyfile`, and the design docs `DESIGN.md`, `PRODUCT.md`, `README.md`, `CLAUDE.md` (read those for stated conventions, then check whether the code follows them). Another reviewer covers `scripts/` and `engine/`; do not duplicate.
+Subject: the APPLICATION SOURCE of the BusMaps.uk portal at `C:\Buses\community-bus-maps` (repo community-bus-maps, Node 22+, Fastify 5, ESM, sqlite). Your scope is `src/` (every module), `views/`, `public/`, `Dockerfile`, `compose.yaml`, `Caddyfile`, and the design docs `DESIGN.md`, `PRODUCT.md`, `README.md`, `CLAUDE.md` (read those for stated conventions, then check whether the code follows them). Another reviewer covers `scripts/` and `engine/`; do not duplicate.
 
 Review for:
 

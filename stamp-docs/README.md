@@ -28,8 +28,8 @@ Three folders:
 
 | Folder | What |
 |---|---|
-| `C:\u3a St Ives\Using AI\Buses` | Markdown — development plans and handoffs, the BusMapsUK business documents, `Documentation`, the area and place READMEs, the top-level `README - How to …` guides — plus the PowerPoint decks |
-| `C:\Claude\community-bus-maps` | The documents in `docs\` (handbook, runbooks, policies), README, CLAUDE.md, CHANGELOG and the rest of the repo root, the engine READMEs |
+| `C:\Buses\buses-data` | Markdown — development plans and handoffs, the BusMapsUK business documents, `Documentation`, the area and place READMEs, the top-level `README - How to …` guides — plus the PowerPoint decks |
+| `C:\Buses\community-bus-maps` | The documents in `docs\` (handbook, runbooks, policies), README, CLAUDE.md, CHANGELOG and the rest of the repo root, the engine READMEs |
 | `C:\Claude\community-bus-maps-ops` | The local-only operations notes |
 
 Only Markdown and PowerPoint. Word, Excel, HTML and PDF are deliberately not covered.

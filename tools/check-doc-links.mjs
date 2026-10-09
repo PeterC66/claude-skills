@@ -74,7 +74,7 @@
 //
 // Run it from the repository root of whichever repository you are checking. The
 // path below is a real path on this machine, not a placeholder:
-//   node "C:/u3a St Ives/.claude/skills/tools/check-doc-links.mjs"
+//   node "C:/Buses/claude-skills/tools/check-doc-links.mjs"
 //
 // Add --verbose to list every document scanned and its counts. Exits non-zero
 // and names file and line for each finding, so it can gate a commit or a CI run.
@@ -273,7 +273,7 @@ function linkBases(file) {
  *
  *   * A BACKTICKED ABSOLUTE PATH is itself a declaration, keyword or none. The
  *     house rule asks a document to say where a command runs in the terms of the
- *     machine that runs it, and `C:\u3a St Ives\.claude\skills\bus-work\assets`
+ *     machine that runs it, and `C:\Buses\claude-skills\bus-work\assets`
  *     is that sentence with nothing left to infer. It does not occur by accident.
  *   * `from` IMMEDIATELY FOLLOWED BY A BACKTICKED TOKEN — "run from
  *     `make-bus-leaflet`". The skills repo names its folders relative to its own
@@ -287,7 +287,7 @@ function linkBases(file) {
  * absolute path is only ever written to say where to run something. The portal's
  * prose writes one to LOCATE something — "the private ops folder is
  * `C:\Claude\community-bus-maps-ops\`", "paths below are under
- * `C:\u3a St Ives\Using AI\Buses\`" — and neither sentence is an instruction to
+ * `C:\Buses\buses-data\`" — and neither sentence is an instruction to
  * anybody. Unbounded, one of those reached forward across a section boundary and
  * roughly a hundred lines to the command appendix of
  * `docs/H1-operations-handbook.md`, silenced the C1 that should have fired on it,
@@ -678,7 +678,7 @@ const RUNNER = /(?:^|\|\s*|&&\s*)\s*(node|python|python3)\s+((?:"[^"]*"|'[^']*'|
  * very first run, reporting four scripts as missing that were all there.
  *
  * So: match the declared path onto the tree we actually have. Longest existing
- * suffix under ROOT wins, which turns `C:/u3a St Ives/Using AI/Buses/BusMapsUK/
+ * suffix under ROOT wins, which turns `C:/Buses/buses-data/BusMapsUK/
  * deck-src` into `<root>/BusMapsUK/deck-src` on any platform. A path with no
  * such suffix is in ANOTHER REPOSITORY — the engine, the portal — which a CI
  * checkout does not have; use it directly if it happens to be present (it is,
@@ -732,7 +732,7 @@ function checkCommands(doc) {
      * means this repo; "doesn't matter / from anywhere" means do not resolve. */
     let cwd = null;
     /* A Windows path in this corpus is ALWAYS inside backticks, and it always
-     * has spaces in it (`C:\u3a St Ives\Using AI\Buses`). Matching on
+     * has spaces in it (`C:\Buses\buses-data`). Matching on
      * whitespace instead truncated every one of them to `C:/u3a` and then
      * reported two live scripts as missing. Take the backticked form first. */
     const abs = /`([A-Za-z]:[\\/][^`\n]*)`/.exec(decl.text)

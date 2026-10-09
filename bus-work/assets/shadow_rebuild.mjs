@@ -54,7 +54,7 @@
  * IT COMMITS NOTHING AND TOUCHES NO TRACKED FILE — not `ci-reference/`, not a
  * map's manifest. `loop/` is gitignored and is the only place it writes.
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets), with no
+ * From this folder (C:\Buses\claude-skills\bus-work\assets), with no
  * placeholders:
  *
  *   node shadow_rebuild.mjs

@@ -238,7 +238,7 @@ function printDeployment(deploy, liveUrl = DEFAULT_LIVE_URL, log = console.log) 
     // that was already current, and that instruction reached Peter's worklist.
     log('  live ahead   live ' + deploy.deployed + ' contains commits this checkout\'s main ' + deploy.want + ' does not');
     log('    Nothing is undeployed. This clone is behind the remote. From anywhere, with no placeholders:');
-    log('      git -C "C:\\Claude\\community-bus-maps" fetch origin');
+    log('      git -C "C:\\Buses\\community-bus-maps" fetch origin');
   } else if (deploy.status === 'skipped') {
     log('  skipped   ' + deploy.why);
   } else if (deploy.status === 'unreachable') {
@@ -253,7 +253,7 @@ function printDeployment(deploy, liveUrl = DEFAULT_LIVE_URL, log = console.log) 
             : deploy.fetch === 'not attempted (--no-fetch)' ? '; --no-fetch, so nobody looked)' : ')')
          : '  (oldest undeployed commit ' + deploy.ageHours + 'h old, grace ' + deploy.graceHours + 'h'
            + (deploy.status === 'BEHIND' ? ' — a chore, not a fault: information here and a deploy-pending row on the worklist, never red)' : ')')));
-    log('    main has commits the public cannot see. From C:\\Claude\\community-bus-maps, with no placeholders:');
+    log('    main has commits the public cannot see. From C:\\Buses\\community-bus-maps, with no placeholders:');
     log('      npm run deploy');
   }
 }

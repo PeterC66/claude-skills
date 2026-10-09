@@ -2,7 +2,7 @@
 /* Prove the ad-hoc pre-test can say SUPERSEDED, BLOCKED, DUE, and can decline to
  * decide (buses-data, 2026-10-08).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-adhoc-pretest.mjs
  *

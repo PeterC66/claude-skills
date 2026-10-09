@@ -2,7 +2,7 @@
 /* Prove the weekly shadow rebuild can REFUSE, can count a regression without
  * failing, and never applies (buses-data OA-485 item 1).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets), with no
+ * From this folder (C:\Buses\claude-skills\bus-work\assets), with no
  * placeholders:
  *
  *   node prove-red-shadow-rebuild.mjs

@@ -3,7 +3,7 @@
  * prove-red-build-log.js — break build_log.js's severity contract on purpose,
  * one rule at a time, and prove each break is caught.
  *
- * Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` — the engine's own
+ * Run from `C:\Buses\claude-skills\make-bus-leaflet` — the engine's own
  * folder, not the buses-data repository. No placeholders; run it exactly as written:
  *
  *   node tools/prove-red-build-log.js

@@ -3,7 +3,7 @@
  * adhoc_pretest.mjs — is a file in `adhoc/ready/` still worth a run, and does it
  * still need nothing from Peter? (buses-data, 2026-10-08, at Peter's request.)
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node adhoc_pretest.mjs [--buses <buses-data root>] [--json]
  *

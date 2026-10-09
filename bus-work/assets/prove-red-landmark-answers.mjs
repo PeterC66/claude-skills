@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Prove the landmark-answer rows can appear AND can go away (buses-data OA-233).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-landmark-answers.mjs
  *

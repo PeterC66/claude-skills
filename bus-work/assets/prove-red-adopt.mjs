@@ -2,7 +2,7 @@
 /* Prove the loop's adoption of Peter's edits refuses what it must, adopts what it
  * may, and that each refusal can be seen to fail (buses-data OA-542).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets), with no
+ * From this folder (C:\Buses\claude-skills\bus-work\assets), with no
  * placeholders:
  *
  *   node prove-red-adopt.mjs

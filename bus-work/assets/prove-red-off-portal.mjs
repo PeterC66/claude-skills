@@ -2,7 +2,7 @@
 /* Prove a map off the portal owes no engine-rebuild row, and that a list nobody read
  * drops nothing (buses-data OA-607 change 1).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets), with no
+ * From this folder (C:\Buses\claude-skills\bus-work\assets), with no
  * placeholders:
  *
  *   node prove-red-off-portal.mjs

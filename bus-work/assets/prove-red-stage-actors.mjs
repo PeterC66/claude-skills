@@ -2,7 +2,7 @@
 /* Prove WHO PERFORMED A STAGE can be counted, and can refuse to be (buses-data
  * OA-427, item 3 of R9 of the process review, 2026-09-17).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-stage-actors.mjs
  *

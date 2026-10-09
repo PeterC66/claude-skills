@@ -2,7 +2,7 @@
 /* Prove the five routine numbers are each what routine_numbers.mjs says they are
  * (buses-data OA-402, R9 of the process review, 2026-09-18).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-routine-numbers.mjs
  *

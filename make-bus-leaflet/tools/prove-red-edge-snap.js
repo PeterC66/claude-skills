@@ -27,7 +27,7 @@
  *   5. PROVE RED          with the lever disabled in a copy of match_routes.js, case 2
  *                         must FAIL. A check never seen to go red proves nothing.
  *
- * Run from C:\u3a St Ives\.claude\skills\make-bus-leaflet — no placeholders:
+ * Run from C:\Buses\claude-skills\make-bus-leaflet — no placeholders:
  *   npm run test:prove-red-edge-snap
  */
 const fs = require('fs');

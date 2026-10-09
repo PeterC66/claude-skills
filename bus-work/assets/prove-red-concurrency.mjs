@@ -2,7 +2,7 @@
 /* Prove the concurrency verdicts can go red — and, just as hard, that they go
  * back to green when the condition clears.
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-concurrency.mjs
  *

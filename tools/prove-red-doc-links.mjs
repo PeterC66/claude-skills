@@ -13,7 +13,7 @@
 // come out green. Without that, a checker that reported everything as broken
 // would pass this harness with full marks.
 //
-// Run from the repository root (C:\u3a St Ives\Using AI\Buses). No placeholders:
+// Run from the repository root (C:\Buses\buses-data). No placeholders:
 //   node Documentation/prove-red-doc-links.mjs
 
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
@@ -264,7 +264,7 @@ report(w1.code === 1 && w1.out.includes('[C1 '),
 
 /* And the form the 2026-09-01 widening was actually FOR, which still declares:
  * `bus-work/SKILL.md` writes "Run `npm run rotate:secret` from
- * `C:\Claude\community-bus-maps`" — the path, and an instruction beside it. */
+ * `C:\Buses\community-bus-maps`" — the path, and an instruction beside it. */
 const absWithCue = fixture({
   'sub/only-here.mjs': '// here\n',
   'doc.md': '# Doc\n\nEvery block below runs in one shell session, started in `Z:\\somewhere\\else\\sub`.\n\nA paragraph of ordinary prose in between.\n\n```bash\nnode only-here.mjs\n```\n',

@@ -2,7 +2,7 @@
 /* Prove the "ad-hoc loop is not taking this" row appears, and stays away when it
  * should (buses-data OA-503; paths moved by OA-610).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-loop-ready.mjs
  *

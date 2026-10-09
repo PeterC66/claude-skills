@@ -92,7 +92,7 @@ if (KEEP) require('../assets/scratch').keepScratch();
 const bi = argv.indexOf('--buses');
 const BUSES = resolveBuses({ buses: (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : undefined });
 const pi = argv.indexOf('--portal');
-const PORTAL = (pi >= 0 && argv[pi + 1]) ? argv[pi + 1] : 'C:/Claude/community-bus-maps';
+const PORTAL = (pi >= 0 && argv[pi + 1]) ? argv[pi + 1] : 'C:/Buses/community-bus-maps';
 
 /* The donor town. It must be one whose engine stamp is CURRENT, or the control is
  * red before anything is mutated and the whole run proves nothing.

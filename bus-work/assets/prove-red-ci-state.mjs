@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Prove the CI-red row can appear, can be excused, and can go away (buses-data OA-251).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets), with no
+ * From this folder (C:\Buses\claude-skills\bus-work\assets), with no
  * arguments and no placeholders:
  *
  *   node prove-red-ci-state.mjs

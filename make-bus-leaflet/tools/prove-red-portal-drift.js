@@ -25,7 +25,7 @@
  * vendored copies, with `refs/remotes/origin/main` written by hand, which is
  * enough for `git rev-parse --verify origin/main` and `git show origin/main:...`
  * to answer exactly as they do against the real one. Nothing under
- * C:\Claude\community-bus-maps is read, written or checked out.
+ * C:\Buses\community-bus-maps is read, written or checked out.
  *
  * AND SINCE 2026-09-21 IT COVERS THE FIXTURE COPY TOO (buses-data OA-419). The
  * portal vendors two things out of two different repositories: the ENGINE, from

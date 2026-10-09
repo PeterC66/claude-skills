@@ -3,7 +3,7 @@
  * about a sheet nobody let through (buses-data OA-428, item 4 of R9 of the
  * process review of 2026-09-17).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets), no placeholders:
+ * From this folder (C:\Buses\claude-skills\bus-work\assets), no placeholders:
  *
  *   node prove-red-stage-refresh.mjs
  *

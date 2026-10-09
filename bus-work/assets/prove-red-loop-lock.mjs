@@ -3,7 +3,7 @@
  * the four places it MUST, because each of those is a way this rule could
  * quietly break something that works today. buses-data OA-287.
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-loop-lock.mjs
  *

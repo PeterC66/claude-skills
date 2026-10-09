@@ -4,7 +4,7 @@
  *
  * Run from anywhere, with no arguments and no placeholders:
  *
- *     node "C:/u3a St Ives/.claude/skills/tools/prove-red-exclusion-fields.mjs"
+ *     node "C:/Buses/claude-skills/tools/prove-red-exclusion-fields.mjs"
  *
  * WHY. `check-exclusion-fields.mjs` is a gate that went GREEN on the day it landed,
  * because the four town files using a deprecated exclusion field were migrated in the

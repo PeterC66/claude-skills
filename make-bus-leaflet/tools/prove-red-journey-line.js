@@ -25,7 +25,7 @@
  *   5. PROVE RED          with the drop disabled in a copy of match_routes.js, case 2
  *                         must FAIL
  *
- * Run from C:\u3a St Ives\.claude\skills\make-bus-leaflet — no placeholders:
+ * Run from C:\Buses\claude-skills\make-bus-leaflet — no placeholders:
  *   npm run test:prove-red-journey-line
  */
 const fs = require('fs');

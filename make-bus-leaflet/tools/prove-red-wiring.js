@@ -3,7 +3,7 @@
  *
  *   node tools/prove-red-wiring.js
  *
- * Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` — the engine's own
+ * Run from `C:\Buses\claude-skills\make-bus-leaflet` — the engine's own
  * folder. No placeholders.
  *
  * WHY. `check-wiring.js` is a check whose whole subject is OTHER checks being

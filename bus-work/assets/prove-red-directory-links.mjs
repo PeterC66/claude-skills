@@ -2,7 +2,7 @@
 /* Prove the bus-map directory's link rows appear, say WHY, and go away
  * (buses-data OA-308's "Keeping it true", 2026-09-11).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-directory-links.mjs
  *

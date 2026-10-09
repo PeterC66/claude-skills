@@ -4,7 +4,7 @@
  *
  * Run from anywhere, with no arguments and no placeholders:
  *
- *     node "C:/u3a St Ives/.claude/skills/tools/prove-red-s6-claims.mjs"
+ *     node "C:/Buses/claude-skills/tools/prove-red-s6-claims.mjs"
  *
  * WHY. The gate went green on the real estate on the day it landed (2026-09-08,
  * buses-data OA-273), after the register was written and one place's S3 run carried

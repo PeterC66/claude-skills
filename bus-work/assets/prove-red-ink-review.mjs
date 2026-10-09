@@ -2,7 +2,7 @@
 /* Prove the monthly ink review can show a sheet, stay quiet, and refuse
  * (buses-data OA-429, item 5 of R9 of the process review of 2026-09-17).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets), no placeholders:
+ * From this folder (C:\Buses\claude-skills\bus-work\assets), no placeholders:
  *
  *   node prove-red-ink-review.mjs
  *

@@ -4,7 +4,7 @@
  *
  *   node tools/prove-red-baseline.js
  *
- * Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` — the engine's own
+ * Run from `C:\Buses\claude-skills\make-bus-leaflet` — the engine's own
  * folder. No placeholders.
  *
  * WHY. `prove-red.js` is the file that makes the unit suite's green mean

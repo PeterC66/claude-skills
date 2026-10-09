@@ -2,7 +2,7 @@
 /* Prove the stranded-branch row can go red — and, harder, that it stays SILENT
  * for every branch that is finished (buses-data OA-326).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-unpushed-branches.mjs
  *

@@ -36,7 +36,7 @@ const whole = (to) => (line) => `${line.match(/^\s*/)[0]}${to}`;
 
 /* tag -> how to break it, and the test cases that must object. */
 const MUTANTS = {
-  literal: [swap("'--literal-pathspecs', ", ''), ['literal']],
+  literal: [drop('literal'), ['literal']],
   glob: [drop('glob'), ['refuse-glob*']],
   outside: [drop('outside'), ['refuse-outside*']],
   dir: [drop('dir'), ['refuse-dir*']],
@@ -47,6 +47,8 @@ const MUTANTS = {
   branch1: [drop('branch1'), ['branch1']],
   branch2: [drop('branch2'), ['branch2']],
   head: [drop('head'), ['head']],
+  'commit-env': [swap("argv[0] !== 'commit' /* @guard:commit-env */", 'true /* @guard:commit-env */'), ['hook-glob']],
+  'commit-literal': [swap(':(literal)', ''), ['literal']],
   pathspec: [whole("const argv = ['commit', '--quiet', '-F', p.message.file];"), ['pathspec']],
   unstage: [drop('unstage'), ['hook-refuses']],
   lock: [drop('lock'), ['lock']],

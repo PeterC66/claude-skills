@@ -225,9 +225,21 @@ test('literal', 'a name with [ ] is that file and not a pattern that also matche
   write(f.repo, 'data [v2].md', 'bracket\nedited\n'); write(f.repo, 'data 2.md', 'sibling\nedited too\n');
   const { j } = report(f, ['data [v2].md']);
   eq(j.paths.map((p) => p.path), ['data [v2].md'], 'paths');
+  yes(!j.diff.includes('edited too'), 'the diff the caller reads is the named file alone, not its sibling');
   const r = apply(f, ['data [v2].md'], j.token);
   eq(r.code, 0, 'exit code'); eq(filesOf(f), ['data [v2].md'], 'files in the commit');
   yes(status(f).some((l) => l.includes('data 2.md')), 'the sibling is still uncommitted');
+});
+
+test('hook-glob', 'a hook that uses a glob pathspec still works, because the literal option is not exported to it', () => {
+  const f = fixture();
+  const mark = path.join(SCRATCH, `hook-seen${n}.txt`);
+  hook(f.repo, 'post-commit', `git diff-tree --root --no-commit-id --name-only -r HEAD -- '*.md' > "${mark.split(path.sep).join('/')}"\nexit 0`);
+  write(f.repo, 'a.md', 'alpha\nalpha2\n');
+  const { j } = report(f, ['a.md']);
+  const r = apply(f, ['a.md'], j.token);
+  eq(r.code, 0, 'exit code');
+  eq(fs.readFileSync(mark, 'utf8').trim(), 'a.md', 'what the glob in the hook matched (empty means GIT_LITERAL_PATHSPECS reached it)');
 });
 
 test('new-deleted', 'a new file and a deleted file go in one commit', () => {

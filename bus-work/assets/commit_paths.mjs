@@ -26,8 +26,9 @@
  * the repository, anything under `.git`, a path with no change to commit, a path somebody else has
  * already STAGED (the pathspec commit would carry their half-finished work under this message), a
  * branch other than `--branch` — checked at the start and again just before the commit — and a HEAD
- * that moved between the report and the commit. Every git call is `--literal-pathspecs`, so a name
- * with `[` in it is that file and never a pattern that also matches its sibling.
+ * that moved between the report and the commit. Every git call is `--literal-pathspecs` (the commit
+ * names each path as `:(literal)<path>` instead, so the option is not exported to the hooks), so a
+ * name with `[` in it is that file and never a pattern that also matches its sibling.
  *
  * HOW IT COMMITS: `git commit --quiet -F <message-file> -- <paths>` through spawnSync with the output
  * captured. Never a shell, so a backtick in the message is text; never a pipe, so a hook cannot be
@@ -82,7 +83,12 @@ export class Refused extends Error {
 }
 
 export const defaultGit = (root, argv, input) => {
-  const r = spawnSync('git', ['--literal-pathspecs', '-C', root, ...argv], { encoding: 'utf8', input, maxBuffer: 512 * 1024 * 1024 }); // @guard:literal
+  /* NOT for `commit`: git exports the option to the hooks as GIT_LITERAL_PATHSPECS, which turned the
+   * `'*.md'` glob in buses-data's post-commit hook into a literal and stopped its index repair from
+   * ever running (found 2026-10-09). The commit names its paths as `:(literal)<path>` instead. */
+  const flags = [];
+  if (argv[0] !== 'commit' /* @guard:commit-env */) flags.push('--literal-pathspecs'); // @guard:literal
+  const r = spawnSync('git', [...flags, '-C', root, ...argv], { encoding: 'utf8', input, maxBuffer: 512 * 1024 * 1024 });
   return { status: r.status, out: String(r.stdout || ''), err: String(r.stderr || '') };
 };
 
@@ -341,9 +347,11 @@ function readBack(ctx, p, { added }) {
  * A pathspec commit builds git's real index BEFORE the pre-commit hook runs, so a hook that restamps
  * a document (it does: the stamp is written at commit time) lands the stamp in the commit and the
  * working tree but leaves the index one stamp behind — `MM` in `git status`, and a later bare commit
- * would silently put the old stamp back. Measured 2026-10-09 against buses-data's own hook. Where a
- * named path is staged and its working-tree content already EQUALS HEAD's, the staged entry is stale
- * and is reset to HEAD; anything else is left alone for the read-back to report.
+ * would silently put the old stamp back. Measured 2026-10-09 against buses-data's own hook. buses-data
+ * has a post-commit hook that resets exactly this; this does the same for a repository that has none,
+ * and is a no-op where the hook ran. Where a named path is staged and its working-tree content already
+ * EQUALS HEAD's, the staged entry is stale and is reset to HEAD; anything else is left alone for the
+ * read-back to report.
  */
 function refreshStaleIndex(ctx, p) {
   const st = ctx.git(p.root, ['status', '--porcelain=v1', '-z', '--no-renames', '-uall', '--', ...p.paths]);
@@ -367,7 +375,7 @@ function applyPlan(o, deps, p) {
       if (a.status !== 0) throw new Refused(`git add failed: ${a.err.trim()}`, 1);
     }
   }
-  const argv = ['commit', '--quiet', '-F', p.message.file, ...(p.mode === 'index' ? [] : ['--', ...p.paths])]; // @guard:pathspec
+  const argv = ['commit', '--quiet', '-F', p.message.file, ...(p.mode === 'index' ? [] : ['--', ...p.paths.map((x) => `:(literal)${x}`)])]; // @guard:pathspec @guard:commit-literal
   const c = ctx.git(p.root, argv);
   const hookOutput = `${c.out}${c.err}`.trim();
   if (c.status !== 0) {

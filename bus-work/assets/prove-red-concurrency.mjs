@@ -765,7 +765,7 @@ says(conc.assess(['buses-tree'], dirtyTree), /cannot tell yours from a neighbour
 
 const stagedTree = world({ buses: { staged: ['Development Docs/OA-999.md'] } });
 want(conc.assess(['buses-tree'], stagedTree), conc.CHECK, "someone else's staged file: CHECK FIRST");
-says(conc.assess(['buses-tree'], stagedTree), /pathspec/, 'and the remedy named is the pathspec commit');
+says(conc.assess(['buses-tree'], stagedTree), /commit_paths\.mjs/, 'and the remedy named is the commit script, which refuses a path another session staged');
 
 // OA-301, the judgement half: accountFor over a synthetic repo, and the
 // subtraction must reach the STAGED count too, or a staged held letter would

@@ -323,7 +323,27 @@ test('rb-files', 'a hook that adds a file to the commit makes the read-back fail
   eq(r.code, 1, 'exit code'); yes(/FAIL files/.test(r.stdout), 'files named');
 });
 
-test('lock', 'a held index lock is "not now" (exit 3) and commits nothing', () => {
+test('internal', 'an unexpected exception is an internal error (exit 2) that says what happened, not a stack trace', () => {
+  const f = fixture();
+  write(f.repo, 'a.md', 'alpha\nalpha2\n');
+  const git = spy((argv) => { if (argv[0] === 'status') throw new Error('boom from the harness'); return null; });
+  const r = run(f, ['a.md'], [], { git });
+  eq(r.code, 2, 'exit code'); yes(/INTERNAL ERROR/.test(r.stderr) && /boom from the harness/.test(r.stderr), `stderr was ${JSON.stringify(r.stderr.slice(0, 120))}`);
+  eq(r.stdout, '', 'stdout stays empty');
+});
+
+test('rb-throws', 'a read-back that throws after the commit still says COMMITTED first and exits 1', () => {
+  const f = fixture();
+  write(f.repo, 'a.md', 'alpha\nalpha2\n');
+  const { j } = report(f, ['a.md']);
+  const git = spy((argv, k) => { if (argv[0] === 'ls-tree' && k === 2) throw new Error('boom in the read-back'); return null; });
+  const r = apply(f, ['a.md'], j.token, [], { git });
+  eq(r.code, 1, 'exit code'); yes(/^COMMITTED [0-9a-f]{8} - READ-BACK FAILED\n/.test(r.stdout), `first line, got ${JSON.stringify(r.stdout.split('\n')[0])}`);
+  yes(/boom in the read-back/.test(r.stdout), 'the failure is named');
+  eq(filesOf(f), ['a.md'], 'the commit did land');
+});
+
+test('lock','a held index lock is "not now" (exit 3) and commits nothing', () => {
   const f = fixture();
   write(f.repo, 'a.md', 'alpha\nalpha2\n');
   const { j } = report(f, ['a.md']);

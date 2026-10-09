@@ -933,9 +933,9 @@ const RULES = {
     const where = top.slice(0, 4).join(', ') + (top.length > 4 ? ', …' : '');
     const staged = paths.filter((p) => r.staged.includes(p)).length;
     if (staged) {
-      return [CHECK, `${n} uncommitted file(s) here (${where}), ${staged} already STAGED in the shared index — commit with a pathspec (git commit -m "…" -- <paths>), never a bare commit`];
+      return [CHECK, `${n} uncommitted file(s) here (${where}), ${staged} already STAGED in the shared index — commit only your own paths with commit_paths.mjs, which refuses a path somebody else staged, never a bare commit`];
     }
-    return [CHECK, `${n} uncommitted file(s) here (${where}) — this tool cannot tell yours from a neighbour's; read them, then stage by name and commit with a pathspec`];
+    return [CHECK, `${n} uncommitted file(s) here (${where}) — this tool cannot tell yours from a neighbour's; read them, then commit your own by name with commit_paths.mjs`];
   },
 
   // OA-434. Work that writes into a map or letter folder, or sweeps every town.

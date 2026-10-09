@@ -93,6 +93,11 @@ export const ALLOW = [
     why: 'Its main-module block takes a LIST of repository folders as bare arguments, which a long-flags-only parser cannot express at all. It parses no flag and resolves no path.',
   },
   {
+    file: 'commit_paths.mjs',
+    idiom: ARGV,
+    why: "Its parser is deliberately STRICTER than the shared one, for town_status.mjs's reason: it refuses an unknown flag BY NAME (buses-data Conventions), and it takes its paths after a bare `--`, which the shared parser skips because it ignores every argument not starting with `--`. A path lost that way would leave a commit naming nothing. It is also one self-contained file because prove-red-commit-paths.mjs copies it into a scratch folder to break it, and a copy cannot import engine.mjs.",
+  },
+  {
     file: 'loop_lock.mjs',
     idiom: ARGV,
     why: 'Same shape: a debug entry point taking a bare folder and an optional session id positionally. It parses no flag, and since OA-345 its folder DEFAULT comes from engine.mjs `resolveBuses()` rather than from a literal.',

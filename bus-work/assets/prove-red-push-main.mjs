@@ -4,7 +4,7 @@
  * (the scheduled loop cut to three ticks a day), which would have left a
  * deferred push waiting for a tick instead of an interval.
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-push-main.mjs
  *

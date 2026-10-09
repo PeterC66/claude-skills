@@ -2,7 +2,7 @@
 /* Prove the pull-request sweep's rows appear, say WHY, and go away — and that
  * the reader can never open a socket (buses-data OA-326 item 1, 2026-09-21).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-pr-sweep.mjs
  *

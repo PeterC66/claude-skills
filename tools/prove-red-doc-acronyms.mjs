@@ -23,7 +23,7 @@
 //
 // Run from anywhere. The path below is a real path on this machine, not a
 // placeholder:
-//   node "C:/u3a St Ives/.claude/skills/tools/prove-red-doc-acronyms.mjs"
+//   node "C:/Buses/claude-skills/tools/prove-red-doc-acronyms.mjs"
 
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';

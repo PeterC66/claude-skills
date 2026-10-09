@@ -2,7 +2,7 @@
 /* Prove the coverage-gate freshness row appears, names the right authorities,
  * and — far more importantly — GOES AWAY (buses-data OA-317, 2026-09-12).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-directory-coverage.mjs
  *

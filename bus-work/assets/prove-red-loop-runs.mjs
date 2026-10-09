@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Prove the loop-idle row appears, says WHY, and goes away (buses-data OA-288).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-loop-runs.mjs
  *

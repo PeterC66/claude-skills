@@ -2,7 +2,7 @@
 /* Prove the refresh GRADING can speak and can refuse to (buses-data OA-426, item 2
  * of R9 of the process review, 2026-09-17).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-refresh-grades.mjs
  *

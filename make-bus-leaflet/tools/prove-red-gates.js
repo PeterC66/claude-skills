@@ -33,8 +33,8 @@
  *     node tools/prove-red-gates.js --keep     leave the mutated copies on disk
  *     node tools/prove-red-gates.js --buses "<path to the Buses repo>"
  *     node tools/prove-red-gates.js --portal "<path to community-bus-maps>"
- * `--buses` defaults to C:\u3a St Ives\Using AI\Buses and `--portal` to
- * C:\Claude\community-bus-maps; both are only needed if that repo is checked out
+ * `--buses` defaults to C:\Buses\buses-data and `--portal` to
+ * C:\Buses\community-bus-maps; both are only needed if that repo is checked out
  * somewhere else, which in CI it is. Without a portal the four portal-fixture
  * targets are reported SKIPPED rather than silently dropped.
  */
@@ -57,7 +57,7 @@ if (KEEP) require('../assets/scratch').keepScratch();
 const bi = argv.indexOf('--buses');
 const BUSES = resolveBuses({ buses: (bi >= 0 && argv[bi + 1]) ? argv[bi + 1] : undefined });
 const pi = argv.indexOf('--portal');
-const PORTAL = (pi >= 0 && argv[pi + 1]) ? argv[pi + 1] : 'C:/Claude/community-bus-maps';
+const PORTAL = (pi >= 0 && argv[pi + 1]) ? argv[pi + 1] : 'C:/Buses/community-bus-maps';
 
 /* WHICH MAP EACH TARGET USES IS NOW A DESCRIPTION, NOT A NAME (OA-398,
  * 2026-09-18). Every target carried a `map:` literal — `Areas/St Ives`,

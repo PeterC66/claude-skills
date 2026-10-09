@@ -28,7 +28,7 @@
  *                         case 2 must FAIL. A check that has never been seen to go
  *                         red proves nothing.
  *
- * Run from C:\u3a St Ives\.claude\skills\make-bus-leaflet — no placeholders:
+ * Run from C:\Buses\claude-skills\make-bus-leaflet — no placeholders:
  *   npm run test:prove-red-via-chain
  */
 const fs = require('fs');

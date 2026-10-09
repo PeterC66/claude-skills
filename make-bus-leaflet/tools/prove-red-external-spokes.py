@@ -12,7 +12,7 @@ The OLD reverse-geocode results are replayed from a table rather than fetched, s
 the harness is offline and deterministic. Every value in REPLAY is what Nominatim
 returns today at zoom=14 for that locality's stops -- including the wrong ones.
 
-Run from the skill's own folder (C:\\u3a St Ives\\.claude\\skills\\make-bus-leaflet):
+Run from the skill's own folder (C:\\Buses\\claude-skills\\make-bus-leaflet):
 
     npm run test:prove-red-external-spokes
 

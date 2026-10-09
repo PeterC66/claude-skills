@@ -2,7 +2,7 @@
 /* Prove the deploy-pending source can raise a row AND stay quiet (buses-data
  * OA-396, 2026-09-17).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-deploy-pending.mjs
  *

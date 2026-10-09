@@ -74,7 +74,7 @@
  * Run it from make-bus-leaflet (no placeholders):
  *     npm run test:prove-red-sweep
  *     node tools/prove-red-sweep.js --buses "<path to the Buses repo>"
- * `--buses` defaults to C:\u3a St Ives\Using AI\Buses and is only needed if the
+ * `--buses` defaults to C:\Buses\buses-data and is only needed if the
  * data repo is checked out somewhere else.
  */
 'use strict';

@@ -20,7 +20,7 @@
 // cases below deliberately include a row style the old version was blind to —
 // otherwise this harness would certify exactly the coverage that was the bug.
 //
-// Run from the repository root (C:\u3a St Ives\Using AI\Buses). No placeholders:
+// Run from the repository root (C:\Buses\buses-data). No placeholders:
 //   node Documentation/prove-red-tables.mjs
 
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';

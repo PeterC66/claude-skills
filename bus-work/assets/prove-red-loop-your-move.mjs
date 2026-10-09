@@ -4,7 +4,7 @@
  * 2026-09-08 and the 2026-09-10 drop-zone row, merged by OA-401 on 2026-09-18
  * when the two folders became one).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-loop-your-move.mjs
  *

@@ -2,7 +2,7 @@
 /* Prove the worktree sweep removes ONLY what is finished, and that every refusal
  * actually refuses (built 2026-09-23 with worktree_sweep.mjs).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets), no placeholders:
+ * From this folder (C:\Buses\claude-skills\bus-work\assets), no placeholders:
  *
  *   node prove-red-worktree-sweep.mjs
  *

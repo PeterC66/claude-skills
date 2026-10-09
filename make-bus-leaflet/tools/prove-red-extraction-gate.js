@@ -9,7 +9,7 @@
  * `--buses` defaults to this skill's own fixture estate, test/fixtures/estate,
  * because the question is about the gate and not about any map; pointing it at
  * the real buses-data tree works and takes about five times as long. `--portal`
- * defaults to C:\Claude\community-bus-maps and is passed through to status.js.
+ * defaults to C:\Buses\community-bus-maps and is passed through to status.js.
  *
  * WHY. On 2026-09-27 `extraction-gate.js` printed "all 119 sheet verdicts
  * identical" with gen_internal.js forced to smooth every casing, an edit that
@@ -53,7 +53,7 @@ const arg = (name, dflt) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
 const BUSES = path.resolve(arg('buses', path.join(SK, 'test', 'fixtures', 'estate')));
-const PORTAL = arg('portal', 'C:/Claude/community-bus-maps');
+const PORTAL = arg('portal', 'C:/Buses/community-bus-maps');
 
 const tmp = scratchDir('prove-red-extraction-gate-');
 const baseFile = path.join(tmp, 'baseline.json');

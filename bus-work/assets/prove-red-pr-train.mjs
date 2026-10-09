@@ -2,7 +2,7 @@
 /* Prove the pull-request train picks the right pull request, and leaves the
  * right ones alone (2026-09-27).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-pr-train.mjs
  *

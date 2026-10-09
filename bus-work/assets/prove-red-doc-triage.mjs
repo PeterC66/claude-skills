@@ -2,7 +2,7 @@
 /* Prove the weekly document triage can find something, can say nothing, can
  * REFUSE, and never deletes a draft (buses-data, 2026-09-22).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-doc-triage.mjs
  *

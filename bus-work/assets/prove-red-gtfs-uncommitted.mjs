@@ -2,7 +2,7 @@
 /* Prove the uncommitted-refresh source can raise a row AND stay quiet
  * (buses-data OA-505, Tier 2.1 of the codebase review of 2026-09-28).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets), with no
+ * From this folder (C:\Buses\claude-skills\bus-work\assets), with no
  * placeholders:
  *
  *   node prove-red-gtfs-uncommitted.mjs

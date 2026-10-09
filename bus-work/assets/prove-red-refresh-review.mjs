@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Prove the refresh-review suppression can go quiet AND can come back (OA-205).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-refresh-review.mjs
  *

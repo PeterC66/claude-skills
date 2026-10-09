@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Prove the commitments source in worklist.mjs can go red AND stay quiet.
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets):
+ * From this folder (C:\Buses\claude-skills\bus-work\assets):
  *
  *   node prove-red-commitments.mjs
  *

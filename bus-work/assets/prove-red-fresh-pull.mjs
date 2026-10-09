@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Prove the fresh-pull row can appear AND can go away (buses-data OA-499 items 1 and 2).
  *
- * From this folder (C:\u3a St Ives\.claude\skills\bus-work\assets), with no
+ * From this folder (C:\Buses\claude-skills\bus-work\assets), with no
  * placeholders:
  *
  *   node prove-red-fresh-pull.mjs

@@ -386,7 +386,7 @@ function builtIn(repo) {
          * exit 0 only, stopped pushing (buses-data OA-441). The index is the
          * committed tree plus whatever the caller has staged, and a claim is
          * never staged by the tool that writes it. */
-        { id: 'backlog-index', label: 'the backlog index matches every committed action file', cmd: 'node', args: ['Development Docs/open-actions/assemble.mjs', '--check', '--from-index'] },
+        { id: 'backlog-index', label: 'every committed action file is well-formed', cmd: 'node', args: ['Development Docs/open-actions/assemble.mjs', '--lint', '--from-index'] },
         /* The two checks the pre-commit hook ran until buses-data OA-581, moved here
          * because a fault in either costs a billed red only if it reaches a push, and
          * this is the one place asked before every push: push_main.mjs, the loop's

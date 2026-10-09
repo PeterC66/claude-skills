@@ -273,7 +273,7 @@ function runWith(fixture, opts = {}) {
   const m = manifestFor(fx.repo);
   const arm = m && m.checks.find((c) => c.id === 'backlog-index');
   check('buses-data: the built-in manifest is the one chosen', !!m && m.name === 'buses-data', m ? m.name : 'no manifest');
-  check('buses-data: the backlog arm reads the index, not the working tree', !!arm && arm.args.includes('--check') && arm.args.includes('--from-index'), arm ? arm.args.join(' ') : 'no backlog-index arm');
+  check('buses-data: the backlog arm reads the index, not the working tree', !!arm && arm.args.includes('--lint') && arm.args.includes('--from-index'), arm ? arm.args.join(' ') : 'no backlog-index arm');
   rmSync(fx.root, { recursive: true, force: true });
 }
 

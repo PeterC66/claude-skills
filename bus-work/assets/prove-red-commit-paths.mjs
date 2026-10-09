@@ -52,6 +52,8 @@ const MUTANTS = {
   pathspec: [whole("const argv = ['commit', '--quiet', '-F', p.message.file];"), ['pathspec']],
   unstage: [drop('unstage'), ['hook-refuses']],
   lock: [drop('lock'), ['lock']],
+  internal: [drop('internal'), ['internal']],
+  'rb-throws': [drop('rb-throws'), ['rb-throws']],
   refresh: [whole('const refreshed = [];'), ['rb-stamp']],
   'rb-subject': [whole("checks.push(checkRow('subject', true));"), ['rb-subject']],
   'rb-files': [whole("checks.push(checkRow('files', true));"), ['rb-files']],

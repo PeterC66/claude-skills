@@ -372,7 +372,7 @@ function applyPlan(o, deps, p) {
     added = p.entries.filter((e) => e.state === 'new').map((e) => e.path);
     if (added.length) {
       const a = ctx.git(p.root, ['add', '--', ...added]);
-      if (a.status !== 0) throw new Refused(`git add failed: ${a.err.trim()}`, 1);
+      if (a.status !== 0) { ctx.git(p.root, ['reset', '--quiet', '--', ...added]); throw new Refused(`git add failed: ${a.err.trim()}; any path it did stage is unstaged again`, 1); }
     }
   }
   const argv = ['commit', '--quiet', '-F', p.message.file, ...(p.mode === 'index' ? [] : ['--', ...p.paths.map((x) => `:(literal)${x}`)])]; // @guard:pathspec @guard:commit-literal
@@ -384,7 +384,8 @@ function applyPlan(o, deps, p) {
     return { ok: false, committed: false, refusedByGit: true, hookOutput, status: c.status };
   }
   const refreshed = p.mode === 'index' ? [] : refreshStaleIndex(ctx, p); // @guard:refresh
-  const rb = readBack(ctx, p, { added });
+  let rb;
+  try { rb = readBack(ctx, p, { added }); } catch (e) { rb = { sha: ctx.git(p.root, ['rev-parse', 'HEAD']).out.trim(), subject: '', ok: false, checks: [checkRow('read-back ran', false, `the read-back itself threw: ${e.message}`)] }; } // @guard:rb-throws
   return { ok: rb.ok, committed: true, sha: rb.sha, subject: rb.subject, files: p.paths, checks: rb.checks, refreshed, hookOutput };
 }
 
@@ -424,7 +425,7 @@ export function main(argv, deps = {}) {
     if (o.json) return { code, stdout: JSON.stringify({ ok: r.ok, mode: 'apply', committed: r.committed, sha: r.sha, subject: r.subject, files: r.files, checks: r.checks, refreshed: r.refreshed, hookOutput: r.hookOutput, token: p.token }) + '\n', stderr: '' };
     return { code, stdout: r.committed ? resultText(p, r) : '', stderr: r.committed ? '' : resultText(p, r) };
   } catch (e) {
-    if (!(e instanceof Refused)) throw e;
+    if (!(e instanceof Refused)) e = new Refused(`INTERNAL ERROR (${String(e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e)}). If no COMMITTED line was printed, nothing was committed, but check git status for a new file this run staged`, 2); // @guard:internal
     if (o.json) return { code: e.code, stdout: JSON.stringify({ ok: false, committed: false, refused: e.message, code: e.code }) + '\n', stderr: '' };
     return { code: e.code, stdout: '', stderr: `commit_paths: REFUSED — ${e.message}\n${e.usage ? USAGE : ''}` };
   }

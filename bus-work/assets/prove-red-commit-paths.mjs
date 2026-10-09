@@ -5,7 +5,7 @@
  *
  *   node prove-red-commit-paths.mjs
  *
- * WHAT IS BEING FALSIFIED. `test-commit-paths.mjs` says the script refuses what it must and reads
+ * WHAT IS BEING FALSIFIED. `prove-red-commit-paths-cases.mjs` says the script refuses what it must and reads
  * back what it must. A suite nobody has seen go red proves less than it looks, so this breaks the
  * script on purpose: for every line in commit_paths.mjs tagged `@guard:<name>`, a scratch copy has
  * that one line removed or weakened, and the cases that guard owns are run against the copy. Each
@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE = path.join(HERE, 'commit_paths.mjs');
-const TEST = path.join(HERE, 'test-commit-paths.mjs');
+const TEST = path.join(HERE, 'prove-red-commit-paths-cases.mjs');
 const src = fs.readFileSync(SOURCE, 'utf8');
 
 const drop = (id) => (line) => `${line.match(/^\s*/)[0]}// mutated away: ${id}`;

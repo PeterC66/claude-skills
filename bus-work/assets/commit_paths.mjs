@@ -50,7 +50,7 @@
  * the untracked path is gone from HEAD and a mode change reads back as the mode that was reviewed.
  *
  * It never pushes: the push preflight paces that. `git` and the file reads are injected so a stub can
- * falsify each branch (`test-commit-paths.mjs`), and `prove-red-commit-paths.mjs` breaks each guard
+ * falsify each branch (`prove-red-commit-paths-cases.mjs`), and `prove-red-commit-paths.mjs` breaks each guard
  * below, one at a time, in a scratch copy and requires that suite to go red. A line tagged
  * `@guard:<name>` is a line that harness replaces. Node core only; keep it one file, because the
  * harness copies it.

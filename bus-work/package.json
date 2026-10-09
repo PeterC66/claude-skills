@@ -46,7 +46,7 @@
     "test:prove-red-adhoc-pretest": "node assets/prove-red-adhoc-pretest.mjs",
     "test:prove-red-push-main": "node assets/prove-red-push-main.mjs",
     "test:prove-red-off-portal": "node assets/prove-red-off-portal.mjs",
-    "test:commit-paths": "node assets/test-commit-paths.mjs",
+    "test:commit-paths": "node assets/prove-red-commit-paths-cases.mjs",
     "test:prove-red-commit-paths": "node assets/prove-red-commit-paths.mjs"
   }
 }

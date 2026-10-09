@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-/* The cases for commit_paths.mjs (buses-data OA-617).
+/* The cases for commit_paths.mjs (buses-data OA-617). Named prove-red-* so the satellite load test treats it as a script, which it is.
  *
  * From this folder (C:\Buses\claude-skills\bus-work\assets), no placeholders:
  *
- *   node test-commit-paths.mjs
+ *   node prove-red-commit-paths-cases.mjs
  *
  * Real throwaway git repositories under the temp folder, real hooks where a case needs one to
  * refuse or to rewrite what it was handed, and an injected `git` where a case needs the world to

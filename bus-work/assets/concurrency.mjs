@@ -1268,6 +1268,8 @@ export function needsOf(item) {
   // OA-408 item 3: the silent-loop row's action is "read the scheduler's run
   // list", a read in the desktop app. Empty for loop-idle's reason.
   if (key === 'loop-silent') return [];
+  // OA-567: `npm ci` writes only the portal's gitignored node_modules, and a row saying no portal script can run must not be hidden by --safe-only.
+  if (key === 'portal-deps') return [];
   // 2026-09-10: the row's action is "read loop/your-move/ and promote, file or
   // decline each draft" — a triage, done by moving gitignored files. It touches
   // no shared tree, and it is the row most likely to be ABOUT a fix a tick was

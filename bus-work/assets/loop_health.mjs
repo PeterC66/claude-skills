@@ -97,7 +97,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, resolveBuses, assetsDir } from './engine.mjs';
-import { readRuns, loopHealth } from './loop_runs.mjs';
+import { readRuns, loopHealth, readSchedule, scheduleText } from './loop_runs.mjs';
 import { readLoopLock } from './loop_lock.mjs';
 import { fenceOf } from './concurrency.mjs';
 import { readYourMoveDir, classify, parseHold, heldPaths } from './loop_your_move.mjs';
@@ -319,6 +319,7 @@ export function assessCapacity(f, ctx) {
  * @param {object|null} [f.resources] the conditions check's per-resource verdicts
  * @param {{rows:Array, grades:object, fixtures:string[], review?:object|null}|null} [f.busWork] only with --deep; `review` is the scan's ink review
  * @param {number|null} [f.perDay]   ticks a day read from loop/README.md; null falls back to DEFAULT_TICKS_PER_DAY
+ * @param {{minute, hours}|null} [f.schedule]  the same cron line's fire times; null measures lateness by the median gap (OA-608)
  * @param {Array<{id:string, what:string, by:string}>} f.commitments
  * @param {number} [f.days=7] [f.pushStaleHours=5]
  */
@@ -329,7 +330,7 @@ export function analyse(f) {
   const findings = [];
   const add = (level, key, text, move) => findings.push({ level, key, text, move: move || null });
 
-  const health = loopHealth({ runs: f.runs, now: f.now });
+  const health = loopHealth({ runs: f.runs, now: f.now, schedule: f.schedule || null });
   const buckets = bucketActions(f.actions || [], today);
 
   if (f.stopFile) {
@@ -408,8 +409,9 @@ export function analyse(f) {
   if (health.ran && health.missed > 0) {
     add('AT RISK', 'missed', `${health.missed} of the recent idle runs were fired by the scheduler and never reached a prompt (written up as \`-missed\`). No tree state explains that.`, "Open the scheduled task bus-loop in the desktop app and read its recent runs' messages.");
   }
-  if (health.ran && health.ageMin != null && health.ageMin >= 3 * health.cadence) {
-    add('NOTE', 'quiet', `No tick for ${health.ageMin < 180 ? health.ageMin + ' min' : (health.ageMin / 60).toFixed(1) + ' h'} (cadence ${health.cadence} min). Normal while the desktop app was shut; if it was open, the schedule may be off.`);
+  // OA-608: against the scheduled fire times when loop/README.md gives them, so a normal gap says nothing.
+  if (health.ran && (health.dueAt ? health.dueAt.length >= 1 : health.ageMin != null && health.ageMin >= 3 * health.cadence)) {
+    add('NOTE', 'quiet', `No tick for ${health.ageMin < 180 ? health.ageMin + ' min' : (health.ageMin / 60).toFixed(1) + ' h'} (${health.dueAt ? `${health.dueAt.length} scheduled run${health.dueAt.length === 1 ? '' : 's'} of ${scheduleText(health.schedule)} fell due since` : `cadence ${health.cadence} min`}). Normal while the desktop app was shut; if it was open, the schedule may be off.`);
   }
   if (!health.ran) add('NOTE', 'no-runs', 'No run files found in `loop/runs/`, which is normal in a fresh clone or a worktree and means nothing here.');
 
@@ -486,7 +488,7 @@ export function render(r, now) {
   L.push('');
   const h = r.health;
   L.push(h.ran
-    ? `Ticks: last ${new Date(h.lastAt).toTimeString().slice(0, 5)} (${h.ageMin < 180 ? h.ageMin + ' min' : (h.ageMin / 60).toFixed(1) + ' h'} ago), cadence ${h.cadence} min, ${h.idle} consecutive without reaching work${h.lastWorkingAt ? `, last worked ${new Date(h.lastWorkingAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}.`
+    ? `Ticks: last ${new Date(h.lastAt).toTimeString().slice(0, 5)} (${h.ageMin < 180 ? h.ageMin + ' min' : (h.ageMin / 60).toFixed(1) + ' h'} ago), ${h.schedule ? `scheduled ${scheduleText(h.schedule)}` : `cadence ${h.cadence} min`}, ${h.idle} consecutive without reaching work${h.lastWorkingAt ? `, last worked ${new Date(h.lastWorkingAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}.`
     : 'Ticks: no run files here.');
   const s = r.supply;
   L.push(`Backlog (not the loop's feed since OA-576; worked in /oa sessions): ${s.total} actions: ${s.free} free, ${s.held} held by a date, ${s.peter} Peter's decision, ${s.parked} Parked.`);
@@ -728,6 +730,7 @@ export function gather(busesDir, { now = Date.now(), probes = false, deep = fals
     ahead, actions, commitments,
     passedOver: passedOver(path.join(loopDir, 'runs')),
     perDay: (() => { try { return ticksPerDay(readFileSync(path.join(loopDir, 'README.md'), 'utf8')); } catch { return null; } })(),
+    schedule: readSchedule(loopDir),
     ...(probes ? probeFacts(busesDir, deep, probes === true ? { prereq: true, conditions: true, engineLag: true } : probes) : {}),
   };
 }

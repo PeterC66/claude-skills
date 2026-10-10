@@ -643,6 +643,12 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-loop-runs
 
+      # buses-data OA-608: the printed board folds per-map engine-rebuild and
+      # fresh-pull rows into one each; --json keeps a row per map for the ticks.
+      - name: Prove the printed board folds only what it should
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-row-groups
+
       # buses-data OA-503 (2026-09-28): a file in loop/adhoc/ready/ that the ticks
       # keep naming and never take. Since OA-610 (2026-10-08) the queue is the
       # separate ad-hoc loop's `adhoc/ready/`, its runs in `adhoc/runs/`. The loop looked healthy all day while it passed

@@ -30,7 +30,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseRunName, readRuns, cadenceMin, loopHealth, loopRunItems, silenceOld, silentSlots, loopSilentItems } from './loop_runs.mjs';
+import { parseRunName, readRuns, cadenceMin, loopHealth, loopRunItems, silenceOld, silentSlots, loopSilentItems, scheduleOf, readSchedule, firesBetween } from './loop_runs.mjs';
+import { ticksPerDay } from './refresh_deadline.mjs';
 import { needsOf, readSessionTurns } from './concurrency.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -305,7 +306,8 @@ console.log('\n12. the wire in worklist.mjs — literal strings, and it must RUN
   // contains the string.
   const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));
   for (const lit of [
-    "import { readRuns, loopHealth, loopRunItems, loopSilentItems } from './loop_runs.mjs';",
+    "import { readRuns, loopHealth, loopRunItems, loopSilentItems, readSchedule } from './loop_runs.mjs';",
+    "schedule: readSchedule(path.join(BUSES, 'loop')) });",
     "readRuns(path.join(BUSES, 'loop', 'runs'))",
     "stopFile: existsSync(path.join(BUSES, 'loop', 'STOP')),",
     'treeDirty: !!(conditions.repos.buses && conditions.repos.buses.dirty),',
@@ -376,6 +378,71 @@ console.log('\n13. silence with witnesses (OA-408 item 3)');
   check('a transcript last written before since is skipped', readSessionTurns({ projectsDir: proj, since: at(4, 15), now: Date.now() }).length === 1);
   check('absent projects folder: [] and no throw', readSessionTurns({ projectsDir: path.join(tmp, 'no-projects'), since: 0 }).length === 0);
   check('no since: []', readSessionTurns({ projectsDir: proj }).length === 0);
+}
+
+console.log('\n14. the schedule is read from the cron line, and a normal gap is not lateness (OA-608)');
+{
+  const README = 'The cadence is three ticks a day (cron `0 4,13,19 * * *`, OA-577).';
+  const sched = scheduleOf(README);
+  check('the cron line parses to minute 0, hours 4, 13, 19', sched && sched.minute === 0 && sched.hours.join() === '4,13,19', JSON.stringify(sched));
+  check('`*` is every hour', scheduleOf('cron `15 * * * *`').hours.length === 24);
+  check('an hour out of range is null, not a schedule', scheduleOf('cron `0 4,25 * * *`') === null);
+  check('no cron line is null', scheduleOf('no schedule here') === null && scheduleOf(null) === null);
+  check('ticksPerDay reads the same parser', ticksPerDay(README) === 3 && ticksPerDay('cron `0 * * * *`') === 24 && ticksPerDay('') === null);
+  const loopDir = path.join(tmp, 'sched', 'loop');
+  fs.mkdirSync(loopDir, { recursive: true });
+  fs.writeFileSync(path.join(loopDir, 'README.md'), README, 'utf8');
+  check('readSchedule reads loop/README.md', readSchedule(loopDir) && readSchedule(loopDir).hours.length === 3);
+  check('readSchedule of an absent folder is null, no throw', readSchedule(path.join(tmp, 'nowhere-sched')) === null);
+  // Across the UK clock change on Sunday 25 October 2026: four fires, none skipped or doubled.
+  const fires = firesBetween(sched, new Date(2026, 9, 24, 20, 0).getTime(), new Date(2026, 9, 26, 5, 0).getTime());
+  check('fire times across a clock change: 04, 13, 19, 04', fires.map((t) => new Date(t).getHours()).join() === '4,13,19,4', fires.map((t) => new Date(t).toString()).join(' | '));
+
+  // THE 8 OCTOBER SHAPE. Weeks of hourly history, then three a day: the last tick
+  // 19:01 on the 7th, read at 00:51 on the 8th. The median says 60 minutes, so
+  // without the schedule it reads as silence; with it, nothing is due until 04:00.
+  const hourly = [];
+  for (let h = 0; h < 19; h++) hourly.push(`${String(h).padStart(2, '0')}15-bus-work`);
+  const dir = path.join(tmp, 'oct', 'loop', 'runs');
+  fs.mkdirSync(dir, { recursive: true });
+  for (const s of hourly) fs.writeFileSync(path.join(dir, `2026-10-07_${s}.md`), '#\n', 'utf8');
+  fs.writeFileSync(path.join(dir, '2026-10-07_1901-bus-work.md'), '#\n', 'utf8');
+  const runs = readRuns(dir);
+  const t = (d, h, m = 0) => new Date(2026, 9, d, h, m).getTime();
+  const median = loopHealth({ runs, now: t(8, 0, 51) });
+  check('MUTATION CONTROL — the median alone still reads 60 and calls 00:51 old', median.cadence === 60 && silenceOld(median) === true, `${median.cadence} ${silenceOld(median)}`);
+  const h = loopHealth({ runs, now: t(8, 0, 51), schedule: sched });
+  check('with the schedule nothing is due at 00:51', h.dueAt && h.dueAt.length === 0, JSON.stringify(h.dueAt));
+  check('…so the silence is not old', silenceOld(h) === false);
+  check('…and the busiest night raises no loop-silent row', loopSilentItems({ health: h, turns: [t(7, 20), t(7, 22), t(8, 0, 30)] }).length === 0);
+  // 04:00 fired and wrote nothing: not late until its grace has passed, late after.
+  check('04:00 is not late at 05:29', loopHealth({ runs, now: t(8, 5, 29), schedule: sched }).dueAt.length === 0);
+  const late = loopHealth({ runs, now: t(8, 5, 31), schedule: sched });
+  check('04:00 IS late at 05:31 — a missed run still counts', late.dueAt.length === 1 && new Date(late.dueAt[0]).getHours() === 4, JSON.stringify(late.dueAt));
+  // The silent row: two late fires, each followed by a session's turn.
+  const at21 = loopHealth({ runs, now: t(8, 20, 0), schedule: sched });
+  check('by 20:00 on the 8th, 04:00 and 13:00 are late (19:00 is inside its grace)', at21.dueAt.length === 2, String(at21.dueAt.length));
+  const rows = loopSilentItems({ health: at21, turns: [t(8, 9, 0), t(8, 14, 0)] });
+  check('sessions after both late fires raise loop-silent', rows.length === 1 && /after 2 of the 2 scheduled runs since/.test(rows[0].title), rows[0] && rows[0].title);
+  check('…and the why names the schedule', rows[0] && /scheduled at 04:00, 13:00, 19:00/.test(rows[0].why));
+  check('CONTROL — a session after only one late fire raises nothing', loopSilentItems({ health: at21, turns: [t(8, 9, 0), t(8, 10, 0)] }).length === 0);
+  check('CONTROL — a turn before the first late fire is no witness', silentSlots({ health: at21, turns: [t(8, 2, 0)] }).length === 0);
+  // Two late fires after a 04:01 tick make the silence old at 20:31, 16.5 h on —
+  // under the three mean gaps (24 h) the fallback would wait for.
+  const morning = readRuns(dir).concat([{ name: 'y', feed: 'bus-work', at: t(8, 4, 1) }]);
+  check('two late fires make the silence old before three mean gaps have passed', silenceOld(loopHealth({ runs: morning, now: t(8, 20, 31), schedule: sched })) === true);
+  const ticked = readRuns(dir).concat([{ name: 'x', feed: 'bus-work', at: t(8, 13, 1) }]);
+  check('CONTROL — a tick at 13:01 leaves only 19:00 to count, and it is not due at 20:00', loopHealth({ runs: ticked, now: t(8, 20, 0), schedule: sched }).dueAt.length === 0);
+}
+
+console.log('\n15. the schedule reaches loop_health.mjs');
+{
+  const src = fs.readFileSync(path.join(HERE, 'loop_health.mjs'), 'utf8');
+  const liveLine = (lit) => src.split('\n').some((l) => l.includes(lit) && !l.trim().startsWith('//') && !l.trim().startsWith('*'));
+  for (const lit of [
+    'schedule: readSchedule(loopDir),',
+    'const health = loopHealth({ runs: f.runs, now: f.now, schedule: f.schedule || null });',
+  ]) check(`loop_health.mjs RUNS: ${lit.slice(0, 58)}`, liveLine(lit), 'absent, or commented out');
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

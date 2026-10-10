@@ -83,7 +83,8 @@ import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { freshPullItems, readCurrentQuery, readRecordedQuery, s2Row } from './fresh_pull.mjs';
 import { localDecisionItems } from './local_decisions.mjs';
 import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
-import { readRuns, loopHealth, loopRunItems, loopSilentItems } from './loop_runs.mjs';
+import { readRuns, loopHealth, loopRunItems, loopSilentItems, readSchedule } from './loop_runs.mjs';
+import { groupForPrint } from './row_groups.mjs';
 import { adhocNotTakenFor } from './loop_ready.mjs';
 import { unpushedBranchItems } from './unpushed_branches.mjs';
 import { readPrSweep, prSweepItems } from './pr_sweep.mjs';
@@ -1030,11 +1031,9 @@ worktreeSweepBoard({ busesDir: BUSES, assetsDir: HERE, add, warnings }); // fini
 // health. On 2026-09-09 it stopped four ticks running, three of them on a still
 // tree left by a finished experiment, and nothing on this board said so.
 //
-// The causes come from `conditions`, which this run has already gathered, so the
-// row cannot contradict the CONDITIONS block printed above it. The measurement
-// itself opens no file: `loop/runs/` is one file per tick named with its date,
-// time and feed, and `none` is exactly a tick that stopped before dispatch.
-const loopState = loopHealth({ runs: readRuns(path.join(BUSES, 'loop', 'runs')) });
+// The causes come from `conditions`, so the row cannot contradict the CONDITIONS
+// block above it; the measurement reads only `loop/runs/` filenames and the cron line.
+const loopState = loopHealth({ runs: readRuns(path.join(BUSES, 'loop', 'runs')), schedule: readSchedule(path.join(BUSES, 'loop')) }); // OA-608: late against the cron line
 const loopIdle = loopRunItems({
   health: loopState,
   stopFile: existsSync(path.join(BUSES, 'loop', 'STOP')),
@@ -1146,6 +1145,7 @@ for (const { row: mapRow, place } of engineStale) {
 }
 // OA-480: the portal ahead of engine.lock.json's pin is a chore, carried here; the row is built in pin_behind.js.
 if (SK && PORTAL && findEngineRepo()) { const it = require(path.join(SK, 'pin_behind.js')).pinBehindItem({ buses: BUSES, portal: PORTAL, skillsRoot: findEngineRepo() }); if (it) add(it); }
+if (SK && PORTAL) { const it = require(path.join(SK, 'portal_deps.js')).item(PORTAL); if (it) add(it); } // OA-567: no node_modules is a chore with its repair
 const s6StalePlaces = (tree.places || []).filter((p) => p.built && p.s6Stale);
 if (s6StalePlaces.length) {
   /*
@@ -1578,7 +1578,7 @@ if (warnings.length) console.log('');
 if (!SHOW_DEMO && demoAll.length) console.log(`  (${demoAll.length} demo-customer row${demoAll.length === 1 ? '' : 's'} hidden — --demo to show)\n`);
 
 let band = null, n = 0;
-for (const it of limited) {
+for (const it of groupForPrint(limited)) { // OA-608: an estate-wide fact prints once; --json keeps a row per map (row_groups.mjs)
   if (bandOf(it) !== band) { band = bandOf(it); console.log(`── ${band} ${'─'.repeat(Math.max(0, 58 - band.length))}`); }
   n++;
   const age = it.ageDays == null ? '' : `  [${it.ageDays}d]`;

@@ -90,6 +90,16 @@
  * an 82-minute one, a 6-minute manual fire). A median needs no outlier rule and
  * no configuration, and it re-calibrates by itself if the schedule ever changes.
  *
+ * EXCEPT IT DID NOT, AND THE SCHEDULE NOW WINS WHERE IT IS WRITTEN (buses-data
+ * OA-608). When OA-577 moved the loop to `0 4,13,19` on 7 October, the median was
+ * still 57 minutes a day later — weeks of hourly history outvote a handful of new
+ * gaps — so every normal nine-hour wait read as nine missed ticks. And an uneven
+ * schedule has no one gap a median could find. So `loop/README.md`'s cron line,
+ * the written copy of the stored task's schedule and the line OA-577 changed, is
+ * read for the scheduled FIRE TIMES: a run is late when a fire time has passed by
+ * `FIRE_GRACE_MIN` with no run file since, and a normal gap raises nothing. The
+ * median stays as the fallback for a README with no cron line.
+ *
  * WHAT IT DELIBERATELY DOES NOT RAISE: a stale newest run on its own. The
  * scheduler only fires while the desktop app is open, and a task that falls due
  * while it is shut runs once on next launch — so "nothing since 01:15" is the
@@ -119,7 +129,50 @@
  * no warning, and `prove-red-loop-runs.mjs` proves that against real directories
  * because a fake reader cannot be absent.
  */
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
+
+/** Minutes after a scheduled fire before its missing run file counts: the loop lock's lease. */
+export const FIRE_GRACE_MIN = 90;
+
+/**
+ * The schedule in `loop/README.md`'s cron line, `cron \`M H,H,H * * *\``:
+ * `{ minute, hours }` with the hours sorted, or null when there is no such line
+ * or it holds an hour or minute out of range. Shared with refresh_deadline.mjs.
+ */
+export function scheduleOf(readme) {
+  const m = /cron `(\d{1,2}) ([\d,]+|\*) \* \* \*`/.exec(String(readme || ''));
+  if (!m) return null;
+  const minute = Number(m[1]);
+  const hours = m[2] === '*' ? [...Array(24).keys()] : [...new Set(m[2].split(',').filter(Boolean).map(Number))].sort((a, b) => a - b);
+  if (minute > 59 || !hours.length || !hours.every((h) => Number.isInteger(h) && h >= 0 && h <= 23)) return null;
+  return { minute, hours };
+}
+
+/** scheduleOf() of `<loopDir>/README.md`, or null when it is absent or unreadable. */
+export function readSchedule(loopDir) {
+  try { return scheduleOf(readFileSync(path.join(loopDir, 'README.md'), 'utf8')); } catch { return null; }
+}
+
+/** Scheduled fire times (local, ms) strictly after `from` and at or before `to`. */
+export function firesBetween(sched, from, to) {
+  const out = [];
+  if (!sched || !(to > from)) return out;
+  const d0 = new Date(from);
+  // Day by day through the local calendar, so a clock change cannot skip or repeat a day.
+  for (let k = 0; ; k++) {
+    const day = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + k);
+    if (day.getTime() > to) break;
+    for (const h of sched.hours) {
+      const t = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, sched.minute).getTime();
+      if (t > from && t <= to) out.push(t);
+    }
+  }
+  return out;
+}
+
+/** `04:00, 13:00, 19:00` */
+export const scheduleText = (sched) => sched.hours.map((h) => `${String(h).padStart(2, '0')}:${String(sched.minute).padStart(2, '0')}`).join(', ');
 
 /** `2026-09-09_1115-none.md` -> { name, feed: 'none', at: <ms> }, or null. */
 export function parseRunName(name) {
@@ -191,17 +244,22 @@ export const DEFERRED = new Set(['busy', 'idle']);
 const DID_NOTHING = new Set(['none', 'missed', ...DEFERRED]);
 
 /**
- * @param {{runs: Array, now?: number, fallbackMin?: number}} p
- * @returns {{ran: boolean, lastAt, ageMin, cadence, idle: number, around: number, missed: number, lastWorkingAt}}
+ * @param {{runs: Array, now?: number, fallbackMin?: number, schedule?: {minute, hours}|null}} p
+ * @returns {{ran: boolean, lastAt, ageMin, cadence, idle: number, around: number, missed: number, lastWorkingAt, schedule, dueAt}}
+ *   `dueAt` (with a schedule only, else null): the fire times after the newest run
+ *   whose grace has passed with no run file since — the runs that are LATE.
  *   `idle` is the number of CONSECUTIVE most-recent ticks that never reached the
  *   queue — `none`, `around` or `missed`. `around` is how many of those did work
  *   anyway, and `missed` how many left no file of their own.
  */
-export function loopHealth({ runs, now = Date.now(), fallbackMin = 60 }) {
+export function loopHealth({ runs, now = Date.now(), fallbackMin = 60, schedule = null }) {
   const list = (runs || []).slice();
-  const cadence = cadenceMin(list, fallbackMin);
-  if (!list.length) return { ran: false, lastAt: null, ageMin: null, cadence, idle: 0, around: 0, missed: 0, lastWorkingAt: null };
+  // With a schedule the cadence is its mean gap, for wording only; lateness is `dueAt`.
+  const cadence = schedule ? Math.round(1440 / schedule.hours.length) : cadenceMin(list, fallbackMin);
+  if (!list.length) return { ran: false, lastAt: null, ageMin: null, cadence, idle: 0, around: 0, missed: 0, lastWorkingAt: null, schedule, dueAt: null };
   const last = list[list.length - 1];
+  // Ten minutes' slack: a tick names its file when it starts, a minute or two after its fire.
+  const dueAt = schedule ? firesBetween(schedule, last.at + 10 * 60000, now - FIRE_GRACE_MIN * 60000) : null;
   let idle = 0;
   let around = 0;
   let missed = 0;
@@ -225,6 +283,8 @@ export function loopHealth({ runs, now = Date.now(), fallbackMin = 60 }) {
     around,
     missed,
     lastWorkingAt: working.length ? working[working.length - 1].at : null,
+    schedule,
+    dueAt,
   };
 }
 
@@ -309,8 +369,17 @@ export function loopRunItems({ health, idleThreshold = 2, stopFile = false, tree
  */
 export function silenceOld(health, minSlots = 3) {
   const h = health || {};
+  if (h.ran && h.dueAt) return h.dueAt.length >= Math.min(minSlots, SCHEDULED_SLOTS);
   return !!(h.ran && h.ageMin != null && h.cadence && h.ageMin >= minSlots * h.cadence);
 }
+
+/**
+ * Late fires that must each have seen a session before the silent row is raised,
+ * when the schedule is known (OA-608). Two, not three: at three a day, three would
+ * be a whole day of silence, and one would cry wolf on the morning the app opens a
+ * minute before the catch-up tick writes its file.
+ */
+export const SCHEDULED_SLOTS = 2;
 
 /**
  * The cadence-long slots after the newest run file that hold at least one
@@ -319,6 +388,16 @@ export function silenceOld(health, minSlots = 3) {
  */
 export function silentSlots({ health, turns }) {
   const h = health || {};
+  if (h.ran && h.dueAt) {
+    // Slot k runs from the k-th late fire to the next one (or now): a turn in it
+    // says the app was open after a fire that wrote no run file.
+    const seen = new Set();
+    for (const t of turns || []) {
+      const k = h.dueAt.filter((f) => f <= t).length;
+      if (k >= 1) seen.add(k);
+    }
+    return [...seen].sort((a, b) => a - b);
+  }
   if (!h.ran || !h.cadence) return [];
   const slotMs = h.cadence * 60000;
   const seen = new Set();
@@ -341,11 +420,14 @@ export function loopSilentItems({ health, turns, readTurns, minSlots = 3 }) {
   // `readTurns` is `concurrency.mjs`'s `readSessionTurns`, passed in so this
   // module still opens nothing and a working loop never reaches the read.
   const slots = silentSlots({ health: h, turns: turns || (readTurns ? readTurns({ since: h.lastAt }) : []) });
-  if (slots.length < minSlots) return [];
+  const sched = !!h.dueAt;
+  if (slots.length < (sched ? Math.min(minSlots, SCHEDULED_SLOTS) : minSlots)) return [];
   return [{
     key: 'loop-silent', rank: 8, type: 'loop-health',
-    title: `The scheduled loop has written no run file for ${ago(h.ageMin)} (last tick ${hhmm(h.lastAt)}), though sessions were working in ${slots.length} of the ${Math.floor(h.ageMin / h.cadence)} cadences since`,
-    why: `The loop's cadence is ${h.cadence} min, measured from the run filenames. A stale newest run is normal while the desktop app is shut, so it raises nothing by itself; this row is raised because session transcripts show the app open in ${slots.length} separate ${h.cadence}-minute slots after the last tick, and no tick wrote a file in any of them. Either the scheduler did not fire, or it fired and each run died before its prompt (a session limit, a crash) — the scheduler's own run list for \`bus-loop\` says which. A chore, not a fault: a session sitting at a prompt is weak evidence, and Peter chose a false alarm over silence (OA-408, 2026-09-21).`,
+    title: sched
+      ? `The scheduled loop has written no run file for ${ago(h.ageMin)} (last tick ${hhmm(h.lastAt)}), though sessions were working after ${slots.length} of the ${h.dueAt.length} scheduled runs since`
+      : `The scheduled loop has written no run file for ${ago(h.ageMin)} (last tick ${hhmm(h.lastAt)}), though sessions were working in ${slots.length} of the ${Math.floor(h.ageMin / h.cadence)} cadences since`,
+    why: `${sched ? `The loop is scheduled at ${scheduleText(h.schedule)} (loop/README.md's cron line), and ${h.dueAt.length} of those runs have fallen due since the last tick with no run file.` : `The loop's cadence is ${h.cadence} min, measured from the run filenames.`} A stale newest run is normal while the desktop app is shut, so it raises nothing by itself; this row is raised because session transcripts show the app open ${sched ? `after ${slots.length} separate scheduled runs that wrote nothing` : `in ${slots.length} separate ${h.cadence}-minute slots after the last tick, and no tick wrote a file in any of them`}. Either the scheduler did not fire, or it fired and each run died before its prompt (a session limit, a crash) — the scheduler's own run list for \`bus-loop\` says which. A chore, not a fault: a session sitting at a prompt is weak evidence, and Peter chose a false alarm over silence (OA-408, 2026-09-21).`,
     who: 'Peter', runbook: 'loop',
     ageDays: Math.floor(h.ageMin / 1440),
     silentSlots: slots.length, cadenceMin: h.cadence,

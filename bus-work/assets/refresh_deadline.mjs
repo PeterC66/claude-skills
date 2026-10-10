@@ -39,6 +39,7 @@
  *
  * Pure: no disk, no clock. The callers read the files and pass today's date in.
  */
+import { scheduleOf } from './loop_runs.mjs';
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const DATED = /registered (?:to start|only to) (\d{4}-\d{2}-\d{2})\b/g;
@@ -82,12 +83,8 @@ function byEffective(x, y) {
  * saying so.
  */
 export function ticksPerDay(readme) {
-  const m = /cron `(\d{1,2}) ([\d,]+|\*) \* \* \*`/.exec(String(readme || ''));
-  if (!m) return null;
-  if (m[2] === '*') return 24;
-  const hours = new Set(m[2].split(',').filter(Boolean).map(Number));
-  if (![...hours].every((h) => Number.isInteger(h) && h >= 0 && h <= 23)) return null;
-  return hours.size || null;
+  const s = scheduleOf(readme);   // one parser for the cron line, in loop_runs.mjs (OA-608)
+  return s ? s.hours.length : null;
 }
 
 /**

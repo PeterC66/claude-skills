@@ -128,10 +128,7 @@ const MUTANTS = [
   ['undated rows come first', 'return x ? -1 : y ? 1 : 0;', 'return x ? 1 : y ? -1 : 0;'],
   ['the date outranks the rank', '|| a.rank - b.rank\n    || byEffective(a.effectiveDate, b.effectiveDate)', '|| byEffective(a.effectiveDate, b.effectiveDate)\n    || a.rank - b.rank'],
   ['demo rows are not last', '(a.demo ? 1 : 0) - (b.demo ? 1 : 0)', '0'],
-  ['the cadence is assumed, not read', 'return hours.size || null;', 'return 3;'],
-  ['a repeated hour counts twice', "const hours = new Set(m[2].split(',')", "const hours = (m[2].split(',')"],
-  ['an hour past 23 is counted', 'h >= 0 && h <= 23', 'h >= 0'],
-  ['hourly is not counted', "if (m[2] === '*') return 24;", "if (m[2] === '*') return null;"],
+  ['the cadence is assumed, not read', 'return s ? s.hours.length : null;', 'return 3;'],
   ['a staging is ignored', 'if (m.staged && m.staged.after === m.after) return 0;', ''],
   ['a staging of an older build counts', 'if (m.staged && m.staged.after === m.after) return 0;', 'if (m.staged) return 0;'],
   ['an answer for an older build counts', "m.answer && m.answer.after === m.after && m.answer.verdict === 'accept'", "m.answer && m.answer.verdict === 'accept'"],
@@ -154,6 +151,27 @@ for (const [name, from, to] of MUTANTS) {
   fs.writeFileSync(file, source.replace(from, to));
   let bad = 0;
   try { bad = suite(await load(file), false); } catch { bad = 1; } finally { fs.rmSync(file, { force: true }); }
+  if (bad > 0) console.log(`  ok  "${name}" turns ${bad} assertion(s) red`);
+  else { failed++; console.error(`  ✗   mutation "${name}" left the suite green: an assertion that cannot go red`); }
+}
+
+// The cron parser moved to loop_runs.mjs's scheduleOf() (OA-608), shared with the
+// loop's lateness test; its mutants are applied THERE, and reached through a copy of
+// refresh_deadline.mjs that imports the mutant.
+const lrSource = fs.readFileSync(path.join(HERE, 'loop_runs.mjs'), 'utf8');
+for (const [name, from, to] of [
+  ['a repeated hour counts twice', "[...new Set(m[2].split(',').filter(Boolean).map(Number))]", "[...m[2].split(',').filter(Boolean).map(Number)]"],
+  ['an hour past 23 is counted', 'h >= 0 && h <= 23', 'h >= 0'],
+  ['hourly is not counted', "m[2] === '*' ? [...Array(24).keys()]", "m[2] === '*' ? []"],
+]) {
+  const n = lrSource.split(from).length - 1;
+  if (n !== 1) { failed++; console.error(`  ✗   mutation "${name}": its target occurs ${n} times in loop_runs.mjs, not once, so it tests nothing`); continue; }
+  const lrFile = path.join(HERE, `.loop_runs.mutant-${process.pid}.mjs`);
+  const rdFile = path.join(HERE, `.refresh_deadline.lrmutant-${process.pid}.mjs`);
+  fs.writeFileSync(lrFile, lrSource.replace(from, to));
+  fs.writeFileSync(rdFile, source.replace("from './loop_runs.mjs'", `from './${path.basename(lrFile)}'`));
+  let bad = 0;
+  try { bad = suite(await load(rdFile), false); } catch { bad = 1; } finally { fs.rmSync(lrFile, { force: true }); fs.rmSync(rdFile, { force: true }); }
   if (bad > 0) console.log(`  ok  "${name}" turns ${bad} assertion(s) red`);
   else { failed++; console.error(`  ✗   mutation "${name}" left the suite green: an assertion that cannot go red`); }
 }

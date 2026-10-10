@@ -773,6 +773,37 @@ console.log('\nOA-610. the ad-hoc queue is its own loop: where things go, and wh
   check('CONTROL — a tick\'s sched-HHMM still reads the same', parseDraft({ name: 'y.md', text: 'Noticed by `sched-1522` on 2026-09-08\n', mtimeMs: 0 }).by === 'sched-1522');
 }
 
+console.log('\nDecided holds. the row quotes the decision, not the ask it already answered (10 Oct 2026)');
+{
+  // The shape /triage writes: Decided and Revisit when above an ask that is
+  // still true of the day it was raised.
+  const DECIDED = '# High Wycombe stops\n\n**Decided:** 2026-10-01, rebuild after 1 November, owned by OA-544.\n**Revisit when:** 2026-11-01\n\n**Raised by:** sched-1301, 2026-10-09\n**Blocks:** engine-rebuild-Soham\n\n## What is needed from you\n\nDecide how the rebuild should be done.\n';
+  const UNDECIDED = DECIDED.replace(/\*\*Decided:\*\*[^\n]*\n\*\*Revisit when:\*\*[^\n]*\n\n/, '');
+  const dir = path.join(tmp, 'decided', 'loop', 'your-move');
+  mk(dir, 'decided.md', DECIDED);
+  mk(dir, 'open.md', UNDECIDED.replace('High Wycombe stops', 'Another stops').replace('engine-rebuild-Soham', 'other-row-1'));
+  const files = readYourMoveDir(dir);
+  const r = loopHoldItems({ files });
+  const d = r.items.find((i) => i.ref === 'decided');
+  const o = r.items.find((i) => i.ref === 'open');
+  const ph = parseHold({ name: 'decided.md', text: DECIDED, mtimeMs: 0 });
+  check('a Decided line is parsed with its Revisit when', ph.decided.startsWith('2026-10-01, rebuild after 1 November') && ph.revisit === '2026-11-01', JSON.stringify(ph));
+  check('the decided row says it is decided and leads with the decision', /^Decided, nothing to answer: High Wycombe stops/.test(d.title) && d.why === 'Decided: 2026-10-01, rebuild after 1 November, owned by OA-544. Revisit when: 2026-11-01', d.title + ' | ' + d.why);
+  check('…and does NOT quote the ask it already answered', !/Decide how the rebuild/.test(d.why) && !/blocked on you/.test(d.title));
+  check('…and its instruction is not "read the file and answer it"', !/it states what is needed/.test(d.do.map((x) => x.what).join(' ')) && /Nothing to answer/.test(d.do[0].what));
+  check('the decided hold is still a hold at rank 3, still blocking its row', d.rank === 3 && d.type === 'loop-hold' && r.holds.some((h) => h.key === 'engine-rebuild-Soham' && h.decided));
+  const banner = holdBanner(r.holds.find((h) => h.key === 'engine-rebuild-Soham')).join('\n');
+  check('the banner over the blocked row says DECIDED and quotes the decision, not the ask', /ON HOLD, DECIDED/.test(banner) && /Decided: 2026-10-01/.test(banner) && !/Decide how the rebuild/.test(banner), banner);
+  check('CONTROL — an undecided hold reads exactly as before', /^The scheduled loop is blocked on you: Another stops/.test(o.title) && o.why === 'Decide how the rebuild should be done.' && /it states what is needed/.test(o.do[0].what) && !('decided' in o), JSON.stringify(o));
+  const ob = holdBanner(r.holds.find((h) => h.key === 'other-row-1')).join('\n');
+  check('CONTROL — an undecided banner still says ON HOLD and quotes the ask', /ON HOLD —/.test(ob) && /Decide how the rebuild/.test(ob) && !/DECIDED/.test(ob), ob);
+  // A row key can carry a town's name, so it can carry a space.
+  check('a backticked Blocks key keeps its space', JSON.stringify(parseHold({ name: 'k.md', text: '# K\n\n**Blocks:** `engine-rebuild-High Wycombe`\n\n## What is needed from you\n\nAsk.\n', mtimeMs: 0 }).blocks) === '["engine-rebuild-High Wycombe"]');
+  check('…several backticked keys each stay whole', JSON.stringify(parseHold({ name: 'k.md', text: '# K\n\n**Blocks:** `engine-rebuild-High Wycombe`, `fresh-pull-High Wycombe`\n', mtimeMs: 0 }).blocks) === '["engine-rebuild-High Wycombe","fresh-pull-High Wycombe"]');
+  check('CONTROL — keys with no backticks still split on commas and spaces', JSON.stringify(parseHold({ name: 'k.md', text: '# K\n\n**Blocks:** draft-1, s6-stale  ci-red-x\n', mtimeMs: 0 }).blocks) === '["draft-1","s6-stale","ci-red-x"]');
+  check('a Decided line inside a fenced example is not a decision', parseHold({ name: 'f.md', text: '# F\n\n```\n**Decided:** nothing\n```\n\n## What is needed from you\n\nAsk.\n', mtimeMs: 0 }).decided === '');
+}
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(bad ? `\n${bad} check(s) FAILED\n` : '\nAll checks passed.\n');
 process.exit(bad ? 1 : 0);

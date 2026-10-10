@@ -237,9 +237,14 @@ export function parseHold(f) {
   // reader tells a typo from a sentence, and the tokens alone cannot say which.
   const blocksRaw = plain(field(text, 'Blocks'), 160);
 
-  const blocks = field(text, 'Blocks')
-    .split(/[,\s]+/)
-    .map((k) => k.replace(/[`'"]/g, '').trim())
+  // A key can contain a space: the town in `engine-rebuild-High Wycombe` is part of
+  // it, and splitting on whitespace tore it into two tokens neither of which was a
+  // row, so that hold never attached (10 Oct 2026). A key written in backticks is
+  // therefore taken whole (and split only on commas); outside backticks a field
+  // reads as it always did, on commas and whitespace.
+  const blocks = [...field(text, 'Blocks').matchAll(/`([^`]*)`|([^,\s`]+)/g)]
+    .flatMap((m) => (m[1] !== undefined ? m[1].split(',') : [m[2]]))
+    .map((k) => k.replace(/['"]/g, '').trim())
     .filter(Boolean);
 
   // OA-301. The repository path a hold is ABOUT, from its `**File:**` field —
@@ -269,6 +274,14 @@ export function parseHold(f) {
     raisedBy: plain(raisedBy, 200),
     blocks,
     blocksRaw,
+    // The decision, when one has been made. A hold is written ask-first, so by the
+    // time somebody decides it the first paragraph is describing something that
+    // is already done, and the board quoted that paragraph. `**Decided:**` sits
+    // above the ask (the /triage command writes it there) and says what was
+    // decided and who owns it; `**Revisit when:**` says when it is due again.
+    // Both are plain fields: neither makes a hold a hold or stops one being one.
+    decided: plain(field(text, 'Decided'), 280),
+    revisit: plain(field(text, 'Revisit when'), 160),
     // OA-409. Does the file still carry its ASK, independent of its `Blocks:`
     // field? A field is one consequence a hold has for one row, and the ask
     // outlives it — so when the row a field names has cleared, this is what
@@ -413,19 +426,30 @@ export function loopHoldItems({ files, now = Date.now() }) {
     const stamp = b.raisedOn ? Date.parse(`${b.raisedOn}T00:00:00Z`) : b.mtimeMs;
     const ageDays = Number.isFinite(stamp) ? Math.max(0, Math.floor((now - stamp) / 86400000)) : null;
 
-    for (const key of b.blocks) holds.push({ key, ref: b.ref, file: b.file, headline: b.headline, need: b.need, raw: b.blocksRaw, asks: b.asks });
+    for (const key of b.blocks) holds.push({ key, ref: b.ref, file: b.file, headline: b.headline, need: b.need, raw: b.blocksRaw, asks: b.asks, decided: b.decided, revisit: b.revisit });
 
     items.push({
       key: `loop-hold-${b.ref}`, rank: 3, type: 'loop-hold',
-      title: `The scheduled loop is blocked on you: ${b.headline}`,
+      // A DECIDED hold says so in its title and leads its `why` with the decision:
+      // the ask is still in the file and still true of the day it was raised, and
+      // quoting it first told Peter to do what he had already done (10 Oct 2026).
+      // The rank is unchanged; that is a separate question.
+      title: b.decided
+        ? `Decided, nothing to answer: ${b.headline}`
+        : `The scheduled loop is blocked on you: ${b.headline}`,
       // The provenance is deliberately NOT folded into `why`: it is a fact about
       // the row rather than a reason to act, and the two oldest holds' own
       // "Raised by" lines run to 180 characters of thread references. It stays on
       // the item so --json carries it and a reader who wants it can have it.
-      why: b.need || `A scheduled tick stopped rather than guess and wrote loop/your-move/${b.file}. Nothing in the loop will move this until you answer.`,
+      why: b.decided
+        ? `Decided: ${b.decided}${b.revisit ? ` Revisit when: ${b.revisit}` : ''}`
+        : b.need || `A scheduled tick stopped rather than guess and wrote loop/your-move/${b.file}. Nothing in the loop will move this until you answer.`,
       who: 'Peter', runbook: 'loop', ref: b.ref, blocks: b.blocks, raisedBy: b.raisedBy,
+      ...(b.decided ? { decided: b.decided, revisit: b.revisit } : {}),
       ageDays,
-      do: [
+      do: b.decided ? [
+        { kind: 'chat', what: `Nothing to answer. loop/your-move/${b.file} records the decision at its top${b.revisit ? `; it is due again when: ${b.revisit.replace(/\.$/, '')}` : ''}. A /triage skips it until then; say "full triage" to re-check it.` },
+      ] : [
         { kind: 'chat', what: `Read loop/your-move/${b.file} — it states what is needed and the evidence behind it.` },
         { kind: 'chat', what: 'When you have the answer, append it to that file and move it into adhoc/ready/ — that is how an answer re-enters the work, taken by the ad-hoc loop as part of the work rather than as a message.' },
       ],
@@ -501,8 +525,8 @@ export function loopDraftItems({ files, now = Date.now() }) {
 export function holdBanner(h) {
   const decision = h.origin === 'decision';
   return [
-    `    ⚠ ${decision ? "PETER'S DECISION" : 'ON HOLD'} — ${h.headline}`,
-    ...(h.need ? [`      ${h.need}`] : []),
+    `    ⚠ ${decision ? "PETER'S DECISION" : h.decided ? 'ON HOLD, DECIDED' : 'ON HOLD'} — ${h.headline}`,
+    ...(!decision && h.decided ? [`      Decided: ${h.decided}${h.revisit ? ` Revisit when: ${h.revisit}` : ''}`] : h.need ? [`      ${h.need}`] : []),
     decision
       ? `      This row is his to accept or decline; the whole argument is in ${h.source}`
       : `      Raised by the scheduled loop; the whole argument is in loop/your-move/${h.file}`,

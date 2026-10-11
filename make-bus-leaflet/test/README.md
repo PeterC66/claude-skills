@@ -1,6 +1,6 @@
 # The engine's unit tests
 
-Run them from `C:\u3a St Ives\.claude\skills\make-bus-leaflet` (or wherever this skill is checked out — every command on this page is run from that folder, and none of them takes a parameter):
+Run them from `C:\Buses\claude-skills\make-bus-leaflet` (or wherever this skill is checked out — every command on this page is run from that folder, and none of them takes a parameter):
 
 ```bash
 npm test
@@ -90,7 +90,7 @@ npm run test:prove-red-gates
 
 `tools/prove-red-gates.js` runs each generator **unmutated** against a map's tracked `ci-reference/` and requires PASS — the control, because a mutation that "fails" a gate which was already failing proves nothing — then applies one anchored mutation and requires DIFF. Six targets, one per sheet type: internal (town), internal (place, which needs `PLACE_IGNORE`), external, schematic, diagram, boarding. It gates against `ci-reference/` rather than the local `S4-generate` run dir on purpose, because `ci-reference/` is what a fresh CI clone actually has; gating against a run dir that only exists on this laptop would prove the gate works in the one place it is never needed. Nothing under `assets/` is touched — the mutated copy goes to a temp file and is handed to `gate()` by path. It runs in `gates.yml` **ahead of** the `status.js` board, so CI falsifies the gates before trusting them.
 
-Add `--keep` to leave the mutated generators on disk, and `--buses "<path>"` if the data repo is not at `C:\u3a St Ives\Using AI\Buses`.
+Add `--keep` to leave the mutated generators on disk, and `--buses "<path>"` if the data repo is not at `C:\Buses\buses-data`.
 
 ### The three refactor tools
 
@@ -161,7 +161,7 @@ Not a mutation harness. The question OA-118 asked was never "can something be co
 npm run test:prove-red-route-collision
 ```
 
-Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet`; the npm script wraps `python3 tools/prove-red-route-collision.py` and takes no arguments.
+Run from `C:\Buses\claude-skills\make-bus-leaflet`; the npm script wraps `python3 tools/prove-red-route-collision.py` and takes no arguments.
 
 **A route NUMBER is not an identity, and indexing on one is an index AND a silent de-duplication that nothing distinguishes afterwards.** Wisbech runs two route 46s — Stagecoach East to March and Lynx to King's Lynn — so `{s["route"]: s for s in services}` turned eleven shipped services into ten entries. Measured on 2026-08-28: the monthly change scan had been diffing the *Lynx* 46 against BODS every month and had **never once checked the Stagecoach East one**. Nothing threw, nothing was missing, every route appeared exactly once, and the report looked complete — which is the whole difficulty. `verify_report.js` had the identical fault and was fixed on 2026-08-27; this harness exists because the fix needed to be shown to be a fix.
 
@@ -429,7 +429,7 @@ The separate claim that the lever is **inert by default** is not asserted here b
 npm run test:prove-red-journey-line
 ```
 
-Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet`; there are no placeholders. `tools/prove-red-journey-line.js` falsifies `match_routes.js` reading `journey_weights.json` (buses-data OA-452). The file took a route's minority stops off its ticks through `derive_intown.js` but not off its line, which `match_routes.js` builds from the canonical direction, so St Neots v5.0 drew the 18's ticks on the majority pattern and its line down the 7-of-25 Eynesbury working until `match_cfg.json viaExclude["18"]` was set by hand to the same 24 stops. The fixture is a 2 km main road with a 670 m spur and one route whose canonical direction calls at the spur's tip; the instrument is how far north of the road the line goes.
+Run from `C:\Buses\claude-skills\make-bus-leaflet`; there are no placeholders. `tools/prove-red-journey-line.js` falsifies `match_routes.js` reading `journey_weights.json` (buses-data OA-452). The file took a route's minority stops off its ticks through `derive_intown.js` but not off its line, which `match_routes.js` builds from the canonical direction, so St Neots v5.0 drew the 18's ticks on the majority pattern and its line down the 7-of-25 Eynesbury working until `match_cfg.json viaExclude["18"]` was set by hand to the same 24 stops. The fixture is a 2 km main road with a 670 m spur and one route whose canonical direction calls at the spur's tip; the instrument is how far north of the road the line goes.
 
 | Case | Must report |
 |---|---|

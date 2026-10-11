@@ -18,6 +18,7 @@
  *   node worklist.mjs --local         # the dev checkout instead (opt in)
  *   node worklist.mjs --json          # same items, machine-readable
  *   node worklist.mjs --gates         # + full byte-identical gate run (slow)
+ *   node worklist.mjs --limit 5       # print the top N rows only; ranked over all
  *   node worklist.mjs --url https://busmaps.uk --token <OPERATOR_TOKEN>
  *
  * WHICH PORTAL — it will not guess (2026-08-31). Configure BUSMAPS_URL and

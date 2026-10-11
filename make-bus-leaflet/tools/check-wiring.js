@@ -88,18 +88,24 @@ const NOT_IN_CI = {
     // at, and a missing one is a manifest nobody has.
   },
   'make-bus-leaflet': {
+    // FIVE OF THESE REASONS WERE FALSE ON 2026-10-11 (codebase review, R2 N35), each
+    // describing where a script ran on the day it was written. The join this table is
+    // half of — does buses-data's gates.yml run it? — lives in another repository and
+    // nothing here can read it, so the reasons below name the buses-data STEP rather
+    // than a hope, and the next review re-reads that file (R2 M20 is the cross-repository
+    // join that would make this prose unnecessary).
     'test:prove-red-status':
-      'needs the buses estate AND a portal checkout; it is falsified in the status job by prove-red-gates.js instead',
+      'needs the buses estate AND a portal checkout; buses-data\'s own gates.yml runs it in its status job, through this npm script, with both checkouts beside it',
     'test:prove-red-attribution':
-      'needs the buses estate — would have to move to the status job, which has the checkout',
+      'needs the buses estate; buses-data\'s gates.yml runs it in the step "Prove the attribution gate can go red", through this npm script, beside the gate it falsifies',
     'test:prove-red-external-spokes':
-      'needs the buses estate — would have to move to the status job, which has the checkout',
+      'reads Ramsey\'s ci-reference AND _gtfs/naptan.sqlite, which is UNTRACKED; against a tracked-only checkout it prints SKIP and exits 0, so no CI job anywhere can give it its subject (buses-data\'s gates.yml says the same, in the comment that declines to wire it). Run by hand on the laptop',
     'gate:attribution':
-      'needs the buses estate; run by the rollout, and gated estate-wide by status.js in the status job',
+      'needs the buses estate; run by the rollout, and estate-wide by buses-data\'s gates.yml in the step after its falsifier, through this npm script',
     'gate:latest-mirrors':
-      'needs the buses estate — its subject is each map\'s _latest/verification.docx, so it is wired into buses-data\'s own gates.yml status job, which has that checkout. It would move here only if this repository gained one',
+      'its subject is each map\'s _latest/verification.docx, which is UNTRACKED and does not survive actions/checkout: buses-data dropped the step on 2026-10-05 (8a455d89) after it read MISSING for every map on a fresh clone. A local instrument now, run by hand from make-bus-leaflet; it would be scheduled again only if the mirror became tracked',
     'test:prove-red-latest-mirrors':
-      'builds its own fixture and needs no estate, but it is wired beside the gate it falsifies, in buses-data\'s gates.yml, so the harness and its subject cannot be scheduled apart. Moving it here would split the pair',
+      'builds its own fixture and needs no estate, but it went with its gate when buses-data dropped the pair on 2026-10-05 (8a455d89), so the harness and its subject stay unscheduled together. It would be wired beside the gate wherever the gate is',
     'gate:extraction':
       'needs the buses estate; run by hand after an extraction, where its whole job is to report nothing moved',
     'gate:dark-paths':

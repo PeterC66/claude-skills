@@ -78,7 +78,21 @@ console.log('the population is what git tracks');
   const lp = out.ok ? out.result.groups.laptopPaths : {};
   check('two tracked files name the laptop — one under .claude/, which NEVER_WALK hid — and the untracked two do not count',
     lp['files naming the laptop path (buses-data code)'] === 2, `got ${lp['files naming the laptop path (buses-data code)']}`);
+  // The fixture names `C:/u3a St Ives/Using AI/Buses`, the home the 2026-10-08 move
+  // emptied; its first two folders exist on no machine this runs on, so both files
+  // are counted on the third line as well (2026-10-11, review finding 1).
+  check('both name a home ABSENT from this disk, and the third line says so',
+    lp['  ...of which name a home ABSENT from this disk (buses-data)'] === 2, `got ${lp['  ...of which name a home ABSENT from this disk (buses-data)']}`);
   check('the ledger\'s file is sized', out.ok && out.result.groups.sizes['a.js'] === 3);
+}
+
+console.log('the flags are cli.js\'s: a flag with no value is refused, not defaulted');
+{
+  // Until 2026-10-11 a trailing `--buses` read as undefined and fell through to the
+  // laptop default without a word (review R3 G20).
+  const r = cli('--skills', SKILLS, '--portal', PORTAL, '--buses');
+  check('a trailing --buses exits 2', r.status === 2, `exit ${r.status}`);
+  check('…and says which flag wanted a path', /--buses needs a path/.test(r.stderr || ''), (r.stderr || '').trim());
 }
 
 console.log('the wiring answer is check-wiring.js\'s, and absent is not zero');

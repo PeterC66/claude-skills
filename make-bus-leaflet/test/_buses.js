@@ -18,9 +18,14 @@
  * BUSES_DIR, when set, is AUTHORITATIVE — a wrong value skips rather than quietly
  * falling back to whichever other tree happens to be on this disk. Answering
  * about a repository the caller did not name is how a check comes to describe the
- * neighbour instead of its subject. Unset, two layouts are tried, because the
- * laptop and CI put the two repositories in different places: here buses-data is
- * ../../../../Using AI/Buses, in CI the workflow checks it out beside skills/.
+ * neighbour instead of its subject. Unset, ONE layout is tried, from this checkout
+ * and then from its main checkout: buses-data beside claude-skills, as a sibling
+ * folder, which is where both the laptop (`C:\Buses\`, since 2026-10-08, buses-data
+ * OA-611) and the CI workflow put it. The second layout this list held until
+ * 2026-10-11 — `../../../../Using AI/Buses`, the laptop's home before the move —
+ * resolved to a folder that no longer exists and was deleted (codebase review
+ * 2026-10-11, R2 N48); a dead layout is harmless to the walk and misleading to the
+ * reader, who takes it for a place the estate might be.
  *
  * USE IT AS A SKIP OPTION, NOT AS AN `if`:
  *
@@ -35,11 +40,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { mainCheckoutTwin } = require('./_worktree.js');
 
-/* The two layouts, walked up from one base. Kept as a function OF the base so that the same
- * two walks can be retried from the main checkout when this one is a worktree, rather than
- * a third layout being invented for that case. */
+/* The layout, walked up from one base. Kept as a function OF the base so that the same
+ * walk can be retried from the main checkout when this one is a worktree, rather than
+ * a second layout being invented for that case. */
 const LAYOUTS = (base) => [
-  path.join(base, '..', '..', '..', '..', 'Using AI', 'Buses'),
   path.join(base, '..', '..', '..', 'buses-data'),
 ];
 

@@ -975,12 +975,12 @@ const RULES = {
    * OA-558. A branch and a pull request in the portal repository read nothing
    * from buses-data's unpushed commits and write nothing to the shared
    * checkout (the work is done in a worktree and the tick fetches before it
-   * returns the checkout to main), so the unpushed-commit test in
-   * `portal-write` below is not guarding it. That test guards a DELIVER, which
-   * scp's renders from buses-data while the portal's verify.yml reads that
-   * repo's pushed main. The push preflight defers most ticks by design, so the
-   * test was closing the portal to every tick for the hours a push waited.
-   * Only what a branch really needs is asked: that the checkout can be read.
+   * returns the checkout to main). `portal-write` then still asked about
+   * buses-data's unpushed commits, and the push preflight defers most ticks by
+   * design, so that test was closing the portal to every tick for the hours a
+   * push waited. It has since gone from `portal-write` too, as stale since
+   * OA-398. Only what a branch really needs is asked: that the checkout can be
+   * read.
    */
   'portal-branch': (c) => {
     const p = c.repos.portal;
@@ -989,7 +989,7 @@ const RULES = {
   },
 
   'portal-write': (c) => {
-    const p = c.repos.portal, b = c.repos.buses;
+    const p = c.repos.portal;
     if (!p.readable) return [CHECK, `could not read the state of ${p.name} at ${p.dir}`];
     /*
      * OA-387. TWO THINGS LOOK ALIKE HERE AND ONLY ONE OF THEM CLEARS ITSELF.
@@ -1037,13 +1037,12 @@ const RULES = {
         return [DELAY, `the portal checkout is detached at ${d.head || 'an unknown commit'} and this tool COULD NOT LOOK to see whether that is deploy residue or somebody's unlanded work — ${d.why || 'no reason recorded'}.${held}${dirt} Check by hand before delivering`];
       }
     }
-    if (b.readable && b.unpushed > 0) return [CHECK, `${b.name} has ${b.unpushed} unpushed commit(s)${b.unpushedFrom === 'default-branch' ? ` (counted against ${b.unpushedBasis}, which is where they would land)` : ''} — push this side FIRST; the portal's verify.yml reads whatever is on this repo's main at that moment`];
-    // OA-313. A count that could not be taken is not a count of zero. Before
-    // this, a buses-data checkout with no upstream and no origin said nothing
-    // here and the row read SAFE NOW — the shape named as *the refusal read as
-    // an absence*, and the one direction in which being wrong ships a deliver
-    // against fixtures GitHub has never seen.
-    if (b.readable && b.unpushed === null) return [CHECK, `could not count what ${b.name} has not pushed — ${b.unpushedWhy || 'no basis to count against'}. The portal's verify.yml reads whatever is on that repo's main, so check by hand before delivering`];
+    // buses-data's unpushed commits are not asked here. This rule held a deliver
+    // at CHECK FIRST while any waited on local main, on the grounds that the
+    // portal's verify.yml read buses-data's pushed main; it has had no second
+    // checkout since OA-398 (18 Sep), and deliver-map.mjs reads only the portal's
+    // own origin/main and the renders on this disk. The stale test barred the
+    // loop's ticks on 8 Oct and 11 Oct for the hours a deferred push waited.
     // OA-375. On main the same question stands: a checkout behind origin/main,
     // or an edited script, runs a recipe nobody has landed. Dirt anywhere ELSE
     // is not read by a deliver, so a measured match lets it pass.
@@ -1396,7 +1395,7 @@ export const STANDING_TOOLS = [
   { what: 'Re-record the quality ledger', cmd: 'node quality_gate.js --accept', needs: ['estate-sweep'] },
   { what: 'Work an open action or ad-hoc prompt that writes into no map or letter folder', cmd: '(the ad-hoc loop)', needs: ['buses-tree'], note: 'OA-434: a stray file fenced to one town or letter does not stop this. OA-610: ad-hoc prompts have their own scheduled loop, adhoc-loop, which holds loop/LOCK.d as sched-adhoc-HHMM' },
   { what: 'Deliver a map to the live portal', cmd: 'npm run deliver -- --map <slug>', needs: ['portal-write'] },
-  { what: 'Portal code on a branch and a pull request', cmd: '(an open action\'s portal slice)', needs: ['portal-branch'], note: 'OA-558: reads nothing from unpushed buses-data commits; a deliver still needs portal-write' },
+  { what: 'Portal code on a branch and a pull request', cmd: '(an open action\'s portal slice)', needs: ['portal-branch'], note: 'OA-558: a branch is worked in a worktree and leaves the shared checkout alone; a deliver needs portal-write' },
   { what: 'Deploy the portal', cmd: 'npm run deploy', needs: ['portal-deploy'] },
 ];
 

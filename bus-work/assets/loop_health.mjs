@@ -236,7 +236,7 @@ export function assessCapacity(f, ctx) {
     const barred = entries.filter(([, v]) => v && v.verdict !== 'safe').map(([name, v]) => {
       const rs = v.reasons || [];
       const real = rs.find((r) => !isLock(r));
-      return { name, verdict: v.verdict, bars: UNIT[name] || name, why: String((real || rs[0] || {}).why || '').replace(/^(.{200}).+$/s, '$1...'), lockOnly: rs.length > 0 && !real, unpushed: rs.some((r) => /unpushed/i.test(r.why || '')) };
+      return { name, verdict: v.verdict, bars: UNIT[name] || name, why: String((real || rs[0] || {}).why || '').replace(/^(.{200}).+$/s, '$1...'), lockOnly: rs.length > 0 && !real };
     });
     cap.resources = { safe: entries.filter(([, v]) => v && v.verdict === 'safe').map(([n]) => n), barred };
     for (const b of barred) {
@@ -245,7 +245,7 @@ export function assessCapacity(f, ctx) {
       if ((b.name === 'buses-tree' || b.name === 'estate-sweep') && findings.some((x) => x.key === 'tree-dirty')) continue;
       const fencedOnly = findings.some((x) => x.key === 'tree-fenced') && !findings.some((x) => x.key === 'tree-dirty');
       if (fencedOnly && (b.name === 'buses-maps' || b.name === 'estate-sweep')) continue;
-      add(b.verdict === 'check' && !b.unpushed ? 'AT RISK' : 'NOTE', `resource-${b.name}`, `\`${b.name}\` is ${b.verdict.toUpperCase()}, which bars ${b.bars}: ${b.why}`, b.unpushed ? null : 'Read `node worklist.mjs --conditions` from the bus-work assets folder and clear what it names.');
+      add(b.verdict === 'check' ? 'AT RISK' : 'NOTE', `resource-${b.name}`, `\`${b.name}\` is ${b.verdict.toUpperCase()}, which bars ${b.bars}: ${b.why}`, 'Read `node worklist.mjs --conditions` from the bus-work assets folder and clear what it names.');
     }
   }
 
@@ -287,9 +287,6 @@ export function assessCapacity(f, ctx) {
   }
 
   // 5. what a person can do, most rows first
-  if (f.ahead && f.ahead.count > 0 && cap.resources && cap.resources.barred.some((b) => b.unpushed)) {
-    lever(0, [], `${f.ahead.count} commit${f.ahead.count === 1 ? '' : 's'} on local \`main\` hold \`portal-write\`, which bars every row that writes to the portal.`, 'push_main.mjs pushes once the preflight allows it (exit 3 means deferred, nothing for you to do). To go sooner, push from a session after the preflight exits 0.');
-  }
   if (cap.busWork && cap.busWork.escalate.length) {
     const n = cap.busWork.escalate.length;
     lever(n, cap.busWork.escalate, `${n} row${n === 1 ? ' is' : 's are'} stopped by an ESCALATE grade${cap.busWork.towns.length ? ` (${cap.busWork.towns.join(', ')})` : ''}, which only a person reviews.`, 'Read the newest `_gtfs/refresh-grades_<date>.json` for those towns and settle the grade; the rebuild then goes back to the loop.');

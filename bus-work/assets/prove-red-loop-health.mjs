@@ -197,8 +197,11 @@ async function suite(m, label, verbose) {
   check('a resource barred only by a tick\'s own lock is a run in progress, not a finding, and not BARRED', !lockOnly.findings.some((x) => /^resource-/.test(x.key)) && lockOnly.capacity.work !== 'BARRED' && lockOnly.capacity.resources.barred.every((b) => b.lockOnly));
   const treeReal = analyse(base({ resources: { 'buses-tree': { verdict: 'check', reasons: [lockReason, { need: 'buses-tree', verdict: 'check', why: '2 uncommitted file(s) here' }] } } }));
   check('a resource barred for a real reason is at risk, and the tree makes work BARRED', has(treeReal, 'resource-buses-tree', 'AT RISK') && treeReal.capacity.work === 'BARRED');
+  // portal-write no longer reads buses-data's unpushed commits, so commits waiting
+  // on local main are no lever on it, and a portal-write CHECK is at risk however
+  // its reason is worded.
   const pushBar = analyse(base({ ahead: { count: 4, oldestMs: NOW - 3600000 }, resources: { 'portal-write': { verdict: 'check', reasons: [{ need: 'portal-write', verdict: 'check', why: 'buses-data has 4 unpushed commit(s)' }] } } }));
-  check('portal-write barred by unpushed commits is a note, with the push as a lever', has(pushBar, 'resource-portal-write', 'NOTE') && pushBar.capacity.levers.some((v) => /portal-write/.test(v.text)));
+  check('a portal-write CHECK is at risk, and waiting commits are not offered as a push lever on it', has(pushBar, 'resource-portal-write', 'AT RISK') && !pushBar.capacity.levers.some((v) => /portal-write/.test(v.text)));
 
   check('a stored prompt that differs from the README is at risk', has(analyse(base({ prereq: { drift: true, scripts: [] } })), 'prompt-drift', 'AT RISK') && !has(analyse(base({ prereq: { drift: false, scripts: [] } })), 'prompt-drift'));
   check('a prompt block that cannot be found is at risk, not a pass', has(analyse(base({ prereq: { drift: false, scripts: [], unreadable: true } })), 'prompt-unreadable', 'AT RISK'));

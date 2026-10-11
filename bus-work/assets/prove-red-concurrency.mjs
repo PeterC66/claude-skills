@@ -853,24 +853,21 @@ want(conc.assess(['portal-write'], portalBranch), conc.DELAY, 'portal on a featu
 // ship". A deploy ships no branch — the host pulls its own — so with no script
 // reading the rule names the branch as the thing it could not look past.
 says(conc.assess(['portal-deploy'], portalBranch), /COULD NOT LOOK.*oa-220-landmark-chooser/, 'and the deploy rule says it could not compare the script on that branch');
-want(conc.assess(['portal-write'], world({ buses: { unpushed: 3 } })), conc.CHECK, 'unpushed commits here: CHECK FIRST before portal work');
-says(conc.assess(['portal-write'], world({ buses: { unpushed: 3 } })), /verify\.yml/, 'and it says WHY the order matters');
-// OA-313. A count that could not be TAKEN used to fall through this rule as
-// silently as a count of zero, and the row read SAFE NOW. The pair is the
-// point: unknown is CHECK FIRST, and a real zero is still SAFE NOW, or the
-// rule would simply be CHECK for ever and get muted.
+// A deliver reads nothing from buses-data's pushed main: the portal's verify.yml
+// has had no second checkout since OA-398 (18 Sep), and deliver-map.mjs fetches
+// only the portal's own origin/main. These held a deliver at CHECK FIRST while a
+// deferred push waited, and barred the loop's ticks on 8 Oct and 11 Oct; each
+// is SAFE NOW, so a reinstated unpushed test turns them red.
+want(conc.assess(['portal-write'], world({ buses: { unpushed: 3 } })), conc.SAFE, 'unpushed buses-data commits: a deliver is SAFE NOW, since nothing it runs reads them');
 const cannotCount = world({ buses: { unpushed: null, unpushedWhy: 'the branch has no upstream and no origin/HEAD' } });
-want(conc.assess(['portal-write'], cannotCount), conc.CHECK, 'a buses-data whose unpushed count could not be taken: CHECK FIRST, not SAFE');
-says(conc.assess(['portal-write'], cannotCount), /no upstream/, 'and it repeats the reason git gave rather than reporting an absence');
-want(conc.assess(['portal-write'], world({ buses: { unpushed: 0 } })), conc.SAFE, 'and a genuine zero is still SAFE NOW');
-// OA-558. A portal branch-and-PR slice is not a deliver: deferred buses-data commits
-// must not close it, while the same state still closes a deliver (the pair above).
+want(conc.assess(['portal-write'], cannotCount), conc.SAFE, 'a buses-data whose unpushed count could not be taken: SAFE NOW, the count is not asked');
+want(conc.assess(['portal-write'], world({ buses: { unpushed: 0 } })), conc.SAFE, 'and a genuine zero is SAFE NOW');
+want(conc.assess(['portal-write'], world({ buses: { unpushed: 2, unpushedFrom: 'default-branch', unpushedBasis: 'origin/main' } })), conc.SAFE, 'a count taken against the default branch: SAFE NOW too');
+// OA-558. A portal branch-and-PR slice is not a deliver, and deferred buses-data
+// commits never closed it.
 want(conc.assess(['portal-branch'], world({ buses: { unpushed: 3 } })), conc.SAFE, 'unpushed commits here: a portal BRANCH is still SAFE NOW');
 want(conc.assess(['portal-branch'], world({ buses: { unpushed: null, unpushedWhy: 'no upstream' } })), conc.SAFE, 'an uncountable buses-data does not close a portal branch either');
-want(conc.assess(['portal-write'], world({ buses: { unpushed: 3 } })), conc.CHECK, 'and the same state still holds a DELIVER at CHECK FIRST');
 want(conc.assess(['portal-branch'], world({ portal: { readable: false, name: 'community-bus-maps', dir: 'C:/x' } })), conc.CHECK, 'a portal it cannot read is not SAFE for a branch');
-
-says(conc.assess(['portal-write'], world({ buses: { unpushed: 2, unpushedFrom: 'default-branch', unpushedBasis: 'origin/main' } })), /origin\/main/, 'a count taken against the default branch says so on the row');
 
 /* OA-387, the judgement half. The observation block above proves what git
  * answers; these prove what the rule DOES with each answer, including the one

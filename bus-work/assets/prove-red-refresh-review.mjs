@@ -23,7 +23,8 @@
  * A throwaway buses tree, and --portal aimed at a directory that does not exist, so
  * the portal queues warn and skip: this tests one source, not six. With no portal
  * maps the row under test is the `refresh-local` one, which is the same suppression
- * on the same file.
+ * on the same file. Cases 18 to 22 add a stub portal, to reach the join from a
+ * report section to a portal map (buses-data OA-615).
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -295,6 +296,100 @@ expect('...and the board honours the CURRENT verdict, not the superseded one', '
     `entry was ${JSON.stringify(other)}`);
 }
 clearReview(dorking);
+
+/* ---- a PLACE section reaching its PORTAL map (buses-data OA-615) ------------
+ *
+ * Everything above runs with no portal, so it never reaches the join from a report
+ * section to a portal map. That join matched a place by its portal `subject`
+ * containing the section name, and a standalone place's subject is a street address:
+ * on 2026-10-11 Ely Co-op and both Godmanchester Co-ops had sections in the
+ * 2026-10-01 report and no refresh row. So this half has a portal of its own — a
+ * stub of the two modules worklist.mjs imports from a local checkout — and a tree
+ * with a standalone place in it, shaped like the real ones.
+ */
+console.log('\n== a place section and its portal map: does the row reach it? ==');
+
+const proot = fs.mkdtempSync(path.join(os.tmpdir(), 'refresh-place-'));
+const stubPortal = path.join(proot, 'portal');
+function portalMaps(maps) {
+  fs.mkdirSync(path.join(stubPortal, 'src', 'worklist'), { recursive: true });
+  fs.mkdirSync(path.join(stubPortal, 'src', 'db'), { recursive: true });
+  fs.writeFileSync(path.join(stubPortal, 'package.json'), '{"type":"module"}');
+  fs.writeFileSync(path.join(stubPortal, 'src', 'worklist', 'index.js'), 'export function buildWorklist() { return { items: [] }; }\n');
+  fs.writeFileSync(path.join(stubPortal, 'src', 'db', 'index.js'),
+    `export function listMaps() { return ${JSON.stringify(maps.map((m, i) => ({ id: i + 1, cur_key: 'v1', customer_name: 'test', ...m })))}; }\n`);
+}
+function mapDir(dir, name) {
+  fs.mkdirSync(dir, { recursive: true });
+  const stages = Object.fromEntries(['S1', 'S2', 'S3', 'S4', 'S5', 'S6'].map((k) => [k, { runs: [], latest: null }]));
+  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ town: name, stages }));
+  return dir;
+}
+mapDir(path.join(proot, 'Areas', 'Dorking'), 'Dorking');
+const elyCoop = mapDir(path.join(proot, 'Places', '_standalone', 'Ely Co-op'), 'Ely Co-op');
+mapDir(path.join(proot, 'Areas', 'Dorking', 'Places', 'Dorking Station'), 'Dorking Station');
+const placeScan = (sections) => {
+  const dir = path.join(proot, '_gtfs', 'upcoming');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `upcoming-report_${SCAN}.md`), `# Upcoming\n\n${sections.join('\n')}`);
+};
+const SEC = {
+  dorking: '## Dorking — 3 upcoming\n_region surrey_\n- **[DAYS] 21** — \'Mon-Fri\' -> \'Mon-Sat\'\n',
+  station: '## Dorking Station — nothing upcoming\n_kind place · region surrey · town Dorking · radius 0.8 km_\n',
+  ely: '## Ely Co-op — 1 upcoming, 2 to verify\n_kind place · region cambridgeshire · town Ely · radius 0.8 km_\n- **[WITHDRAWN] 101** — route no longer serves the town - verify\n',
+};
+const MAPS = [
+  { slug: 'ely-co-op', name: 'Ely Co-op', kind: 'place', subject: "Co-op Food, 64 St Mary's Street, Ely" },
+  { slug: 'dorking-station', name: 'Dorking Station', kind: 'place', subject: 'Station Approach, Dorking' },
+];
+function placeRows() {
+  const out = execFileSync('node', [TOOL, '--json', '--local', '--buses', proot, '--portal', stubPortal],
+    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  const j = JSON.parse(out);
+  return { items: j.items.filter((i) => i.type === 'refresh'), adjudicated: j.meta.adjudicated || [] };
+}
+function expectPlace(label, key, present) {
+  const { items } = placeRows();
+  const ok = present ? items.some((i) => i.key === key) : !items.some((i) => i.key === key);
+  console.log(`  ${ok ? (present ? 'ROW  ' : 'QUIET') : 'MISS '} ${label}`);
+  if (!ok) { bad++; console.log(`        want ${present ? 'present' : 'absent'}; saw: ${items.map((i) => i.key).join(', ') || '(none)'}`); }
+}
+
+// 18. THE CASE OA-615 WAS RAISED FOR: a standalone place, an address for a subject,
+//     its own section in the report and no section for its town. Red on 2026-10-11's
+//     worklist.mjs, which matched the subject.
+portalMaps(MAPS);
+placeScan([SEC.dorking, SEC.station, SEC.ely]);
+expectPlace('a standalone place with its own upcoming section raises its row', 'refresh-ely-co-op', true);
+
+// 19. A place is answered by ITS section, not its town's: Dorking has changes and
+//     Dorking Station's own section says nothing. Red on the subject rule, which gave
+//     every place in a town that town's row.
+expectPlace("a place whose own section is quiet gets no row from its town's", 'refresh-dorking-station', false);
+
+// 20. Adjudicated against the current scan, in the place's OWN folder: suppressed,
+//     and said out loud. The pair of 18, so a join that found nothing passes neither.
+reviewFile(elyCoop, { reviews: [{ scan: SCAN, verdict: 'no-rebuild', by: 'test' }] });
+expectPlace('...and adjudicated no-rebuild against the current scan, it does not', 'refresh-ely-co-op', false);
+{
+  const named = placeRows().adjudicated.some((a) => a.map === 'Ely Co-op' && a.scan === SCAN);
+  console.log(`  ${named ? 'SAID ' : 'MISS '} the place's suppression is reported, not silent`);
+  if (!named) bad++;
+}
+clearReview(elyCoop);
+
+// 21. A portal name that has drifted from the folder's still finds the section, by
+//     the folder: the portal's own join is by name alone and would miss it.
+portalMaps([{ ...MAPS[0], name: 'Ely Co-op (St Mary\'s Street)' }, MAPS[1]]);
+expectPlace('a drifted portal name is joined through its local folder', 'refresh-ely-co-op', true);
+portalMaps(MAPS);
+
+// 22. CONTROL for 19: a report written before places had sections keeps the subject
+//     rule, which there is a place's only route to a row.
+placeScan([SEC.dorking]);
+expectPlace('a pre-places report still reaches a place through its town', 'refresh-dorking-station', true);
+fs.rmSync(proot, { recursive: true, force: true });
 
 fs.rmSync(root, { recursive: true, force: true });
 if (bad) { console.log(`\n${bad} case(s) behaved wrongly.`); process.exit(1); }

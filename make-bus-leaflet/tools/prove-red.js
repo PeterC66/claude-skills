@@ -25,6 +25,9 @@
  *                                         fit to be mutated at all? Seconds rather
  *                                         than minutes, and the arm the harness
  *                                         drives end to end
+ *     node tools/prove-red.js --census-only
+ *                                         ask only whether every hashed engine
+ *                                         file is named by a mutation (OA-625)
  *
  * THREE OUTCOMES, THREE EXIT CODES (buses-data OA-353). 0 every mutation was
  * caught; 1 the harness RAN and found a hole — a mutation survived, or an anchor
@@ -3155,7 +3158,138 @@ const MUTATIONS = [
     what: 'a list nobody read drops every map from the ceiling',
     find: "r.days > ceiling && r.onPortal !== false)",
     to: "r.days > ceiling && r.onPortal === true)" },
+
+  // THE CENSUS'S SIX (buses-data OA-625). Hashed files that no mutation named
+  // until the census below asked; each suite already existed for five of them.
+  { suite: 'arm_note.test.js', file: 'arm_note.js',
+    what: 'a route with one spoke is listed too, so every route on the sheet "runs as two arms"',
+    find: ".filter(([, v]) => v.length > 1)",
+    to: ".filter(([, v]) => v.length >= 1)" },
+
+  { suite: 'arm_note.test.js', file: 'arm_note.js',
+    what: 'the bold route number is measured as regular text, so the rest of the line runs into it',
+    find: "const bw = measureText(it.route, 2.9, true)",
+    to: "const bw = measureText(it.route, 2.9)" },
+
+  { suite: 'casing_width.test.js', file: 'casing_width.js',
+    what: 'the median may widen as well as narrow, so a 3 mm stub between wide streets turns into a grey slab',
+    find: "    out[s] = Math.min(segs[s].w, med);",
+    to: "    out[s] = med;" },
+
+  { suite: 'casing_width.test.js', file: 'casing_width.js',
+    what: 'segments join at a finer precision than the SVG prints, so a knot whose ends agree on paper is three roads',
+    find: "const key = (x, y) => x.toFixed(2) + ',' + y.toFixed(2);",
+    to: "const key = (x, y) => x.toFixed(4) + ',' + y.toFixed(4);" },
+
+  { suite: 'frame_gaps.test.js', file: 'frame_gaps.js',
+    what: 'a stop on a sliver no longer keeps it apart, so a place the route calls at loses its device',
+    find: "    if (near && !stopBetween) pairs.splice(i, 2, [pairs[i][0], pairs[i + 1][1]]);",
+    to: "    if (near) pairs.splice(i, 2, [pairs[i][0], pairs[i + 1][1]]);" },
+
+  { suite: 'frame_gaps.test.js', file: 'frame_gaps.js',
+    what: 'an out-and-back through one point is dropped however long the stretch it hides, which is Ely\'s ZIP corner',
+    find: "    const long = a.a != null && b.a != null && b.a - a.a >= OUT_AND_BACK * minDist;",
+    to: "    const long = false;" },
+
+  { suite: 'legend_key_to_diagram.test.js', file: 'legend_key.js',
+    what: 'the legend badges every route in operators[] again, so a spokeless badge and its empty operator row come back',
+    find: "    const rs = all.filter(r => keyed.has(r) || HID.has(r));",
+    to: "    const rs = all.slice();" },
+
+  { suite: 'legend_key_to_diagram.test.js', file: 'legend_key.js',
+    what: 'a bare localLoops string loses its "local circular" caption and prints a badge with nothing beside it',
+    find: "    const t = l.label || 'local circular';",
+    to: "    const t = l.label || '';" },
+
+  { suite: 'road_labels.test.js', file: 'road_labels.js',
+    what: 'roadLabelExclude does nothing, so every village\'s High Street prints once at their combined centroid',
+    find: "  for(const n of (IR.roadLabelExclude||[])) delete agg[n];",
+    to: "" },
+
+  { suite: 'road_labels.test.js', file: 'road_labels.js',
+    what: 'a pinned name no bus uses is never pulled from roads_geo, so the pin has nothing to place',
+    find: ".concat(IR.roadLabelPin||[]);",
+    to: ";" },
+
+  { suite: 'road_labels.test.js', file: 'road_labels.js',
+    what: 'a placed name claims no box, so the badge pass lands on it - the Great Whyte case the pin exists for',
+    find: "      if(blocked(b))continue; reserve(...b);",
+    to: "      if(blocked(b))continue;" },
+
+  // qr.js: held by qr.test.js against matrices OpenCV's encoder drew independently.
+  { suite: 'qr.test.js', file: 'qr.js',
+    what: 'the format string is XORed with the wrong mask, so every code renders and no phone reads it',
+    find: "  return ((v << 10) | d) ^ 0x5412;",
+    to: "  return ((v << 10) | d) ^ 0x5413;" },
+
+  { suite: 'qr.test.js', file: 'qr.js',
+    what: 'L and M swap their format bits, so a reader decodes with the wrong error correction',
+    find: "const ECBITS = { L: 0b01, M: 0b00, Q: 0b11, H: 0b10 };",
+    to: "const ECBITS = { L: 0b00, M: 0b01, Q: 0b11, H: 0b10 };" },
+
+  { suite: 'qr.test.js', file: 'qr.js',
+    what: 'the remainder bits are placed dark, against ISO 18004 - the one module our code and OpenCV\'s differ on',
+    find: "m[r][c] = bi < bits.length ? bits[bi++] : 0; // remainder bits are light",
+    to: "m[r][c] = bi < bits.length ? bits[bi++] : 1; // remainder bits are light" },
+
+  { suite: 'qr.test.js', file: 'qr.js',
+    what: 'version 10 keeps the 8-bit count, so a long URL encodes a length its reader cannot parse',
+    find: "  push(bytes.length, ver <= 9 ? 8 : 16);  // character count indicator",
+    to: "  push(bytes.length, 8);  // character count indicator" },
+
+  { suite: 'qr.test.js', file: 'qr.js',
+    what: 'the version block takes the wrong BCH generator, so a version 7+ code names a version it is not',
+    find: "d ^= 0x1F25 << (i - 12);",
+    to: "d ^= 0x1F24 << (i - 12);" },
+
+  { suite: 'qr.test.js', file: 'qr.js',
+    what: 'interleaving stops at group 1\'s length, so a two-group code drops its last data codeword',
+    find: "  for (let i = 0; i < Math.max(d1, d2); i++) for (const b of dat) if (i < b.length) out.push(b[i]);",
+    to: "  for (let i = 0; i < d1; i++) for (const b of dat) if (i < b.length) out.push(b[i]);" },
+
+  { suite: 'qr.test.js', file: 'qr.js',
+    what: 'placement walks into the vertical timing column instead of stepping over it',
+    find: "    if (right === 6) right = 5;                     // column 6 is the vertical timing line",
+    to: "" },
+
+  { suite: 'qr.test.js', file: 'qr.js',
+    what: 'a tied penalty goes to the HIGHER mask, so the same text can draw a different code to the one shipped',
+    find: "    if (!best || p < best.p) best = { p, mx };",
+    to: "    if (!best || p <= best.p) best = { p, mx };" },
+
+  { suite: 'qr.test.js', file: 'qr.js',
+    what: 'the finder-lookalike rule scores nothing, so the mask choice drifts from the standard\'s',
+    find: "  for (let r = 0; r < n; r++) for (let c = 0; c + 11 <= n; c++) if (hit(k => m[r][c + k])) p += 40;",
+    to: "  for (let r = 0; r < n; r++) for (let c = 0; c + 11 <= n; c++) if (hit(k => m[r][c + k])) p += 0;" },
+
+  // gen_boarding.js had two mutations across 1,499 lines (the 2026-10-11 review's N26).
+  { suite: 'page.test.js', file: 'gen_boarding.js',
+    what: 'the boarding sheet keeps a page size of its own beside page.js, a second answer to one question',
+    find: "const { W, H, svgOpen } = require(_dep('page.js'));",
+    to: "const W = 297, H = 210, { svgOpen } = require(_dep('page.js'));" },
 ];
+
+/* THE CENSUS (buses-data OA-625). Every file in the town hash and the boarding
+ * closure must be the subject of at least one mutation above, or carry a reasoned
+ * entry here. Nothing asked before: three hashed files had no mutation on
+ * 2026-09-28, the review left the census for the next one, and it found six on
+ * 2026-10-11 (qr.js among them, for the fifth review running). A list is derived
+ * from engine_version.js, so a new engine file joins the census by being required,
+ * and a file that gains a mutation must lose its entry here, or the census goes red
+ * for that too. An entry is a reason, not a placeholder. */
+const UNMUTATED = new Map([
+]);
+const { engineFiles, boardingEngineFiles } = require('../assets/engine_version');
+const hashed = [...new Set([...engineFiles(ASSETS), ...boardingEngineFiles(ASSETS)])].sort();
+const named = new Set(MUTATIONS.map(m => m.file));
+const holes = hashed.filter(f => !named.has(f) && !UNMUTATED.has(f));
+const staleEntries = [...UNMUTATED.keys()].filter(f => named.has(f) || !hashed.includes(f));
+console.log(`census: ${hashed.length} hashed engine files, ${hashed.filter(f => named.has(f)).length} mutated, `
+  + `${hashed.filter(f => !named.has(f) && UNMUTATED.has(f)).length} excused, ${holes.length} with neither, ${staleEntries.length} stale excuses.`);
+for (const f of holes) console.log(`  HOLE   ${f} is hashed and no mutation names it: add one above, or a reasoned UNMUTATED entry`);
+for (const f of staleEntries) console.log(`  STALE  ${f} is excused in UNMUTATED but ${named.has(f) ? 'a mutation names it' : 'is no longer hashed'}: delete the entry`);
+const censusRed = holes.length + staleEntries.length > 0;
+if (process.argv.includes('--census-only')) { process.exitCode = censusRed ? EXIT_FOUND_A_HOLE : 0; return; }
 
 const scratch = scratchDir('prove-red-');
 const engine = path.join(scratch, 'assets');
@@ -3216,10 +3350,11 @@ console.log('-'.repeat(140));
 for (const [v, f, what, detail] of rows) console.log(w(v, 9) + w(f, 22) + w(what, 52) + detail);
 console.log('-'.repeat(140));
 console.log(`${rows.length} mutations, ${rows.length - survived - broken} caught, ${survived} survived, ${broken} anchors stale.\n`);
+if (censusRed) console.log(`The census found ${holes.length} unmutated and ${staleEntries.length} stale (listed at the top): a hole in the harness, not in the suite.\n`);
 if (survived || broken) {
   console.log('A mutation that SURVIVED is a hole in the suite: the engine did something wrong and');
   console.log('nothing said so. A stale ANCHOR means this file has drifted from the engine it edits.');
 }
 if (!KEEP) fs.rmSync(scratch, { recursive: true, force: true });
 else console.log('scratch copy left at ' + scratch);
-process.exitCode = (survived || broken) ? EXIT_FOUND_A_HOLE : 0;
+process.exitCode = (survived || broken || censusRed) ? EXIT_FOUND_A_HOLE : 0;

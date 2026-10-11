@@ -2828,6 +2828,25 @@ const MUTATIONS = [
     find: "    .filter(r => r.v)\n",
     to: "    .map(r => ({ ...r, v: r.v || '0.0' }))\n" },
 
+  // The report search in an ATTACHED worktree (2026-10-11), where S6-verify is a
+  // junction onto the main checkout. The first is the code as it stood until
+  // then; the second removes the cycle guard and is caught by the spawn timeout,
+  // because one back-link alone ends at the OS's own limit and proves nothing.
+  { suite: 'refresh_latest_junction.test.js', file: 'refresh_latest.js',
+    what: 'a junction is not walked again, so an attached worktree\'s S6-verify is skipped and commit S6 mirrors no verification.docx',
+    find: "      if (e.isDirectory() || isDirLink(e, p)) {",
+    to: "      if (e.isDirectory()) {" },
+
+  { suite: 'refresh_latest_junction.test.js', file: 'refresh_latest.js',
+    what: 'the walk forgets where it has been, so two links back to an ancestor double it at every level',
+    find: "    if (seen.has(real)) return;\n",
+    to: "" },
+
+  { suite: 'refresh_latest_junction.test.js', file: 'refresh_latest.js',
+    what: 'a folder holding its own manifest.json is entered, so a nested map reached by junction supplies this map\'s report (OA-329 fault B)',
+    find: "        if (fs.existsSync(path.join(p, 'manifest.json'))) continue;   // a different map — OA-329 fault B\n",
+    to: "" },
+
   /* OA-048. The first two are the bug verbatim, in both directions: the denominator every
    * S6 coverage percentage is struck over counted routes no sheet draws. */
   { suite: 'displayed_routes.test.js', file: 'displayed_routes.js',

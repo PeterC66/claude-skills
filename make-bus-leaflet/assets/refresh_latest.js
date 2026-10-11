@@ -132,12 +132,25 @@ function latestS5() {
 // excludes TOWN itself, and Places/ (which holds no manifest) is still entered
 // so that a place nested one level deeper is skipped individually rather than
 // the whole branch being cut off blind.
+//
+// A JUNCTION IS A DIRECTORY HERE (2026-10-11). In a buses-data worktree attached
+// with `stage.js attach --as <session>`, S4-generate, S5-render, S6-verify and
+// _latest are junctions onto the main checkout, and a Dirent reports a junction
+// as a symbolic link with isDirectory() false — so this walk stepped past the
+// worktree's S6-verify and `commit S6` printed `skipped: verification.docx` beside
+// a run that held one (Huntingdon v6.0). A link that resolves to a directory is
+// now walked, once per real path, so a link back to an ancestor ends the walk.
 function newestUnder(name) {
   let best = null, bestT = -1;
+  const seen = new Set();
+  const isDirLink = (e, p) => { try { return e.isSymbolicLink() && fs.statSync(p).isDirectory(); } catch (err) { return false; } };
   (function walk(dir) {
+    let real; try { real = fs.realpathSync(dir); } catch (err) { return; }
+    if (seen.has(real)) return;
+    seen.add(real);
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
-      if (e.isDirectory()) {
+      if (e.isDirectory() || isDirLink(e, p)) {
         if (e.name === '_latest') continue;
         if (fs.existsSync(path.join(p, 'manifest.json'))) continue;   // a different map — OA-329 fault B
         walk(p);

@@ -972,17 +972,20 @@ if(HOWTO){
   // terminus lozenge. buildLegend's note wrap learned the same thing on 2026-08-06
   // and for the same reason: it is a page device's HEIGHT that collides, because
   // the spokes fan out horizontally. 92mm puts most bullets on one line.
-  const CW = HOWTO.width!=null ? +HOWTO.width : 92;                // content column, mm
   const PAD = 3.4, LH = BS*1.28, GAP = 1.3, IND = 2.9;
   // Width-based wrap using the real Arial advances, not wrapText()'s character
   // count — a bullet is a whole sentence, and the character estimate is ~11% out
   // on ordinary prose, which is the difference between four lines and five.
   // This was a second copy of wrapMm() with the size closed over instead of
   // passed; same loop, same measure, same lines (engine N27).
-  const WRAPPED = BULLETS.map(t=>wrapMm(t, CW-IND, BS));
-  const bodyH = WRAPPED.reduce((a,ls)=>a + ls.length*LH + GAP, 0) - GAP;
-  const PW = CW + PAD*2;
-  const PH = PAD + (HEAD ? HS*1.15 + 1.6 : 0) + bodyH + PAD;
+  let CW, WRAPPED, PW, PH;   // set by sizeHowTo(), which design.howToUse.fit below may call again
+  const sizeHowTo = (cw) => {
+    CW = cw; WRAPPED = BULLETS.map(t=>wrapMm(t, CW-IND, BS));
+    const bodyH = WRAPPED.reduce((a,ls)=>a + ls.length*LH + GAP, 0) - GAP;
+    PW = CW + PAD*2;
+    PH = PAD + (HEAD ? HS*1.15 + 1.6 : 0) + bodyH + PAD;
+  };
+  sizeHowTo(HOWTO.width!=null ? +HOWTO.width : 92);                // content column, mm
   // Content is a pure function of (px,py), like buildLegend — which is what makes
   // building it twice safe when the placement search moves it.
   const buildHowTo = (px, py) => {
@@ -1006,7 +1009,7 @@ if(HOWTO){
   // already carry (the spokes fan out of a central hub and the legend lives top-
   // left). `at:{x,y}` pins it for a town that knows better.
   const HX0 = (HOWTO.at && HOWTO.at.x!=null) ? +HOWTO.at.x : 10;
-  const HY0 = (HOWTO.at && HOWTO.at.y!=null) ? +HOWTO.at.y : FRAME_Y1 - PH;
+  let HY0 = (HOWTO.at && HOWTO.at.y!=null) ? +HOWTO.at.y : FRAME_Y1 - PH;
   let hx = HX0, hy = HY0, draw = true;
   // A fully-specified `at` is a decision, so it opts out of the search — unlike
   // legendAt, which is only a preference the search may overrule. The difference
@@ -1020,7 +1023,15 @@ if(HOWTO){
     // gets first pick of the clear ground, which is right: it is mandatory and
     // this panel is not.
     ART.push([LEG.x, LEG.y, LEG.x+LEG.w, LEG.y+LEG.h, 'legend']);
-    const got = legendSpot(PW, PH, HX0, HY0);
+    let got = legendSpot(PW, PH, HX0, HY0);
+    // design.howToUse.fit (buses-data OA-437): no clear ground and no stored width, so try a narrower
+    // column, widest first, down to the 60 mm Huntingdon and The Shelfords typed. A stored width wins.
+    for(const cw of [84, 76, 68, 60]){
+      if(!got.nowhere || HOWTO.width != null || HOWTO.fit === false) break;
+      sizeHowTo(cw); hy = HY0 = (HOWTO.at && HOWTO.at.y!=null) ? +HOWTO.at.y : FRAME_Y1 - PH;
+      got = legendSpot(PW, PH, HX0, HY0);
+      if(!got.nowhere) process.stderr.write('howToUse: no clear ground at the default width, so its column was narrowed to '+cw+' mm (design.howToUse.fit). Set design.howToUse.width to choose.\n');
+    }
     if(got.moved){
       hx = HX0 + got.dx; hy = HY0 + got.dy;
       process.stderr.write('howToUse: the configured spot covers '+(got.wantSym*100).toFixed(1)

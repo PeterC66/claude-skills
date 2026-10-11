@@ -3084,6 +3084,23 @@ const MUTATIONS = [
     find: ", lx + Math.min(rs.length,LW)*_col);",
     to: ");" },
 
+  // gen_external_radial.js — design.howToUse.fit narrows a help panel that has no clear ground (buses-data OA-437, A1 slice 3).
+  // No stored map reaches the branch (each has ground or a stored width), so howto_fit.test.js alone holds it.
+  { suite: 'howto_fit.test.js', file: 'gen_external_radial.js',
+    what: 'the fit tries the narrowest column first, so every fitted panel is the tallest it could be',
+    find: "for(const cw of [84, 76, 68, 60]){",
+    to: "for(const cw of [60, 68, 76, 84]){" },
+
+  { suite: 'howto_fit.test.js', file: 'gen_external_radial.js',
+    what: 'a stored howToUse.width no longer wins, so the engine overrides a town that chose its own column',
+    find: "if(!got.nowhere || HOWTO.width != null || HOWTO.fit === false) break;",
+    to: "if(!got.nowhere || HOWTO.fit === false) break;" },
+
+  { suite: 'howto_fit.test.js', file: 'gen_external_radial.js',
+    what: 'design.howToUse.fit:false is ignored, so a town cannot refuse the fit',
+    find: "if(!got.nowhere || HOWTO.width != null || HOWTO.fit === false) break;",
+    to: "if(!got.nowhere || HOWTO.width != null) break;" },
+
   // engine_commit.js — the reclaim of a killed run's worktree (buses-data loop
   // adhoc reclaim-worktrees.md, 2026-10-02). Five engine-commit trees from 27–30
   // Sep were still registered on 2026-10-01, because the exit handler never runs

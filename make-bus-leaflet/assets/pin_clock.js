@@ -18,16 +18,28 @@
  *   current    — drawn by the pinned engine.
  *   ahead      — drawn by today's engine, which the pin has not adopted yet. Not behind anything: it
  *                becomes behind only if the pin later moves to something else.
- *   stamp-only — behind the pin, but the weekly shadow rebuild (OA-485) dry-ran the pinned engine over
- *                it AFTER it was built and said STAMP-STALE: every sheet reproduces byte for byte and
- *                only the stamp is old. That is not work, so it is not a row. The byte gate at the
- *                map's own `engineCommit` is untouched and still judges the sheets.
+ *   stamp-only — behind the pin, but the weekly shadow rebuild (OA-485) dry-ran the pinned or the live
+ *                engine over it AFTER it was built and said STAMP-STALE or UP-TO-DATE: every sheet
+ *                reproduces byte for byte and only the stamp is old. That is not work, so it is not a
+ *                row. The byte gate at the map's own `engineCommit` is untouched and still judges the
+ *                sheets.
  *   behind     — behind the pin and nobody has shown the rebuild to be stamp-only: a rebuild is owed.
  *
  * WHAT THE SHADOW EVIDENCE MUST BE, TO COUNT. A written claim about a join is only as good as the
- * join, so a STAMP-STALE verdict excuses a map only when (a) the shadow ran on exactly the engine the
- * clock names, (b) it ran after the map was built, and (c) it named the map. Any of the three missing
- * is `behind`, the conservative answer, and the dry run the row already prescribes will say it again.
+ * join, so a verdict excuses a map only when (a) the shadow ran on the engine the clock names OR on
+ * the live template, (b) it ran after the map was built, and (c) it named the map. Any of the three
+ * missing is `behind`, the conservative answer, and the dry run the row prescribes will say it again.
+ *
+ * WHY THE LIVE TEMPLATE COUNTS AS WELL AS THE PIN (OA-574, 11 Oct 2026). The shadow runs on the live
+ * template, the candidate the weekly bump then adopts, and until the bump lands the pin is behind it.
+ * Taking only the pin's engine left every STAMP-STALE map `behind` in that window, and the row's own
+ * dry run (`rollout.js`, which runs the live template) only repeated the shadow's answer: Beaconsfield
+ * Waitrose was dry-run by five ticks, 8 to 11 Oct, each time to read "NOTHING IS OWED". The key is the
+ * engine HASH, so the excuse lapses by itself the moment the live template moves past the report.
+ *
+ * `regressed()` READS THE SAME EVIDENCE THE OTHER WAY: the shadow dry-ran this map on that engine and
+ * the ink regressed (LOST labels, a HARD rise). The worklist folds such a map's rebuild row into a
+ * loop/your-move hold that already names it, because the hold holds the question a person must answer.
  *
  * NO PIN, NO CHANGE IN KIND. An estate with no readable `engine.lock.json` (a fixture repository, a
  * scratch estate) is judged against the live template as before: `pin` is null and the clock falls
@@ -56,9 +68,11 @@ function readShadow(buses) {
     const s = JSON.parse(fs.readFileSync(path.join(buses, 'loop', 'shadow-rebuild.json'), 'utf8'));
     const ranAtMs = Date.parse(s.ranAt);
     if (!Number.isFinite(ranAtMs) || !s.towns || !s.places) return null;
+    const maps = (h) => (Array.isArray(h.maps) ? h.maps : []);
     const half = (h) => ({
       engine: typeof h.engine === 'string' ? h.engine : null,
-      status: new Map((Array.isArray(h.maps) ? h.maps : []).map((m) => [m.name, m.status])),
+      status: new Map(maps(h).map((m) => [m.name, m.status])),
+      verdict: new Map(maps(h).map((m) => [m.name, m.verdict])),
     });
     return { ranAtMs, town: half(s.towns), place: half(s.places) };
   } catch { return null; }
@@ -81,11 +95,28 @@ function standing({ kind, name, mapEngine, builtAt, live, pin, shadow, strict = 
   if (mapEngine === clock) return 'current';
   if (strict) return 'behind';
   if (live && mapEngine === live) return 'ahead';
+  const half = evidence({ kind, builtAt, live, clock, shadow });
+  if (half && NOTHING_OWED.has(half.status.get(name))) return 'stamp-only';
+  return 'behind';
+}
+
+/* The shadow verdicts that say a rebuild moves no ink. */
+const NOTHING_OWED = new Set(['STAMP-STALE', 'UP-TO-DATE']);
+
+/* The report's half for this kind when it may speak about a map built at `builtAt`: taken on the
+ * clock's engine or on the live template, and after the build. Otherwise null. */
+function evidence({ kind, builtAt, live, clock, shadow }) {
   const half = shadow && shadow[kind];
   const builtMs = Date.parse(builtAt);
-  if (half && half.engine && half.engine === clock && Number.isFinite(builtMs) && builtMs <= shadow.ranAtMs
-    && half.status.get(name) === 'STAMP-STALE') return 'stamp-only';
-  return 'behind';
+  if (!half || !half.engine || (half.engine !== clock && half.engine !== live)) return null;
+  if (!Number.isFinite(builtMs) || builtMs > shadow.ranAtMs) return null;
+  return half;
+}
+
+/* Did the shadow, on an engine that may speak for this map, find its rebuild REGRESSED? */
+function regressed({ kind, name, builtAt, live, pin, shadow }) {
+  const half = evidence({ kind, builtAt, live, clock: pin || live, shadow });
+  return !!half && half.verdict.get(name) === 'regressed';
 }
 
 /* The Engine column's suffix for a map that is not behind but is not simply current either. */
@@ -93,4 +124,4 @@ const note = (r) => r.engineStanding === 'ahead' ? ' (ahead of the pin)' : r.eng
 /* A rebuild is owed: behind, or never stamped at all (an unstamped build was always a row). */
 const owes = (s) => s === 'behind' || s === 'unstamped';
 
-module.exports = { readPin, readShadow, standing, note, owes };
+module.exports = { readPin, readShadow, standing, regressed, note, owes };

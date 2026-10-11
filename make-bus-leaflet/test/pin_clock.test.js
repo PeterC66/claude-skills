@@ -13,7 +13,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { scratchDir } = require('../assets/scratch');
-const { readPin, readShadow, standing } = require('./_engine.js').load('pin_clock.js');
+const { readPin, readShadow, standing, regressed } = require('./_engine.js').load('pin_clock.js');
 
 const PIN = 'aaaaaaaaaa', LIVE = 'bbbbbbbbbb', OLD = 'cccccccccc';
 const BUILT = '2026-10-01T10:00:00.000Z', RAN = '2026-10-04T00:00:00.000Z';
@@ -61,8 +61,21 @@ test('control: the same verdict taken BEFORE the map was built excuses nothing',
   assert.strictEqual(ask({ shadow: shadowFor(), builtAt: '2026-10-05T00:00:00.000Z' }), 'behind');
 });
 
-test('control: a verdict taken on another engine than the clock excuses nothing', () => {
-  assert.strictEqual(ask({ shadow: shadowFor({ engine: LIVE }) }), 'behind');
+test('a STAMP-STALE or UP-TO-DATE verdict taken on the LIVE template excuses the map too: that is the engine the row’s own dry run would use, so a tick would only repeat it (OA-574, Beaconsfield Waitrose dry-run five times, 8-11 Oct)', () => {
+  assert.strictEqual(ask({ shadow: shadowFor({ engine: LIVE }) }), 'stamp-only');
+  assert.strictEqual(ask({ shadow: shadowFor({ engine: LIVE, status: 'UP-TO-DATE' }) }), 'stamp-only');
+  assert.strictEqual(ask({ kind: 'place', shadow: shadowFor({ engine: LIVE, place: true }) }), 'stamp-only');
+});
+
+test('control: the verdict is keyed by engine hash, so one taken on an engine that is neither the pin nor the live template excuses nothing', () => {
+  assert.strictEqual(ask({ shadow: shadowFor({ engine: 'dddddddddd' }) }), 'behind');
+  assert.strictEqual(ask({ shadow: shadowFor({ engine: LIVE }), live: 'dddddddddd' }), 'behind');
+});
+
+test('control: a LIVE-engine verdict taken before the build, or about another map, or that the ink moved, still excuses nothing', () => {
+  assert.strictEqual(ask({ shadow: shadowFor({ engine: LIVE }), builtAt: '2026-10-05T00:00:00.000Z' }), 'behind');
+  assert.strictEqual(ask({ shadow: shadowFor({ engine: LIVE, name: 'Soham' }) }), 'behind');
+  assert.strictEqual(ask({ shadow: shadowFor({ engine: LIVE, status: 'DRY-RUN' }) }), 'behind');
 });
 
 test('control: a verdict that is not STAMP-STALE excuses nothing — the ink moved, so a rebuild is owed', () => {
@@ -109,4 +122,22 @@ test('readShadow says null for an absent, unparseable or half-written report ins
   assert.strictEqual(readShadow(root), null);
   fs.writeFileSync(path.join(root, 'loop', 'shadow-rebuild.json'), JSON.stringify({ ranAt: RAN, towns: { maps: [] } }));
   assert.strictEqual(readShadow(root), null);
+});
+
+const regressedFor = (over = {}) => regressed({ kind: 'town', name: 'Ramsey', builtAt: BUILT, live: LIVE, pin: PIN, shadow: null, ...over });
+function shadowVerdict({ engine = LIVE, verdict = 'regressed', status = 'DRY-RUN', name = 'Ramsey' } = {}) {
+  return readShadowFrom({ ranAt: RAN, engine, towns: { engine, maps: [{ name, status, verdict }] }, places: { engine, maps: [] } });
+}
+
+test('regressed: a shadow on the live template or the pin that found this map regressed says so (OA-574, the fold into a hold)', () => {
+  assert.strictEqual(regressedFor({ shadow: shadowVerdict() }), true);
+  assert.strictEqual(regressedFor({ shadow: shadowVerdict({ engine: PIN }) }), true);
+});
+
+test('control: regressed is false for a clean verdict, another map, another engine, a build after the report, or no report', () => {
+  assert.strictEqual(regressedFor({ shadow: shadowVerdict({ verdict: 'clean' }) }), false);
+  assert.strictEqual(regressedFor({ shadow: shadowVerdict({ name: 'Soham' }) }), false);
+  assert.strictEqual(regressedFor({ shadow: shadowVerdict({ engine: 'dddddddddd' }) }), false);
+  assert.strictEqual(regressedFor({ shadow: shadowVerdict(), builtAt: '2026-10-05T00:00:00.000Z' }), false);
+  assert.strictEqual(regressedFor({ shadow: null }), false);
 });

@@ -2934,14 +2934,39 @@ const MUTATIONS = [
     to: "  const clock = live;" },
 
   { suite: 'pin_clock.test.js', file: 'pin_clock.js',
-    what: 'a shadow verdict is accepted whenever it names the map, so a report from before the build or on another engine excuses it',
-    find: "  if (half && half.engine && half.engine === clock && Number.isFinite(builtMs) && builtMs <= shadow.ranAtMs\n    && half.status.get(name) === 'STAMP-STALE') return 'stamp-only';",
-    to: "  if (half && half.status.get(name) === 'STAMP-STALE') return 'stamp-only';" },
+    what: 'a shadow verdict is accepted on any engine, so a report the live template has moved past still excuses a map',
+    find: "  if (!half || !half.engine || (half.engine !== clock && half.engine !== live)) return null;",
+    to: "  if (!half) return null;" },
+
+  { suite: 'pin_clock.test.js', file: 'pin_clock.js',
+    what: 'a shadow verdict taken before the map was built is accepted, so a rebuild since the report is excused unseen',
+    find: "  if (!Number.isFinite(builtMs) || builtMs > shadow.ranAtMs) return null;",
+    to: "" },
+
+  { suite: 'pin_clock.test.js', file: 'pin_clock.js',
+    what: 'only the pin\'s engine counts again, so every STAMP-STALE map is a row until the bump and a tick re-dry-runs it (OA-574, Beaconsfield Waitrose)',
+    find: "(half.engine !== clock && half.engine !== live)",
+    to: "half.engine !== clock" },
 
   { suite: 'pin_clock.test.js', file: 'pin_clock.js',
     what: 'any verdict at all excuses a map, so a rebuild whose ink moves is never owed',
-    find: "&& half.status.get(name) === 'STAMP-STALE') return 'stamp-only';",
-    to: "&& half.status.has(name)) return 'stamp-only';" },
+    find: "  if (half && NOTHING_OWED.has(half.status.get(name))) return 'stamp-only';",
+    to: "  if (half && half.status.has(name)) return 'stamp-only';" },
+
+  { suite: 'pin_clock.test.js', file: 'pin_clock.js',
+    what: 'UP-TO-DATE is not read as nothing owed, so a map the shadow found already current is a row',
+    find: "const NOTHING_OWED = new Set(['STAMP-STALE', 'UP-TO-DATE']);",
+    to: "const NOTHING_OWED = new Set(['STAMP-STALE']);" },
+
+  { suite: 'pin_clock.test.js', file: 'pin_clock.js',
+    what: 'every map the shadow names reads as regressed, so a clean rebuild row is folded away into a hold',
+    find: "  return !!half && half.verdict.get(name) === 'regressed';",
+    to: "  return !!half && half.verdict.has(name);" },
+
+  { suite: 'pin_clock.test.js', file: 'pin_clock.js',
+    what: 'regressed reads no evidence rule, so a regression measured on another engine folds a row',
+    find: "  const half = evidence({ kind, builtAt, live, clock: pin || live, shadow });\n  return",
+    to: "  const half = shadow && shadow[kind];\n  return" },
 
   { suite: 'pin_clock.test.js', file: 'pin_clock.js',
     what: 'the area-fixture town is judged like any other map, so a fixture donor drifts off the pin unnoticed',

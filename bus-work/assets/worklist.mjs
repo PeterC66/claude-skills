@@ -83,7 +83,7 @@ import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { freshPullItems, readCurrentQuery, readRecordedQuery, s2Row } from './fresh_pull.mjs';
 import { localDecisionItems } from './local_decisions.mjs';
-import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
+import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, foldHeldRows, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems, loopSilentItems, readSchedule } from './loop_runs.mjs';
 import { groupForPrint } from './row_groups.mjs';
 import { adhocNotTakenFor } from './loop_ready.mjs';
@@ -96,7 +96,7 @@ import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
 import { unsentLetterItem } from './outbound_letter.mjs';
 import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
 import { readScanState, bodsScanItems, readGtfsDirt, gtfsUncommittedItems } from './bods_scan.mjs';
-import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh } from './refresh_grades.mjs';
+import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh, nothingOwed } from './refresh_grades.mjs';
 import { earliestEffective, compareRows } from './refresh_deadline.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
@@ -363,6 +363,7 @@ function fromMapTree() {
       try { routes = readJson(path.join(s4.dir, 'routes.json')); } catch { /* older build */ }
       row.engine = routes.engine || null;
       row.pinnedDonor = fixtureDonor(BUSES, t.name).pin; row.engineStale = pinClock.owes(row.engineStanding = pinClock.standing({ kind: 'town', name: t.name, mapEngine: routes.engine, builtAt: s4.rec.at, live: current, pin: PIN && PIN.engine, shadow: SHADOW, strict: !!row.pinnedDonor })); // the area fixture's town is asked strictly (OA-532)
+      row.shadowRegressed = row.engineStale && pinClock.regressed({ kind: 'town', name: t.name, builtAt: s4.rec.at, live: current, pin: PIN && PIN.engine, shadow: SHADOW }); // OA-574: folds into a hold that names it
     }
     const s6 = latestRunDir(m, t.dir, 'S6');
     const dataRuns = ['S1', 'S2', 'S3']
@@ -419,6 +420,7 @@ function fromMapTree() {
       try { pr = readJson(path.join(s4.dir, 'routes.json')); } catch { /* older build */ }
       row.engine = pr.engine || null;
       row.engineStale = pinClock.owes(row.engineStanding = pinClock.standing({ kind: 'place', name: p.name, mapEngine: pr.engine, builtAt: s4.rec.at, live: currentPlace, pin: PIN && PIN.placeEngine, shadow: SHADOW }));
+      row.shadowRegressed = row.engineStale && pinClock.regressed({ kind: 'place', name: p.name, builtAt: s4.rec.at, live: currentPlace, pin: PIN && PIN.placeEngine, shadow: SHADOW });
     }
     return row;
   });
@@ -874,6 +876,8 @@ if (upcoming) {
       if (haveKey(`refresh-${m.slug}`)) continue; // the portal already flagged this one
       const seen = reviewedAgainst(localDirOf(m), upcoming.date);
       if (seen) { noteAdjudicated(`map:${m.slug}`, { map: m.name, scan: upcoming.date, by: seen.by, note: seen.note }); continue; }
+      const none = nothingOwed(grades, s.town, upcoming.date); // OA-574: a NOTHING grade is no actionable change, so nothing is owed
+      if (none) { noteAdjudicated(`map:${m.slug}`, { map: m.name, scan: upcoming.date, by: 'graded NOTHING', note: none.note }); continue; }
       const skill = m.kind === 'place' ? 'make-place-bus-leaflet' : 'make-bus-leaflet';
       const un = unattendedRefresh(grades, s.town, upcoming.date, { kind: m.kind, assetsDir: SK });
       add({
@@ -901,6 +905,8 @@ if (upcoming) {
     if (!maps.length && localTown) {
       const seenLocal = reviewedAgainst(localTown.dir, upcoming.date);
       if (seenLocal) { noteAdjudicated(`local:${localTown.name.toLowerCase()}`, { map: localTown.name, scan: upcoming.date, by: seenLocal.by, note: seenLocal.note }); continue; }
+      const noneLocal = nothingOwed(grades, localTown.name, upcoming.date); // OA-574
+      if (noneLocal) { noteAdjudicated(`local:${localTown.name.toLowerCase()}`, { map: localTown.name, scan: upcoming.date, by: 'graded NOTHING', note: noneLocal.note }); continue; }
       // No portal map means no delivery step, so a SAFE row here is finishable end to end.
       const unLocal = unattendedRefresh(grades, localTown.name, upcoming.date, { kind: 'area', assetsDir: SK });
       add({
@@ -1119,6 +1125,8 @@ for (const it of freshPull.items) add(it);
  * THE LIVE SITE LISTS (OA-607): a hidden one is rebuilt when next activated. Asked only
  * when a map is behind; a list nobody could read raises every row, and says so.
  */
+const stampOnly = tree.towns.concat(tree.places || []).filter((r) => r.built && r.engineStanding === 'stamp-only').map((r) => r.name); // OA-574: no row, so named instead
+const stampOnlyAt = [tree.currentEngine, tree.currentPlaceEngine].filter(Boolean).join(' / ');
 const behindMaps = tree.towns.filter((t) => t.built && t.engineStale).map((t) => ({ row: t, place: false }))
   .concat((tree.places || []).filter((p) => p.built && p.engineStale).map((p) => ({ row: p, place: true })));
 const portalListing = behindMaps.length ? require(path.join(SK, 'portal_listing.js')) : null;
@@ -1138,6 +1146,7 @@ for (const { row: mapRow, place } of engineStale) {
     why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the estate's pinned ${place ? 'PLACE ' : ''}engine is ${clock}${clock !== live ? ` (the live template, ${live}, is ahead of the pin and is not the clock)` : ''}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`
       + (freshPull.owed.has(mapRow.name) ? ` Its landmark pull is also old: take fresh-pull-${mapRow.name} first, or this rebuild draws only the landmarks the stored pull holds.` : '') + (!place && mapRow.pinnedDonor ? ` It is the area fixture's town, so it is judged against engine.lock.json's pin ${mapRow.pinnedDonor} rather than the live template ${tree.currentEngine}, and rollout.js refuses it until the live template is the pin (OA-532).` : ''),
     who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],
+    ...(mapRow.shadowRegressed ? { foldIntoHold: `the weekly shadow rebuild on ${live} found its rebuild regressed, which is the dry run the hold already quotes` } : {}), // OA-574: a hold naming this row takes it (foldHeldRows)
     do: [ // OA-574: no third step. A STAMP-STALE verdict is nothing owed, and the --rebuild-stale flag that wrote it is gone
       { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel}`, note: 'dry-run — if it says STAMP-STALE or UP-TO-DATE nothing is owed (a stamp-only map is not work, OA-574) and there is no write to run' },
       { kind: 'shell', cwd: SK || '', cmd: `node ${tool} ${sel} --apply --commit`, note: 'writes and commits the map by pathspec (OA-586), when the dry run showed the ink moving; stops on a lost label, which is to be reviewed, never forced. It never pushes' },
@@ -1450,6 +1459,7 @@ if (RUN_GATES && SK) {
 // a portal source reached, and it the live one. Every `draft-*` row comes from that
 // source, so REMOTE is the whole test; a hold naming another source would carry it.
 const heldRows = applyHolds(items, loopHolds.holds);
+const foldedRows = foldHeldRows(items); // OA-574: a held row the shadow found regressed is the hold's question, not a row
 const boardAuthoritative = !!portal && REMOTE;
 // OA-376 — ONE finding per FILE, and a value that is not a key list is a fault in the
 // FILE, so the three branches below do not apply to it. Both rules: loop_your_move.mjs.
@@ -1510,6 +1520,8 @@ const meta = {
   // argument as `adjudicated` directly above.
   correspondenceSettled,
   offPortal: offPortal.map((e) => e.row.name), // OA-607: behind, unlisted, so no engine-rebuild row
+  stampOnly, // OA-574: behind the pin, but the shadow rebuild reproduced every sheet on an engine it may speak for
+  folded: foldedRows, // OA-574: rows taken off the board into the hold that names them
   // OA-221. A caller reading --json must be able to see the same verdict a
   // person does, and the evidence behind it -- otherwise the two disagree and
   // only one of them gets read.
@@ -1575,6 +1587,7 @@ if (correspondenceSettled.length) {
   console.log('');
 }
 if (offPortal.length) console.log(`  off the portal, so no engine-rebuild row until next activated (OA-607): ${offPortal.map((e) => e.row.name).join(', ')}\n`);
+if (stampOnly.length) console.log(`  stamp-only, so no engine-rebuild row: the shadow rebuild reproduced every sheet on the pinned or live engine (${stampOnlyAt}) (OA-574): ${stampOnly.join(', ')}\n`);
 if (warnings.length) console.log('');
 if (!SHOW_DEMO && demoAll.length) console.log(`  (${demoAll.length} demo-customer row${demoAll.length === 1 ? '' : 's'} hidden — --demo to show)\n`);
 
@@ -1610,6 +1623,7 @@ for (const it of groupForPrint(limited)) { // OA-608: an estate-wide fact prints
   // an instruction. Without this the St Ives row said "Send v10.2 for review"
   // while a hold said in terms that v10.2 must not be sent.
   // OA-414 — two sources, one renderer: `holdBanner` in loop_your_move.mjs.
+  for (const fr of it.folded || []) console.log(`    carries ${fr.key}: ${fr.why} (OA-574)`);
   if (it.onHold && it.onHold.length) {
     for (const h of it.onHold) for (const l of holdBanner(h)) console.log(l);
     console.log(`    Only once that is settled:`);

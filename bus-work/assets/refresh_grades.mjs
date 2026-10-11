@@ -120,6 +120,20 @@ export function gradeFor(state, town, scanDate) {
   return state.towns[String(town || '').toLowerCase()] || null;
 }
 
+/**
+ * Is this town's refresh NOTHING OWED? A NOTHING grade means the scan found no actionable change
+ * at all, so there is nothing to put on the sheet and the row closes (buses-data OA-574, 11 Oct
+ * 2026: March, St Ives, St Ives Bus Station and Chatteris sat as refresh rows for ten days under a
+ * NOTHING grading). Returns `{ town, grade, date, note }` for the worklist's adjudicated list, so the
+ * closure is printed rather than silent, or null. The date rule is gradeFor's: an older NOTHING
+ * says nothing about a newer scan.
+ */
+export function nothingOwed(state, town, scanDate) {
+  const g = gradeFor(state, town, scanDate);
+  if (!g || g.grade !== 'NOTHING') return null;
+  return { town: g.town, grade: g.grade, date: state.date, note: `the ${state.date} scan graded ${g.town} NOTHING: no actionable change, so nothing is owed` };
+}
+
 /** Was this town one the scan could not check? Named, because an absence is a verdict. */
 export function notCheckedFor(state, town) {
   if (!state || state.status !== 'ok') return null;

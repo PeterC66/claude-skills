@@ -24,7 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   readGradeState, gradeFor, notCheckedFor, gradeSentence, gradeWarnings,
-  defaultReadGradeFiles, SCHEMA, unattendedRefresh,
+  defaultReadGradeFiles, SCHEMA, unattendedRefresh, nothingOwed,
 } from './refresh_grades.mjs';
 
 let bad = 0, ran = 0;
@@ -223,6 +223,25 @@ console.log('\n6. Whether a TICK may take the row, and how far (OA-426, R9 item 
    * whole reason they live in one module. */
   check('the sentence and the verdict agree for a SAFE town', /no judgement is wanted/.test(gradeSentence(st, 'March', SCAN)) && unattendedRefresh(st, 'March', SCAN, { assetsDir: ASSETS }) !== null);
   check('and they agree for an ESCALATE town', /a person decides/.test(gradeSentence(st, 'Ely', SCAN)) && unattendedRefresh(st, 'Ely', SCAN, { assetsDir: ASSETS }) === null);
+}
+
+console.log('\n9. A NOTHING grade closes the row as nothing owed (buses-data OA-574, 11 Oct 2026)');
+{
+  /* March, St Ives, St Ives Bus Station and Chatteris sat on the board as refresh rows
+   * for ten days with the 1 Oct grading saying NOTHING -- no actionable change at all --
+   * so a reader was told to rebuild a sheet that has nothing to change. */
+  const st = stateOf([{ date: SCAN, text: payload(SCAN, { March: MARCH, Ely: ELY, 'St Ives': STIVES }) }]);
+  const n = nothingOwed(st, 'St Ives', SCAN);
+  check('a NOTHING town, graded by the same run as the scan, is nothing owed', n !== null && n.grade === 'NOTHING', JSON.stringify(n));
+  check('  and it says so in words a reader can check against the grading file', !!n && n.note.includes(SCAN) && /NOTHING/.test(n.note), n && n.note);
+  check('  and the join is case-insensitive, like gradeFor', nothingOwed(st, 'st ives', SCAN) !== null);
+  check('a SAFE town is still owed its rebuild', nothingOwed(st, 'March', SCAN) === null);
+  check('an ESCALATE town is still owed its rebuild', nothingOwed(st, 'Ely', SCAN) === null);
+  check('a town the grading does not name is still owed: an absence is not a NOTHING', nothingOwed(st, 'Wisbech', SCAN) === null);
+  const staleSt = stateOf([{ date: OLDER, text: payload(OLDER, { 'St Ives': STIVES }) }]);
+  check('an older NOTHING does not close a row joined to a newer scan', nothingOwed(staleSt, 'St Ives', SCAN) === null);
+  check('  where the same grading WOULD close one for its own scan, so the date is what refuses', nothingOwed(staleSt, 'St Ives', OLDER) !== null);
+  check('an unreadable grading closes nothing', nothingOwed({ status: 'unreadable' }, 'St Ives', SCAN) === null && nothingOwed(null, 'St Ives', SCAN) === null);
 }
 
 console.log('');

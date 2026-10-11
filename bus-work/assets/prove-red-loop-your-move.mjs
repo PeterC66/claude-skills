@@ -37,7 +37,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readYourMoveDir, parseHold, parseDraft, isHold, classify, loopHoldItems, loopDraftItems, applyHolds, heldPaths, looksLikeRowKey, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
+import { readYourMoveDir, parseHold, parseDraft, isHold, classify, loopHoldItems, loopDraftItems, applyHolds, heldPaths, looksLikeRowKey, groupUnmatched, holdBanner, staleBlocksWarning, foldHeldRows } from './loop_your_move.mjs';
 import { needsOf } from './concurrency.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -256,10 +256,22 @@ console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
   for (const lit of [
     // OA-414 added `holdBanner`, which is the renderer the two hold sources share.
     // OA-409 added `staleBlocksWarning`, the authoritative branch's wording.
-    "import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';",
+    // OA-574 added `foldHeldRows`, which runs straight after applyHolds and takes a regressed, held row off the board.
+    "import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, foldHeldRows, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';",
     "const yourMove = readYourMoveDir(path.join(BUSES, 'loop', 'your-move'));",
     'for (const it of loopHolds.items) add(it);',
     'const heldRows = applyHolds(items, loopHolds.holds);',
+    'const foldedRows = foldHeldRows(items);',
+    'folded: foldedRows,',
+    // ...and what marks a row to fold: the shadow's regressed verdict, asked of towns and places alike.
+    "row.shadowRegressed = row.engineStale && pinClock.regressed({ kind: 'town',",
+    "row.shadowRegressed = row.engineStale && pinClock.regressed({ kind: 'place',",
+    '...(mapRow.shadowRegressed ? { foldIntoHold:',
+    // OA-574: a NOTHING grade closes both refresh paths, and says so in the adjudicated list.
+    'const none = nothingOwed(grades, s.town, upcoming.date);',
+    'if (none) { noteAdjudicated(',
+    'const noneLocal = nothingOwed(grades, localTown.name, upcoming.date);',
+    'if (noneLocal) { noteAdjudicated(',
     // OA-401: ONE read feeds BOTH builders. Two reads is how a file could be a
     // hold to one and a draft to the other, and the literals below are what say
     // the second builder was handed the SAME array rather than a fresh read.
@@ -802,6 +814,36 @@ console.log('\nDecided holds. the row quotes the decision, not the ask it alread
   check('…several backticked keys each stay whole', JSON.stringify(parseHold({ name: 'k.md', text: '# K\n\n**Blocks:** `engine-rebuild-High Wycombe`, `fresh-pull-High Wycombe`\n', mtimeMs: 0 }).blocks) === '["engine-rebuild-High Wycombe","fresh-pull-High Wycombe"]');
   check('CONTROL — keys with no backticks still split on commas and spaces', JSON.stringify(parseHold({ name: 'k.md', text: '# K\n\n**Blocks:** draft-1, s6-stale  ci-red-x\n', mtimeMs: 0 }).blocks) === '["draft-1","s6-stale","ci-red-x"]');
   check('a Decided line inside a fenced example is not a decision', parseHold({ name: 'f.md', text: '# F\n\n```\n**Decided:** nothing\n```\n\n## What is needed from you\n\nAsk.\n', mtimeMs: 0 }).decided === '');
+}
+
+console.log('\nFOLD. a row the shadow rebuild found regressed folds into the hold that already names it (buses-data OA-574)');
+{
+  // High Wycombe, 9-11 Oct: the hold names engine-rebuild-High Wycombe and holds Peter's decision,
+  // and the row stayed on the board for every tick to pass over, one dry run at a time.
+  const dir = path.join(tmp, 'fold', 'loop', 'your-move');
+  mk(dir, 'hw.md', '# High Wycombe rollout stops on LOST lines\n\n**Decided:** 2026-10-01, after 1 November.\n**Blocks:** `engine-rebuild-High Wycombe`\n\n## What is needed from you\n\nDecide.\n');
+  const r = loopHoldItems({ files: readYourMoveDir(dir) });
+  const board = [
+    ...r.items,
+    { key: 'engine-rebuild-High Wycombe', title: 'High Wycombe was drawn by an older engine', foldIntoHold: 'the shadow rebuild on 2dca47c291 found it regressed', do: [] },
+    { key: 'engine-rebuild-Ramsey', title: 'Ramsey was drawn by an older engine', foldIntoHold: 'the shadow rebuild on 2dca47c291 found it regressed', do: [] },
+    { key: 'fresh-pull-High Wycombe', title: 'x', do: [] },
+  ];
+  applyHolds(board, r.holds);
+  const folded = foldHeldRows(board);
+  const hold = board.find((i) => i.key === 'loop-hold-hw');
+  check('the regressed, held row leaves the board', !board.some((i) => i.key === 'engine-rebuild-High Wycombe'), JSON.stringify(board.map((i) => i.key)));
+  check('…and the hold row carries it, with the reason', hold && Array.isArray(hold.folded) && hold.folded.length === 1 && hold.folded[0].key === 'engine-rebuild-High Wycombe' && /regressed/.test(hold.folded[0].why), JSON.stringify(hold && hold.folded));
+  check('…and the fold is returned, so --json can say what it did', folded.length === 1 && folded[0].key === 'engine-rebuild-High Wycombe' && folded[0].into === 'loop-hold-hw', JSON.stringify(folded));
+  check('CONTROL — a regressed row NO hold names stays on the board', board.some((i) => i.key === 'engine-rebuild-Ramsey'));
+  check('CONTROL — a held row with no regression stays on the board, annotated', (() => {
+    const b2 = [...loopHoldItems({ files: readYourMoveDir(dir) }).items, { key: 'engine-rebuild-High Wycombe', title: 'x', do: [] }];
+    applyHolds(b2, loopHoldItems({ files: readYourMoveDir(dir) }).holds);
+    foldHeldRows(b2);
+    const row = b2.find((i) => i.key === 'engine-rebuild-High Wycombe');
+    return !!row && row.onHold && row.onHold.length === 1;
+  })());
+  check('CONTROL — a row the hold does not name is untouched', board.some((i) => i.key === 'fresh-pull-High Wycombe'));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

@@ -545,6 +545,35 @@ export function applyHolds(items, holds) {
 }
 
 /**
+ * Fold a held row INTO its hold when the row says the hold is the whole of its question
+ * (buses-data OA-574, 11 Oct 2026). Runs after `applyHolds`, so only a row a hold already names
+ * can fold, and a hold never reads as unmatched because of it.
+ *
+ * WHY ANNOTATING WAS NOT ENOUGH HERE. `applyHolds` keeps a held row on the board on purpose: the
+ * row may still be someone's to act on once the hold is settled. An engine-rebuild row whose map
+ * the weekly shadow rebuild found REGRESSED is not: its dry run is the evidence the hold already
+ * quotes, so every tick that met the row could only re-run it and pass it over (High Wycombe, 9
+ * to 11 Oct). The row's builder marks it with `foldIntoHold`, the reason as a sentence; the hold
+ * row gains `folded[]`, and the row comes off the board.
+ *
+ * @param {Array} items  the board, mutated in place
+ * @returns {Array<{key, into, why}>}  what was folded, for --json and the printed board
+ */
+export function foldHeldRows(items) {
+  const folded = [];
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    if (!it.foldIntoHold || !(it.onHold && it.onHold.length)) continue;
+    const hold = it.onHold.map((h) => items.find((x) => x.key === `loop-hold-${h.ref}`)).find(Boolean);
+    if (!hold) continue;
+    (hold.folded ||= []).unshift({ key: it.key, title: it.title, why: it.foldIntoHold });
+    folded.unshift({ key: it.key, into: hold.key, why: it.foldIntoHold });
+    items.splice(i, 1);
+  }
+  return folded;
+}
+
+/**
  * The unmatched holds as ONE finding per FILE (OA-376, 2026-09-17).
  *
  * WHY THE FILE IS THE UNIT AND THE KEY IS NOT. A `Blocks:` field is written once,

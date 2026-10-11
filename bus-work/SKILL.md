@@ -77,7 +77,7 @@ Read-only, safe to run at any time, and safe while the dev server is running (th
 
 **A dirty tree is `CHECK FIRST`, not a delay** — `git status` cannot say whose files those are. **Only two things earn `BETTER TO DELAY`**: an estate-wide sweep while `Areas/`, `Places/` or `ci-reference/` is dirty, and a deliver or deploy while the portal checkout is off `main`. A modified `Correspondence/**/*.md` that a live `loop/your-move/` hold names is **accounted for** and subtracted, and the block prints the subtraction rather than hiding it.
 
-**A count that could not be taken is never a count of zero.** `unpushed UNKNOWN` reads `CHECK FIRST`.
+**A count that could not be taken is never a count of zero.** The conditions block prints `unpushed UNKNOWN` and git's reason. No verdict reads buses-data's unpushed count, because nothing a deliver runs reads buses-data's pushed `main`. ([why](references/why-these-rules.md#is-it-safe-to-do-this-right-now--the-concurrency-verdict-oa-221-2026-09-01))
 
 **A decision is never held back, and that is the most useful thing on the list.** A publish review, an application, a map-request decision, a chase and a drafted reply touch no working tree, so when everything else says wait, those are what to offer.
 

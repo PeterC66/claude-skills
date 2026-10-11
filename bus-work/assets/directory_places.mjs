@@ -114,7 +114,7 @@ export function directoryPlacesItems({ state, now = Date.now(), recheckDays = RE
       // folder it runs from (buses-data CLAUDE.md), and it is RESOLVED rather
       // than typed, so the sentence stays true on a checkout that is not this
       // laptop's (buses-data OA-345).
-      { kind: 'chat', what: `If the edition changed: update EDITION and URL in build-places.mjs, then \`npm run sync:directory\` from the portal root (${resolvePortal()}) and open a portal PR — AFTER pushing buses-data, because the portal's verify.yml reads this repository's main.` },
+      { kind: 'chat', what: `If the edition changed: update EDITION and URL in build-places.mjs, then \`npm run sync:directory\` from the portal root (${resolvePortal()}) and open a portal PR. The script copies from this checkout; buses-data's own gates.yml compares the two copies.` },
     ],
   });
 

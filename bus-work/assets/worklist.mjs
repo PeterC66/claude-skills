@@ -96,7 +96,7 @@ import { readPlacesState, directoryPlacesItems } from './directory_places.mjs';
 import { unsentLetterItem } from './outbound_letter.mjs';
 import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
 import { readScanState, bodsScanItems, readGtfsDirt, gtfsUncommittedItems } from './bods_scan.mjs';
-import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh, nothingOwed } from './refresh_grades.mjs';
+import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh, nothingOwed, placeGradeOpts } from './refresh_grades.mjs';
 import { earliestEffective, compareRows } from './refresh_deadline.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
@@ -876,15 +876,15 @@ if (upcoming) {
       if (haveKey(`refresh-${m.slug}`)) continue; // the portal already flagged this one
       const seen = reviewedAgainst(localDirOf(m), upcoming.date);
       if (seen) { noteAdjudicated(`map:${m.slug}`, { map: m.name, scan: upcoming.date, by: seen.by, note: seen.note }); continue; }
-      const none = nothingOwed(grades, s.town, upcoming.date); // OA-574: a NOTHING grade is no actionable change, so nothing is owed
+      const gk = placeGradeOpts(m, tree.places.find((x) => x.dir === localDirOf(m))); const none = nothingOwed(grades, s.town, upcoming.date, gk); // OA-574, OA-628: a NOTHING grade owes nothing; a place reads only its own
       if (none) { noteAdjudicated(`map:${m.slug}`, { map: m.name, scan: upcoming.date, by: 'graded NOTHING', note: none.note }); continue; }
       const skill = m.kind === 'place' ? 'make-place-bus-leaflet' : 'make-bus-leaflet';
       const un = unattendedRefresh(grades, s.town, upcoming.date, { kind: m.kind, assetsDir: SK });
       add({
         key: `refresh-${m.slug}`, rank: 5, type: 'refresh',
         title: `Refresh "${m.name}" — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'} in ${s.town}${when}`,
-        why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.${gradeSentence(grades, s.town, upcoming.date)}`,
-        grade: gradeFor(grades, s.town, upcoming.date),
+        why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.${gradeSentence(grades, s.town, upcoming.date, gk)}`,
+        grade: gradeFor(grades, s.town, upcoming.date, gk),
         unattended: un, effectiveDate: s.effective, map: m.name,
         who: m.customerName || 'unowned', ageDays: upcoming.ageDays, detail: s.body.split('\n').filter((l) => l.trim().startsWith('- ')).slice(0, 6).join('\n'),
         where: appUrl('/app/admin'), runbook: 'R4', skill, subject: s.town, kind: m.kind, slug: m.slug,

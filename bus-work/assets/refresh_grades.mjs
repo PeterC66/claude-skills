@@ -106,18 +106,50 @@ export function readGradeState({ busesDir, readGradeFiles = defaultReadGradeFile
     towns[name.toLowerCase()] = { town: name, grade: rec.grade, actionable: rec.actionable, reasons: rec.reasons || [] };
   }
   const notChecked = Array.isArray(payload.notChecked) ? payload.notChecked : [];
-  return { status: 'ok', dir, date: newest.date, towns, notChecked };
+  /* EACH PLACE'S OWN GRADE (buses-data OA-628), keyed "<Town>/<Place>" or
+   * "_standalone/<Place>". Optional, because a grading written before OA-628 has none,
+   * and then no place has a grade — which is what was true of it. */
+  const places = {};
+  if (payload.places != null && typeof payload.places !== 'object') return bad('its `places` is not an object');
+  for (const [key, rec] of Object.entries(payload.places || {})) {
+    if (!rec || !GRADES.includes(rec.grade)) return bad(`place ${key} carries no grade this understands (${JSON.stringify(rec && rec.grade)})`);
+    places[key.toLowerCase()] = { town: key, grade: rec.grade, actionable: rec.actionable, reasons: rec.reasons || [] };
+  }
+  const placesNotChecked = Array.isArray(payload.placesNotChecked) ? payload.placesNotChecked : [];
+  return { status: 'ok', dir, date: newest.date, towns, notChecked, places, placesNotChecked };
 }
 
 /**
  * The grade for one town AS AT one scan date, or null. `scanDate` is the date of
  * the report the caller's row is joined to; see the dates paragraph at the head of
  * this file for why a mismatch is nothing rather than the older answer.
+ *
+ * FOR A PLACE, `{ kind: 'place', place: '<Town>/<Place>' }` reads the place's OWN
+ * record and NEVER the town's (buses-data OA-628). A place draws a different set of
+ * services in a different frame, so its town's NOTHING says nothing about it: on
+ * 2026-10-11 St Neots was ESCALATE while all four of its places, diffed on their own
+ * frames, were NOTHING. A place with no record of its own gets null, so nothing is
+ * closed on its behalf.
  */
-export function gradeFor(state, town, scanDate) {
+export function gradeFor(state, town, scanDate, { kind = 'area', place = null } = {}) {
   if (!state || state.status !== 'ok') return null;
   if (scanDate && state.date !== scanDate) return null;
+  if (kind === 'place') return place ? ((state.places || {})[String(place).toLowerCase()] || null) : null;
   return state.towns[String(town || '').toLowerCase()] || null;
+}
+
+/**
+ * The grading's key for a portal map (buses-data OA-628): `{}` for a town, which reads the
+ * town's record, and for a place `{ kind: 'place', place: '<Town>/<Place>' }`, or
+ * `_standalone/<Place>`, the key `gtfs_refresh_report.py` writes. `pl` is the board's own
+ * place row (`{ name, town }`, from gate_lib's findPlaces). A place whose folder was not
+ * found gets `place: null`, which matches nothing, so it is graded by nobody — never by
+ * its town. Here and not in worklist.mjs, which is at its line ceiling, and so a harness
+ * can pose it.
+ */
+export function placeGradeOpts(m, pl) {
+  if (!m || m.kind === 'area') return {};
+  return { kind: 'place', place: pl && pl.name ? `${pl.town || '_standalone'}/${pl.name}` : null };
 }
 
 /**
@@ -128,15 +160,22 @@ export function gradeFor(state, town, scanDate) {
  * closure is printed rather than silent, or null. The date rule is gradeFor's: an older NOTHING
  * says nothing about a newer scan.
  */
-export function nothingOwed(state, town, scanDate) {
-  const g = gradeFor(state, town, scanDate);
+export function nothingOwed(state, town, scanDate, opts = {}) {
+  const g = gradeFor(state, town, scanDate, opts);
   if (!g || g.grade !== 'NOTHING') return null;
   return { town: g.town, grade: g.grade, date: state.date, note: `the ${state.date} scan graded ${g.town} NOTHING: no actionable change, so nothing is owed` };
 }
 
-/** Was this town one the scan could not check? Named, because an absence is a verdict. */
-export function notCheckedFor(state, town) {
+/** Was this town (or, with `{ kind: 'place', place }`, this place) one the scan could
+ * not check? Named, because an absence is a verdict. Returned as `{ town, reason }`
+ * for both, so the sentence below reads either. */
+export function notCheckedFor(state, town, { kind = 'area', place = null } = {}) {
   if (!state || state.status !== 'ok') return null;
+  if (kind === 'place') {
+    const want = String(place || '').toLowerCase();
+    const hit = want && (state.placesNotChecked || []).find((x) => String(x.place || '').toLowerCase() === want);
+    return hit ? { town: hit.place, reason: hit.reason } : null;
+  }
   const want = String(town || '').toLowerCase();
   return (state.notChecked.find((x) => String(x.town || '').toLowerCase() === want)) || null;
 }
@@ -146,8 +185,8 @@ export function notCheckedFor(state, town) {
  * say. It is a sentence rather than a field because a row's `why` is what a person
  * reads, and the JSON output carries the record itself beside it.
  */
-export function gradeSentence(state, town, scanDate) {
-  const g = gradeFor(state, town, scanDate);
+export function gradeSentence(state, town, scanDate, opts = {}) {
+  const g = gradeFor(state, town, scanDate, opts);
   if (g) {
     if (g.grade === 'SAFE') {
       return ` The ${state.date} scan graded ${g.town} SAFE: all ${g.actionable} actionable change${g.actionable === 1 ? ' is' : 's are'} an operator name or a day string (${g.reasons.join(', ')}), so no judgement is wanted before the rebuild.`;
@@ -157,7 +196,7 @@ export function gradeSentence(state, town, scanDate) {
     }
     return '';
   }
-  const nc = notCheckedFor(state, town);
+  const nc = notCheckedFor(state, town, opts);
   if (nc) return ` The ${state.date} scan could NOT check ${nc.town} (${nc.reason}), so it has no grade — this row's changes came from the upcoming pass alone.`;
   return '';
 }
@@ -189,10 +228,10 @@ export function gradeSentence(state, town, scanDate) {
  * only for a town the month's ink review (`ink_review.mjs --deliverable`, OA-429) lists
  * under `deliver` -- the review is where somebody looks at a sheet whose ink moved.
  *
- * A PLACE IS NOT COVERED, and the reason is in the grading rather than here:
- * `gtfs_refresh_report.py` diffs `Areas/<town>` and nothing else, so no place HAS a grade
- * to be SAFE. `gradeFor` returns null for one and this returns null with it, which is the
- * honest answer rather than a silent omission.
+ * A PLACE IS NOT COVERED. Since OA-628 a place has a grade of its own, and it may be
+ * SAFE, but `refresh_town.py` rebuilds a TOWN and there is no place applier, so the kind
+ * check refuses before the grade is read. That is the honest answer rather than a
+ * command that would rebuild the wrong map.
  *
  * `--by` CARRIES A NAME THIS CANNOT KNOW. The run's own name is `sched-HHMM`, chosen when
  * the tick starts, and only the tick can substitute it.

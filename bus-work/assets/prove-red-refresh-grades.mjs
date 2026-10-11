@@ -24,7 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   readGradeState, gradeFor, notCheckedFor, gradeSentence, gradeWarnings,
-  defaultReadGradeFiles, SCHEMA, unattendedRefresh, nothingOwed,
+  defaultReadGradeFiles, SCHEMA, unattendedRefresh, nothingOwed, placeGradeOpts,
 } from './refresh_grades.mjs';
 
 let bad = 0, ran = 0;
@@ -242,6 +242,43 @@ console.log('\n9. A NOTHING grade closes the row as nothing owed (buses-data OA-
   check('an older NOTHING does not close a row joined to a newer scan', nothingOwed(staleSt, 'St Ives', SCAN) === null);
   check('  where the same grading WOULD close one for its own scan, so the date is what refuses', nothingOwed(staleSt, 'St Ives', OLDER) !== null);
   check('an unreadable grading closes nothing', nothingOwed({ status: 'unreadable' }, 'St Ives', SCAN) === null && nothingOwed(null, 'St Ives', SCAN) === null);
+}
+
+console.log('\n10. A place is graded on its OWN record, never its town\'s (buses-data OA-628, 11 Oct 2026)');
+{
+  /* Measured the day this was written: St Neots ESCALATE, its four places each NOTHING on
+   * their own frames; and St Ives NOTHING while St Ives Bus Station has a record of its
+   * own. Until OA-628 every place row was graded by gradeFor(grades, s.town). */
+  const placed = (towns, places, placesNotChecked = []) => JSON.stringify({
+    date: SCAN, tool: 'gtfs_refresh_report.py', schema: SCHEMA, towns, notChecked: [], places, placesNotChecked,
+  });
+  const COOP = { kind: 'place', place: 'St Neots/St Neots Co-op' };
+  const BUSSTN = { kind: 'place', place: 'St Ives/St Ives Bus Station' };
+  const st = stateOf([{ date: SCAN, text: placed(
+    { 'St Neots': ELY, 'St Ives': STIVES },
+    { 'St Neots/St Neots Co-op': STIVES, 'St Ives/St Ives Bus Station': ELY },
+    [{ place: '_standalone/Ely Co-op', reason: 'no S1 run has a gtfs-services.json' }],
+  ) }]);
+  check('a place graded NOTHING closes its row under an ESCALATE town', nothingOwed(st, 'St Neots', SCAN, COOP) !== null, JSON.stringify(nothingOwed(st, 'St Neots', SCAN, COOP)));
+  check('  and the note names the place, not the town', (nothingOwed(st, 'St Neots', SCAN, COOP) || {}).note?.includes('St Neots Co-op'), JSON.stringify(nothingOwed(st, 'St Neots', SCAN, COOP)));
+  check('a town graded NOTHING no longer closes a place whose own grade is ESCALATE', nothingOwed(st, 'St Ives', SCAN, BUSSTN) === null);
+  check('  and that place\'s row says ESCALATE in its own words', /ESCALATE/.test(gradeSentence(st, 'St Ives', SCAN, BUSSTN)) && /St Ives Bus Station/.test(gradeSentence(st, 'St Ives', SCAN, BUSSTN)), gradeSentence(st, 'St Ives', SCAN, BUSSTN));
+  const OTHER = { kind: 'place', place: 'St Ives/St Ives Market' };
+  check('a place with no grade of its own is NOT closed by its town\'s NOTHING', nothingOwed(st, 'St Ives', SCAN, OTHER) === null);
+  check('  and gets no grade at all, rather than the town\'s', gradeFor(st, 'St Ives', SCAN, OTHER) === null, JSON.stringify(gradeFor(st, 'St Ives', SCAN, OTHER)));
+  check('a place row that names no place key gets nothing, not the town', gradeFor(st, 'St Ives', SCAN, { kind: 'place' }) === null);
+  check('a place the scan could not check is named with its reason', /could NOT check/.test(gradeSentence(st, null, SCAN, { kind: 'place', place: '_standalone/Ely Co-op' })), gradeSentence(st, null, SCAN, { kind: 'place', place: '_standalone/Ely Co-op' }));
+  check('the town itself still reads its own record', gradeFor(st, 'St Ives', SCAN).grade === 'NOTHING' && nothingOwed(st, 'St Ives', SCAN) !== null);
+  check('a SAFE place is still no tick\'s row: there is no place applier', unattendedRefresh(stateOf([{ date: SCAN, text: placed({}, { 'X/Y': MARCH }) }]), 'X', SCAN, { kind: 'place', assetsDir: 'C:/e' }) === null);
+  const old = stateOf([{ date: SCAN, text: payload(SCAN, { 'St Ives': STIVES }) }]);
+  check('a grading written before OA-628 has no places block, so it closes no place row', nothingOwed(old, 'St Ives', SCAN, BUSSTN) === null && old.status === 'ok');
+  /* The key the worklist builds must be the key the Python writes: "<Town>/<Place>". */
+  check('placeGradeOpts keys a nested place "<Town>/<Place>"', placeGradeOpts({ kind: 'place' }, { name: 'St Neots Co-op', town: 'St Neots' }).place === 'St Neots/St Neots Co-op');
+  check('  and a standalone one "_standalone/<Place>"', placeGradeOpts({ kind: 'place' }, { name: 'Ely Co-op', town: null }).place === '_standalone/Ely Co-op');
+  check('  and a place whose folder was not found gets a key that matches nothing', placeGradeOpts({ kind: 'place' }, undefined).place === null && nothingOwed(st, 'St Neots', SCAN, placeGradeOpts({ kind: 'place' }, undefined)) === null);
+  check('  and a town map asks as a town', JSON.stringify(placeGradeOpts({ kind: 'area' }, { name: 'x' })) === '{}');
+  const badPlace = stateOf([{ date: SCAN, text: placed({}, { 'X/Y': { grade: 'FINE' } }) }]);
+  check('a place whose grade is not a grade makes the whole file unreadable', badPlace.status === 'unreadable' && /place X\/Y/.test(badPlace.why), JSON.stringify(badPlace));
 }
 
 console.log('');

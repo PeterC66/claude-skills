@@ -801,13 +801,13 @@ def diff_shipped(db, name, cfg, vs, vf, today=None):
 def read_json(path):
     with open(path,encoding="utf-8") as f: return json.load(f)
 
+# Written as `(... or [None])[-1]` and not as latest_verified's line, which a mutation in
+# tools/prove-red-python.py anchors on and needs to find exactly once.
 def latest_place_services(place_dir):
-    cands=sorted(glob.glob(os.path.join(place_dir,"S1-services","*","gtfs-services.json")))
-    return cands[-1] if cands else None
+    return (sorted(glob.glob(os.path.join(place_dir,"S1-services","*","gtfs-services.json"))) or [None])[-1]
 
 def latest_place_routes(place_dir):
-    cands=sorted(glob.glob(os.path.join(place_dir,"S3-config","*","routes.json")))
-    return cands[-1] if cands else None
+    return (sorted(glob.glob(os.path.join(place_dir,"S3-config","*","routes.json"))) or [None])[-1]
 
 def place_shipped(place_dir):
     """-> (vs, file, cfg, None) for a place that can be graded, or (None, None, None, reason).

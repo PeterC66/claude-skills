@@ -139,6 +139,20 @@ export function gradeFor(state, town, scanDate, { kind = 'area', place = null } 
 }
 
 /**
+ * The grading's key for a portal map (buses-data OA-628): `{}` for a town, which reads the
+ * town's record, and for a place `{ kind: 'place', place: '<Town>/<Place>' }`, or
+ * `_standalone/<Place>`, the key `gtfs_refresh_report.py` writes. `pl` is the board's own
+ * place row (`{ name, town }`, from gate_lib's findPlaces). A place whose folder was not
+ * found gets `place: null`, which matches nothing, so it is graded by nobody — never by
+ * its town. Here and not in worklist.mjs, which is at its line ceiling, and so a harness
+ * can pose it.
+ */
+export function placeGradeOpts(m, pl) {
+  if (!m || m.kind === 'area') return {};
+  return { kind: 'place', place: pl && pl.name ? `${pl.town || '_standalone'}/${pl.name}` : null };
+}
+
+/**
  * Is this town's refresh NOTHING OWED? A NOTHING grade means the scan found no actionable change
  * at all, so there is nothing to put on the sheet and the row closes (buses-data OA-574, 11 Oct
  * 2026: March, St Ives, St Ives Bus Station and Chatteris sat as refresh rows for ten days under a

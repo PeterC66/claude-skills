@@ -24,7 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   readGradeState, gradeFor, notCheckedFor, gradeSentence, gradeWarnings,
-  defaultReadGradeFiles, SCHEMA, unattendedRefresh, nothingOwed,
+  defaultReadGradeFiles, SCHEMA, unattendedRefresh, nothingOwed, placeGradeOpts,
 } from './refresh_grades.mjs';
 
 let bad = 0, ran = 0;
@@ -272,6 +272,11 @@ console.log('\n10. A place is graded on its OWN record, never its town\'s (buses
   check('a SAFE place is still no tick\'s row: there is no place applier', unattendedRefresh(stateOf([{ date: SCAN, text: placed({}, { 'X/Y': MARCH }) }]), 'X', SCAN, { kind: 'place', assetsDir: 'C:/e' }) === null);
   const old = stateOf([{ date: SCAN, text: payload(SCAN, { 'St Ives': STIVES }) }]);
   check('a grading written before OA-628 has no places block, so it closes no place row', nothingOwed(old, 'St Ives', SCAN, BUSSTN) === null && old.status === 'ok');
+  /* The key the worklist builds must be the key the Python writes: "<Town>/<Place>". */
+  check('placeGradeOpts keys a nested place "<Town>/<Place>"', placeGradeOpts({ kind: 'place' }, { name: 'St Neots Co-op', town: 'St Neots' }).place === 'St Neots/St Neots Co-op');
+  check('  and a standalone one "_standalone/<Place>"', placeGradeOpts({ kind: 'place' }, { name: 'Ely Co-op', town: null }).place === '_standalone/Ely Co-op');
+  check('  and a place whose folder was not found gets a key that matches nothing', placeGradeOpts({ kind: 'place' }, undefined).place === null && nothingOwed(st, 'St Neots', SCAN, placeGradeOpts({ kind: 'place' }, undefined)) === null);
+  check('  and a town map asks as a town', JSON.stringify(placeGradeOpts({ kind: 'area' }, { name: 'x' })) === '{}');
   const badPlace = stateOf([{ date: SCAN, text: placed({}, { 'X/Y': { grade: 'FINE' } }) }]);
   check('a place whose grade is not a grade makes the whole file unreadable', badPlace.status === 'unreadable' && /place X\/Y/.test(badPlace.why), JSON.stringify(badPlace));
 }

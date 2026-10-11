@@ -269,7 +269,7 @@ console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
     '...(mapRow.shadowRegressed ? { foldIntoHold:',
     // OA-574: a NOTHING grade closes both refresh paths, and says so in the adjudicated list.
     // OA-628: and a place row asks with its OWN key, so its town's grade never closes it.
-    'const gk = gradeKeyOf(m);',
+    'const gk = placeGradeOpts(m, tree.places.find((x) => x.dir === localDirOf(m)));',
     'const none = nothingOwed(grades, s.town, upcoming.date, gk);',
     'if (none) { noteAdjudicated(',
     'const noneLocal = nothingOwed(grades, localTown.name, upcoming.date);',

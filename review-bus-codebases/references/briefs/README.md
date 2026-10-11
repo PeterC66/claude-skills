@@ -8,7 +8,7 @@ Every brief carries the same preamble and the same output shape, so the six repo
 
 > You are doing a READ-ONLY code review. Do not edit, create, or delete any file. Do not run anything that writes, starts a server, deploys, or touches the network or the VPS. Do not read `.env` or any file that could hold a secret; grep for `process.env.` to learn variable names. Reading, grep, wc, `node --check` and `git log` are fine.
 >
-> The previous run's findings are in `<previous findings path>`; your slice is the section headed `<slice heading>`. Before listing anything new, classify EVERY prior finding in that section as CLOSED (say what closed it, with the commit or file), STILL OPEN (re-measure the number if there was one), or CHANGED (say how). Keep the prior IDs. New findings continue the numbering.
+> The previous run's findings are in `<previous findings path>`; your slice is the section headed `<slice heading>`. Before listing anything new, classify EVERY prior finding in that section as CLOSED (say what closed it, with the commit or file), STILL OPEN (re-measure the number if there was one), or CHANGED (say how). A prior finding that the previous plan's *Where this stands* section records as retired by a decision of Peter's is CLOSED (retired by decision) — name the decision — and is not put to him again, however open the findings document still shows it. Keep the prior IDs. New findings continue the numbering.
 
 ## The common output shape
 

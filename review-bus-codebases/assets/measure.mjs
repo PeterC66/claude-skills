@@ -29,7 +29,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// THE FLAGS ARE READ BY THE ENGINE'S OWN cli.js, NOT BY A READER OF THIS FILE'S OWN
+// (codebase review 2026-10-11, R3 G20). Until then `--buses` given as the LAST
+// argument yielded `undefined` and fell through to the laptop default without a
+// word — a measurer silently measuring the wrong tree is the fault this file's
+// exit-code paragraph above was written against, one flag over. cli.js is in the
+// same repository at a fixed relative path, so it is loaded from here rather than
+// from `--skills`, which is one of the flags being parsed; `resolveBuses` and
+// `resolvePortal` are flag, then env, then laptop, and a flag with no value exits 2.
+const requireCjs = createRequire(import.meta.url);
+const CLI = requireCjs(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'make-bus-leaflet', 'assets', 'cli.js'));
 
 const read = (p) => fs.readFileSync(p, 'utf8');
 const exists = (p) => fs.existsSync(p);
@@ -103,7 +115,10 @@ export function measure({ BUSES, SKILLS, PORTAL, now = new Date() }) {
 
   // ---- 3. the laptop as a dependency -------------------------------------------
   const laptop = /u3a St Ives|C:\/Buses\/|C:\\Buses\\|C:\/Claude\/|C:\\Claude\\/;
-  const busesCode = tracked(BUSES, '.', { exts: ['.js', '.mjs', '.py', '.ps1'], skip: ['Areas', 'Places', '_archive', 'Temp', '_gtfs'] });
+  // `_gtfs` is no longer skipped (2026-10-11, review R6 N13): the skip hid
+  // refresh-bus-data.ps1's hard-coded paths for three runs, and the buses-data count
+  // rose once when it came off — read that rise as a correction, not a regression.
+  const busesCode = tracked(BUSES, '.', { exts: ['.js', '.mjs', '.py', '.ps1'], skip: ['Areas', 'Places', '_archive', 'Temp'] });
   const skillsCode = tracked(SKILLS, '.', { exts: ['.js', '.mjs', '.py'], skip: ['design-preview'] });
   const portalCode = tracked(PORTAL, '.', { exts: ['.js', '.mjs'], skip: ['data', 'backups'] });
   // Two counts per repo, because the 2026-09-03 run found the first one RISING (portal 17 -> 26)
@@ -112,6 +127,18 @@ export function measure({ BUSES, SKILLS, PORTAL, now = new Date() }) {
   // documented default; a path on a code line is a fallback that runs. Only the second is the
   // finding, so it is measured on its own. A code line is one not starting with //, #, * or /*.
   const codeLineNames = (p) => read(p).split(/\r?\n/).some(l => laptop.test(l) && !/^\s*(\/\/|#|\*|\/\*)/.test(l));
+  // A THIRD LINE, FOR A HOME THAT IS NOT THERE (2026-10-11, this plan's finding 1).
+  // A path naming the laptop is a convention in a header and a fallback on a code
+  // line; a path naming a folder that DOES NOT EXIST on this disk is a third thing —
+  // the old home after a move — and it is the one the 2026-10-08 move left in 23
+  // engine files and 53 portal files with every count above unchanged. The home is
+  // the drive plus the first two folders (`C:/Claude/community-bus-maps`,
+  // `C:/u3a St Ives/Using AI`), tested with existsSync, so the line is a measurement
+  // of THIS disk and reads as zero on a machine that has neither home — which is why
+  // it is a line beside the others and not a replacement for them.
+  const homeOf = (token) => token.replace(/\\\\/g, '/').replace(/\\/g, '/').split('/').slice(0, 3).join('/');
+  const namesAbsentHome = (p) => read(p).split(/\r?\n/).some(l => laptop.test(l)
+    && [...l.matchAll(/[A-Za-z]:(?:\\\\|[\\/])[^\s'"`)\]|,;]*/g)].some(mt => !exists(homeOf(mt[0]))));
   const vendoredEngine = tracked(PORTAL, 'engine', { exts: ['.js'] });
   m.laptopPaths = {
     'files naming the laptop path (buses-data code)': filesMatching(busesCode, laptop).length,
@@ -122,8 +149,12 @@ export function measure({ BUSES, SKILLS, PORTAL, now = new Date() }) {
     '  ...of which on a CODE line (claude-skills)': skillsCode.filter(codeLineNames).length,
     '  ...of which on a CODE line (portal)': portalCode.filter(codeLineNames).length,
     '  ...of which on a CODE line (portal engine/)': vendoredEngine.filter(codeLineNames).length,
+    '  ...of which name a home ABSENT from this disk (buses-data)': busesCode.filter(namesAbsentHome).length,
+    '  ...of which name a home ABSENT from this disk (claude-skills)': skillsCode.filter(namesAbsentHome).length,
+    '  ...of which name a home ABSENT from this disk (portal)': portalCode.filter(namesAbsentHome).length,
+    '  ...of which name a home ABSENT from this disk (portal engine/)': vendoredEngine.filter(namesAbsentHome).length,
   };
-  note.laptopPaths = 'files containing the laptop path anywhere, then only on a code line (a header comment naming the folder to run from is the convention, not a finding)';
+  note.laptopPaths = 'files containing the laptop path anywhere, then only on a code line (a header comment naming the folder to run from is the convention, not a finding), then naming a home this disk does not have (a move\'s leftovers; measured on this machine)';
 
   // ---- 4. test wiring -----------------------------------------------------------
   const pkg = exists(path.join(PORTAL, 'package.json')) ? JSON.parse(read(path.join(PORTAL, 'package.json'))) : { scripts: {} };
@@ -218,10 +249,13 @@ function wiringVerdict(SKILLS) {
 // ---- the command line ---------------------------------------------------------
 function main() {
   const argv = process.argv.slice(2);
-  const flag = (n) => { const i = argv.indexOf('--' + n); return i < 0 ? null : argv[i + 1]; };
-  const BUSES = flag('buses') || process.env.BUSES_DIR || 'C:/Buses/buses-data';
-  const SKILLS = flag('skills') || process.env.SKILLS_DIR || 'C:/Buses/claude-skills';
-  const PORTAL = flag('portal') || process.env.BUSMAPS_PORTAL || 'C:/Buses/community-bus-maps';
+  const args = CLI.parseArgs(argv);
+  const BUSES = CLI.resolveBuses(args);
+  const PORTAL = CLI.resolvePortal(args);
+  // The skills checkout defaults to the one THIS FILE is in — two folders up — which
+  // is the one default here that is not a laptop path, because it is not a path at all.
+  if (args.skills === true) CLI.die('--skills needs a path');
+  const SKILLS = path.resolve(args.skills || process.env.SKILLS_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..'));
   const out = measure({ BUSES, SKILLS, PORTAL });
   if (!out.ok) { console.error('measure.mjs: ' + out.why); process.exit(2); }
   const { result, note } = out;

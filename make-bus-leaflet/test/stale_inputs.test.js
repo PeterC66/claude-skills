@@ -123,22 +123,32 @@ test('basedOn that does NOT match the latest is refused, and says what it was bu
   assert.deepStrictEqual(staleInputs(m), [{ stage: 'S2', was: 's2new', now: 's2old', how: 'basedOn' }]);
 });
 
-test('the whole estate as at 2026-09-03 is clean — the guard refuses nothing that works', () => {
+const { busesDir, needsBuses } = require('./_buses');
+const { findTowns, findPlaces } = load('gate_lib.js');
+
+test('the whole estate as at 2026-09-03 is clean — the guard refuses nothing that works', needsBuses, () => {
   /* The measurement that decided this was safe to put in FRONT of the fast paths.
    * It reads the real manifests rather than a fixture, so it is a statement about
    * the estate and not about this file; a map that develops the fault turns it red
-   * here as well as in the tool, which is the point. It is skipped where the data
-   * repository is not beside the skills one, which is every CI checkout. */
+   * here as well as in the tool, which is the point. In a CI checkout, where the
+   * data repository is absent, it is SKIPPED and says so — through `_buses.js`,
+   * which is the rule for every estate test here.
+   *
+   * IT HAD PASSED GREEN WITHOUT RUNNING FOR THREE DAYS (codebase review
+   * 2026-10-11, R2 N47). Until then this test resolved the estate itself, with a
+   * bare `return` when the folder was missing — the exact shape `_buses.js` was
+   * written to forbid — and its default was the old laptop home, which the move
+   * of 2026-10-08 (buses-data OA-611) emptied. On the laptop a user-scope
+   * BUSES_DIR kept it running, which is the only reason the number could be read.
+   * It also walked `Places/` by hand and one level deep, a sixth copy of the
+   * enumeration `gate_lib.findSheets`'s comment says must exist exactly once;
+   * `findTowns` and `findPlaces` are that one walk for map FOLDERS (the sheet
+   * walk is `findSheets`), and both know all three place layouts. */
   const fs = require('node:fs');
   const path = require('node:path');
-  const B = process.env.BUSES_DIR || path.join(__dirname, '..', '..', '..', '..', 'Using AI', 'Buses');
-  if (!fs.existsSync(path.join(B, 'Areas'))) return;
-  const dirs = [];
-  for (const a of fs.readdirSync(path.join(B, 'Areas'))) dirs.push(path.join(B, 'Areas', a));
-  for (const g of fs.readdirSync(path.join(B, 'Places'))) {
-    const gd = path.join(B, 'Places', g);
-    if (fs.statSync(gd).isDirectory()) for (const a of fs.readdirSync(gd)) dirs.push(path.join(gd, a));
-  }
+  const B = busesDir();
+  const towns = findTowns(B);
+  const dirs = [...towns, ...findPlaces(towns, B)].map((m) => m.dir);
   const dirty = [];
   let seen = 0;
   for (const d of dirs) {

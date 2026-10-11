@@ -36,6 +36,9 @@ Beside it, `_gtfs/refresh-grades_<date>.json` says the same thing as DATA: one e
 per town with its grade, its actionable count and the tags that escalated it, plus
 the towns this run could not check. Nothing has to parse the prose to learn whether
 a town's refresh needs a person -- see `town_grade_record` (buses-data OA-426).
+Every place under `Areas/*/Places/*/` and `Places/_standalone/*/` is graded too, on
+its own frame and its own shipped set, into a `places` block keyed "<Town>/<Place>"
+-- see `place_shipped` (buses-data OA-628).
 Community/DRT services (Villager, FACT, dial-a-ride, ...) are NOT in BODS by design, so
 their absence is reported as expected, not as a withdrawal.
 
@@ -161,7 +164,7 @@ def town_grade_record(town, changes):
     return {"town":town, "grade":grade, "actionable":len(actionable),
             "reasons":sorted({r[0] for r in reasons})}
 
-def grades_payload(date, records, not_checked):
+def grades_payload(date, records, not_checked, place_records=(), places_not_checked=()):
     """The whole sidecar: every town this scan graded, and every town it could not.
 
     NOT CHECKED IS PART OF THE ANSWER AND NOT AN OMISSION. A town whose dataset
@@ -170,10 +173,17 @@ def grades_payload(date, records, not_checked):
     exact shape this repository has already paid for once (a month of clean,
     confident, empty reports written by a path that matched no town). It is listed
     separately, with the reason, so an absence has to be read as an absence.
+
+    `places` and `placesNotChecked` are the same two halves for each place, keyed
+    "<Town>/<Place>" (buses-data OA-628). They are ADDED keys, so the schema stays 1:
+    a reader that predates them reads the towns exactly as before, and grades no place,
+    which is what it did anyway.
     """
     return {"date":date, "tool":"gtfs_refresh_report.py", "schema":1,
             "towns":{r["town"]:{k:v for k,v in r.items() if k!="town"} for r in records},
-            "notChecked":[{"town":t,"reason":why} for t,why in not_checked]}
+            "notChecked":[{"town":t,"reason":why} for t,why in not_checked],
+            "places":{r["town"]:{k:v for k,v in r.items() if k!="town"} for r in place_records},
+            "placesNotChecked":[{"place":p,"reason":why} for p,why in places_not_checked]}
 
 # The day vocabulary, once. `parse_days` reads it in three places -- a range's two
 # ends and a bare day -- and three copies of one alternation is how they stop
@@ -555,10 +565,16 @@ def decision_change(route, entry, now, head):
 def diff_town(db, name, cfg, town_dir, today=None):
     # `today` is a parameter and not a call so that a harness can drive an expired
     # `recheckBy` deterministically; main passes the real date it already computed.
-    today=today or datetime.date.today().isoformat()
     vf=latest_verified(town_dir)
     if not vf: return None
     vs=json.load(open(vf,encoding="utf-8"))
+    return diff_shipped(db, name, cfg, vs, vf, today)
+
+def diff_shipped(db, name, cfg, vs, vf, today=None):
+    """The diff itself, over a shipped set already loaded. A town's comes from its
+    `verified-services.json`; a place's is built by `place_shipped` below, and both
+    go through this one body so a place cannot be graded by a second rule."""
+    today=today or datetime.date.today().isoformat()
     # GROUPED, not indexed. `{s["route"]: s for s in ...}` was here until 2026-08-28 and
     # it silently dropped a service on any town with two same-numbered routes: Wisbech
     # ships eleven and that comprehension built ten, so the Stagecoach East 46 had never
@@ -763,6 +779,96 @@ def diff_town(db, name, cfg, town_dir, today=None):
                                 "declares `notInBods`, but the feed carries it - the declaration is stale, delete it"))
     return {"file":vf,"verifiedOn":vs.get("verifiedOn"),"changes":changes}
 
+# A PLACE'S OWN GRADE (buses-data OA-628, 2026-10-11). Until then this report diffed
+# `Areas/<town>` and nothing else, and the worklist graded a place's refresh row by its
+# parent town -- so once OA-574 let a NOTHING grade close a row, a town graded NOTHING
+# closed its places' rows unexamined, and a place that draws a different set of
+# services was never asked about. Measured the day this was written: the four St Neots
+# places, each diffed on its own frame, graded NOTHING while the town was ESCALATE.
+#
+# THE SHIPPED SET IS S1's `gtfs-services.json`, NOT S6. A place has no
+# `verified-services.json`; its S1 writes the services the feed showed inside its own
+# frame (`near`, `atcoPrefixes`), and S3 draws from those. S6 is gitignored, so a grade
+# built from it would differ between this laptop and any other checkout.
+#
+# "NOT DRAWN" IS READ FROM THE LATEST S3 `routes.json`, because that is the only place a
+# place records it (Ely Co-op's `notOnLeaflet`, AJ2 with `servesTown: false`). The four
+# KNOWN_OFF_FIELDS are copied onto the shipped set, so a place's decision goes through
+# the same CONFIRMED / RE-EVAL arms as a town's, and a route a decision names is taken
+# out of the shipped side, exactly as a town's `servesTown: false` service is.
+# `notShown` is NOT one of them: it means "on the panel with no line" (St Neots' Ivel
+# Sprinter and Wanderbus, OA-049), which is a drawn service, not a decision to omit one.
+def read_json(path):
+    with open(path,encoding="utf-8") as f: return json.load(f)
+
+def latest_place_services(place_dir):
+    cands=sorted(glob.glob(os.path.join(place_dir,"S1-services","*","gtfs-services.json")))
+    return cands[-1] if cands else None
+
+def latest_place_routes(place_dir):
+    cands=sorted(glob.glob(os.path.join(place_dir,"S3-config","*","routes.json")))
+    return cands[-1] if cands else None
+
+def place_shipped(place_dir):
+    """-> (vs, file, cfg, None) for a place that can be graded, or (None, None, None, reason).
+
+    `vs` is in the shape `diff_shipped` reads from a town's verified-services.json;
+    `cfg` is the place's own frame, read from the same S1 file it was pulled with.
+    """
+    gf=latest_place_services(place_dir)
+    if not gf:
+        return (None,None,None,"no S1 run has a gtfs-services.json, so there is no shipped set to diff")
+    g=read_json(gf)
+    prefixes=g.get("atcoPrefixes") or None; near=g.get("near") or None
+    if not prefixes and not near:
+        return (None,None,None,f"{os.path.relpath(gf,place_dir)} records neither atcoPrefixes nor near, so its frame is unknown")
+    vs={"verifiedOn":os.path.basename(os.path.dirname(gf))}
+    rf=latest_place_routes(place_dir); drawn=None
+    if rf:
+        r=read_json(rf)
+        for field in KNOWN_OFF_FIELDS:
+            if isinstance(r.get(field),list): vs[field]=r[field]
+        # WHAT S3 DRAWS, where it says: S1 is everything the feed showed in the frame, and
+        # a place drops some of it with no field at all. St Ives Bus Station leaves the
+        # seasonal 101 out of `routeOrder` with only a prose `_route101Note`, so S1 alone
+        # graded it WITHDRAWN? 101 every month over a route neither sheet has ever shown.
+        # Measured 2026-10-11 over every gradeable place: S1 minus this set was only folded
+        # variants and deliberate omissions (101, the 604/624 school runs).
+        order=[x for k in ("routeOrder","panelOrder") if isinstance(r.get(k),list) for x in r[k]]
+        if order: drawn={str(x) for x in order}
+    off,_skipped=known_off_routes(vs)
+    off=set(off)|{str(x.get("route")) for x in vs.get("notOnLeaflet",[]) if isinstance(x,dict) and x.get("servesTown") is False}
+    vs["services"]=[{"route":str(s["route"]),"operator":s.get("operator") or "",
+                     "days":s.get("days") or fmt({i for i in range(7) if (s.get("daysFlags") or [0]*7)[i]})}
+                    for s in g.get("services") or []
+                    if str(s.get("route")) not in off and (drawn is None or str(s.get("route")) in drawn)]
+    return (vs,gf,{"prefixes":prefixes,"near":near},None)
+
+def place_dirs(root):
+    """-> [(key, town or None, dir)] for every place on disk, keyed "<Town>/<Place>" or
+    "_standalone/<Place>", the key the sidecar's `places` block and the worklist share."""
+    out=[]
+    for d in sorted(glob.glob(os.path.join(root,"Areas","*","Places","*"))):
+        if os.path.isdir(d):
+            town=os.path.basename(os.path.dirname(os.path.dirname(d)))
+            out.append((f"{town}/{os.path.basename(d)}",town,d))
+    for d in sorted(glob.glob(os.path.join(root,"Places","_standalone","*"))):
+        if os.path.isdir(d):
+            out.append((f"_standalone/{os.path.basename(d)}",None,d))
+    return out
+
+def standalone_db(gdir, gf, place_dir, regions):
+    """A standalone place has no town in town_prefixes.json to lend it a dataset, so its
+    region is the one its own S1 names: `source` reads "BODS GTFS (<region>)". -> (db, reason)."""
+    g=read_json(gf)
+    m=re.search(r"\(([^)]+)\)\s*$",str(g.get("source") or ""))
+    name=m.group(1).strip().lower() if m else None
+    r=regions.get(name) if name else None
+    if not r: return (None,f"its S1 source {json.dumps(g.get('source'))} names no registered region")
+    db=r.get("db") or os.path.join(gdir,f"{name}.sqlite")
+    if not os.path.isfile(db): return (None,f"dataset for region '{name}' is not built ({os.path.basename(db)} missing)")
+    return (db,None)
+
 def fmt(dayset):
     if not dayset: return "?"
     if dayset==set(range(7)): return "Daily"
@@ -818,6 +924,44 @@ if __name__=="__main__":
             for tag,r,msg in sorted(d["changes"]):
                 lines.append(f"- **[{tag}] {r}** — {msg}")
             lines.append("")
+    # EACH PLACE ON ITS OWN FRAME (OA-628): a nested place reads its town's dataset, a
+    # standalone one the region its S1 names, and a place that cannot be diffed is named
+    # with its reason -- never graded by its town instead.
+    regions,_=greg.load(gdir)
+    town_db={t:g["db"] for g in groups for t,_c in g["towns"]}
+    town_skip=dict(skipped)
+    place_records=[]; places_skipped=[]
+    for key,town,pdir in place_dirs(root):
+        if not os.path.isfile(os.path.join(pdir,"manifest.json")): continue
+        vs,gf,cfg,why=place_shipped(pdir)
+        db=None
+        if not why:
+            if a.db: db=a.db
+            elif town is not None:
+                db=town_db.get(town)
+                if not db: why=f"its town {town} was not checked ({town_skip.get(town,'not in town_prefixes.json')})"
+            else:
+                db,why=standalone_db(gdir,gf,pdir,regions)
+        if why:
+            places_skipped.append((key,why)); summary.append(f"  {key}: NOT CHECKED ({why})"); continue
+        d=diff_shipped(db,key,cfg,vs,gf,today)
+        rec=town_grade_record(key,d["changes"]); place_records.append(rec)
+        if rec["actionable"]: total_actionable+=rec["actionable"]; towns_to_review.append(key)
+        verdict = "NO CHANGE" if not d["changes"] else (f"{rec['actionable']} to review" if rec["actionable"] else "only expected community gaps")
+        verdict = verdict if rec["grade"]=="NOTHING" else f"{verdict} · {rec['grade']}"
+        summary.append(f"  {key}: {verdict}")
+        lines.append(f"## {key} (place) — {verdict}")
+        lines.append(f"_shipped set from S1 {d['verifiedOn']} gtfs-services.json · its own frame_")
+        if not d["changes"]:
+            lines.append("- No differences from the shipped service set.")
+        for tag,r,msg in sorted(d["changes"]):
+            lines.append(f"- **[{tag}] {r}** — {msg}")
+        lines.append("")
+    if places_skipped:
+        lines.append("## Places not checked")
+        for key,why in places_skipped:
+            lines.append(f"- **{key}** — {why}")
+        lines.append("")
     # Towns we deliberately did NOT diff. Reporting these loudly is the point: silently
     # running them against the wrong dataset is what produced a month of false withdrawals.
     if skipped:
@@ -835,7 +979,7 @@ if __name__=="__main__":
     # A trailing newline because every other text file in this tree carries one and
     # check-file-hygiene.mjs says so.
     open(os.path.join(gdir,f"refresh-grades_{today}.json"),"w",encoding="utf-8").write(
-        json.dumps(grades_payload(today,records,skipped),indent=2,ensure_ascii=False)+"\n")
+        json.dumps(grades_payload(today,records,skipped,place_records,places_skipped),indent=2,ensure_ascii=False)+"\n")
     # one-line summary for the Windows notification
     if total_actionable==0:
         headline="Bus data refreshed - nothing to do."

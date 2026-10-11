@@ -268,7 +268,9 @@ console.log('\n13. the wire in worklist.mjs — literal strings, not regexes');
     "row.shadowRegressed = row.engineStale && pinClock.regressed({ kind: 'place',",
     '...(mapRow.shadowRegressed ? { foldIntoHold:',
     // OA-574: a NOTHING grade closes both refresh paths, and says so in the adjudicated list.
-    'const none = nothingOwed(grades, s.town, upcoming.date);',
+    // OA-628: and a place row asks with its OWN key, so its town's grade never closes it.
+    'const gk = gradeKeyOf(m);',
+    'const none = nothingOwed(grades, s.town, upcoming.date, gk);',
     'if (none) { noteAdjudicated(',
     'const noneLocal = nothingOwed(grades, localTown.name, upcoming.date);',
     'if (noneLocal) { noteAdjudicated(',

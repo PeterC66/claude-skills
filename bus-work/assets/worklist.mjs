@@ -854,6 +854,16 @@ const localDirOf = (m) => {
     || tree.places.find((x) => want.includes(x.name.toLowerCase()));
   return pl ? pl.dir : null;
 };
+/* The grading's key for a map (buses-data OA-628): `{}` for a town, which reads the
+ * town's record, and for a place `{ kind: 'place', place: '<Town>/<Place>' }` — or
+ * `_standalone/<Place>` — which reads the place's own record and never the town's. A place
+ * whose folder cannot be found gets a key nothing matches, so it is graded by nobody. */
+const gradeKeyOf = (m) => {
+  if (m.kind === 'area') return {};
+  const dir = localDirOf(m);
+  const pl = dir && tree.places.find((x) => x.dir === dir);
+  return { kind: 'place', place: pl ? `${pl.town || '_standalone'}/${pl.name}` : null };
+};
 /* The monthly grading, read once (buses-data OA-426): does moving this sheet need a
  * PERSON? Matched to the scan the rows join to BY DATE and never otherwise, and
  * warnings rather than rows — `refresh_grades.mjs` says why at length. */
@@ -876,15 +886,16 @@ if (upcoming) {
       if (haveKey(`refresh-${m.slug}`)) continue; // the portal already flagged this one
       const seen = reviewedAgainst(localDirOf(m), upcoming.date);
       if (seen) { noteAdjudicated(`map:${m.slug}`, { map: m.name, scan: upcoming.date, by: seen.by, note: seen.note }); continue; }
-      const none = nothingOwed(grades, s.town, upcoming.date); // OA-574: a NOTHING grade is no actionable change, so nothing is owed
+      const gk = gradeKeyOf(m); // OA-628: a place is graded on its own record, never its town's
+      const none = nothingOwed(grades, s.town, upcoming.date, gk); // OA-574: a NOTHING grade is no actionable change, so nothing is owed
       if (none) { noteAdjudicated(`map:${m.slug}`, { map: m.name, scan: upcoming.date, by: 'graded NOTHING', note: none.note }); continue; }
       const skill = m.kind === 'place' ? 'make-place-bus-leaflet' : 'make-bus-leaflet';
       const un = unattendedRefresh(grades, s.town, upcoming.date, { kind: m.kind, assetsDir: SK });
       add({
         key: `refresh-${m.slug}`, rank: 5, type: 'refresh',
         title: `Refresh "${m.name}" — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'} in ${s.town}${when}`,
-        why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.${gradeSentence(grades, s.town, upcoming.date)}`,
-        grade: gradeFor(grades, s.town, upcoming.date),
+        why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.${gradeSentence(grades, s.town, upcoming.date, gk)}`,
+        grade: gradeFor(grades, s.town, upcoming.date, gk),
         unattended: un, effectiveDate: s.effective, map: m.name,
         who: m.customerName || 'unowned', ageDays: upcoming.ageDays, detail: s.body.split('\n').filter((l) => l.trim().startsWith('- ')).slice(0, 6).join('\n'),
         where: appUrl('/app/admin'), runbook: 'R4', skill, subject: s.town, kind: m.kind, slug: m.slug,

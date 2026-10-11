@@ -723,5 +723,105 @@ class GradeRecordAndSidecar(unittest.TestCase):
         self.assertEqual(json.loads(json.dumps(p, ensure_ascii=False)), p)
 
 
+class APlaceIsGradedOnItsOwnShippedSet(unittest.TestCase):
+    """buses-data OA-628: a place's grade, from its own S1 and S3, on its own frame.
+
+    Until 2026-10-11 no place had a grade, and the worklist borrowed its town's -- so a
+    town graded NOTHING closed its places' rows unexamined. The CONTROLS matter as much
+    as the quiet cases: a place diff that had stopped running would be quiet too.
+    """
+
+    def setUp(self):
+        self.root = _stubs.scratch("refresh-place-")
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.dir = os.path.join(self.root, "Areas", "Testbury", "Places", "Testbury Co-op")
+        self.saved = rr.gq
+        self.addCleanup(setattr, rr, "gq", self.saved)
+
+    def s1(self, services, near=(52.2, -0.27, 0.8), prefixes=None, run="2026-10-01_1015"):
+        _stubs.write_json(os.path.join(self.dir, "S1-services", run, "gtfs-services.json"),
+                          {"town": "Testbury Co-op", "atcoPrefixes": prefixes,
+                           "near": list(near) if near else None, "services": services})
+
+    def s3(self, routes):
+        _stubs.write_json(os.path.join(self.dir, "S3-config", "2026-10-01_1015", "routes.json"), routes)
+
+    def diff(self, feed):
+        asked = []
+        class Rec(StubFeed):
+            def query(s, db, prefixes, near, name):
+                asked.append((prefixes, near))
+                return {"services": s.services}
+        rr.gq = Rec(feed)
+        vs, gf, cfg, why = rr.place_shipped(self.dir)
+        self.assertIsNone(why)
+        d = rr.diff_shipped("unused.sqlite", "Testbury/Testbury Co-op", cfg, vs, gf, today="2026-10-11")
+        self.asked = asked
+        return [(tag, label) for tag, label, _msg in d["changes"]]
+
+    def svc(self, route, op="Stagecoach East", days_="Mon-Sat", week=None):
+        return {"route": route, "operator": op, "days": days_}
+
+    def test_an_unchanged_feed_is_nothing_and_is_asked_on_the_place_s_own_frame(self):
+        self.s1([self.svc("61")]); self.s3({"routeOrder": ["61"]})
+        self.assertEqual(self.diff([bods("61", "Stagecoach East", days("Mon", "Tue", "Wed", "Thu", "Fri", "Sat"))]), [])
+        self.assertEqual(self.asked, [(None, (52.2, -0.27, 0.8))])
+
+    def test_the_control_a_drawn_route_missing_from_the_shipped_set_is_ADD(self):
+        """Peter's own measurement, 2026-10-11: drop 61 and the place escalates on it."""
+        self.s1([self.svc("66")]); self.s3({"routeOrder": ["66"]})
+        self.assertEqual(self.diff([bods("61", "Stagecoach East", ALL), bods("66", "Stagecoach East", days("Mon", "Tue", "Wed", "Thu", "Fri", "Sat"))]),
+                         [("ADD?", "61")])
+
+    def test_a_route_s3_does_not_draw_is_not_shipped_so_its_end_is_not_a_withdrawal(self):
+        """St Ives Bus Station's seasonal 101: in S1, out of routeOrder, gone from the feed."""
+        self.s1([self.svc("A"), self.svc("101", "Whippet Coaches", "Daily")])
+        self.s3({"routeOrder": ["A"], "panelOrder": ["A"]})
+        self.assertEqual(self.diff([bods("A", "Stagecoach East", days("Mon", "Tue", "Wed", "Thu", "Fri", "Sat"))]), [])
+
+    def test_the_control_a_drawn_route_gone_from_the_feed_is_still_WITHDRAWN(self):
+        self.s1([self.svc("A"), self.svc("101", "Whippet Coaches", "Daily")])
+        self.s3({"routeOrder": ["A", "101"]})
+        self.assertEqual(self.diff([bods("A", "Stagecoach East", days("Mon", "Tue", "Wed", "Thu", "Fri", "Sat"))]),
+                         [("WITHDRAWN?", "101")])
+
+    def test_a_place_s_notOnLeaflet_decision_is_a_decision_and_not_news(self):
+        """Ely Co-op's AJ2: servesTown false in S3, in the feed -> RE-EVAL, never ADD?."""
+        self.s1([self.svc("9"), self.svc("AJ2", "A & J Coaches", "Mon-Fri")])
+        self.s3({"routeOrder": ["9"], "notOnLeaflet": [{"route": "AJ2", "servesTown": False, "note": "school"}]})
+        self.assertEqual(self.diff([bods("9", "Stagecoach East", days("Mon", "Tue", "Wed", "Thu", "Fri", "Sat")),
+                                    bods("AJ2", "A & J Coaches", MON_FRI)]), [("RE-EVAL", "AJ2")])
+
+    def test_the_newest_S1_with_the_file_is_the_one_read(self):
+        self.s1([self.svc("5")], run="2026-08-01_0000"); self.s1([self.svc("61")], run="2026-10-01_1015")
+        self.assertIn("2026-10-01_1015", rr.latest_place_services(self.dir))
+
+    def test_a_place_with_no_gtfs_services_is_named_and_not_graded(self):
+        os.makedirs(os.path.join(self.dir, "S1-services", "2026-08-23_1203"))
+        vs, gf, cfg, why = rr.place_shipped(self.dir)
+        self.assertIsNone(vs)
+        self.assertIn("gtfs-services.json", why)
+
+    def test_a_place_with_no_frame_is_named_and_not_graded(self):
+        self.s1([self.svc("61")], near=None)
+        self.assertIn("neither atcoPrefixes nor near", rr.place_shipped(self.dir)[3])
+
+    def test_place_dirs_keys_a_nested_and_a_standalone_place(self):
+        os.makedirs(self.dir)
+        os.makedirs(os.path.join(self.root, "Places", "_standalone", "Ely Co-op"))
+        self.assertEqual([(k, t) for k, t, _d in rr.place_dirs(self.root)],
+                         [("Testbury/Testbury Co-op", "Testbury"), ("_standalone/Ely Co-op", None)])
+
+    def test_the_payload_carries_places_beside_towns_and_keeps_schema_1(self):
+        p = rr.grades_payload("2026-10-01", [rr.town_grade_record("Testbury", [change("ADD?")])], [],
+                              [rr.town_grade_record("Testbury/Testbury Co-op", [])],
+                              [("_standalone/Ely Co-op", "no S1 gtfs-services.json")])
+        self.assertEqual(p["schema"], 1)
+        self.assertEqual(p["towns"]["Testbury"]["grade"], "ESCALATE")
+        self.assertEqual(p["places"], {"Testbury/Testbury Co-op": {"grade": "NOTHING", "actionable": 0, "reasons": []}})
+        self.assertEqual(p["placesNotChecked"], [{"place": "_standalone/Ely Co-op", "reason": "no S1 gtfs-services.json"}])
+        self.assertEqual(json.loads(json.dumps(p, ensure_ascii=False)), p)
+
+
 if __name__ == "__main__":
     unittest.main()

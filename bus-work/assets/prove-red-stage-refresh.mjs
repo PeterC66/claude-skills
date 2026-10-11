@@ -14,7 +14,7 @@
  * answer would flip if the rule were gone, shown beside it, so each rule is
  * load-bearing rather than merely present. No disk, no portal, no clock.
  */
-import { planStage, mapLocation, readBack, newestRender, planFlush, flushArgs, DELIVER_SCRIPT } from './stage_refresh.mjs';
+import { planStage, mapLocation, readBack, portalClear, newestRender, planFlush, flushArgs, DELIVER_SCRIPT } from './stage_refresh.mjs';
 import { deliverable, markStaged, markNotified, mergeAnswers, answer, Refused } from './ink_review.mjs';
 
 let bad = 0, ran = 0;
@@ -113,6 +113,21 @@ console.log('\n4. The read-back finds the update waiting on its customer, and no
   check('a refresh row for the map is not a staged update', !readBack({ maps, items: [{ ...waiting, type: 'refresh' }], slug: 'march' }).ok);
   check('an unknown slug says so', /no map with slug/.test(readBack({ maps, items: [waiting], slug: 'wisbech' }).why || ''));
   check('a name that merely CONTAINS the map\'s name does not match', !readBack({ maps: [{ slug: 'ely', name: 'Ely' }], items: [{ ...waiting, title: 'proposed update to "Ely Co-op"' }], slug: 'ely' }).ok);
+}
+
+console.log('\n4a. The portal is asked before the deliver command, not only the record (OA-573)');
+{
+  const maps = [{ slug: 'st-ives-bus-station', name: 'St Ives Bus Station' }, { slug: 'march', name: 'March' }];
+  const pending = { key: 'proposed-171', type: 'awaiting-customer', title: 'Waiting on BusMaps.uk (pilot) — proposed update to "St Ives Bus Station"' };
+  const clear = (items, slug = 'st-ives-bus-station', extra = {}) => portalClear({ maps, items, slug, ...extra });
+  /* The case OA-573 names: the record says deliverable, and the portal holds a hand staging. */
+  const unrecorded = review(map('St Ives Bus Station', 'no-ink', { kind: 'place', dir: 'Areas/St Ives/Places/St Ives Bus Station' }));
+  check('the record alone lets a hand-staged map through — the guard below is the only thing that stops it', plan(unrecorded, 'St Ives Bus Station', manifest(OLD, NEW), 'st-ives-bus-station') === null);
+  check('an update to the map already waiting on its customer refuses, naming it', !clear([pending]).ok && /already has an update to "St Ives Bus Station" waiting on its customer \(proposed-171\)/.test(clear([pending]).why), clear([pending]).why);
+  check('  and with no such row it is clear — the pending row is what the refusal turned on', clear([]).ok && clear([]).name === 'St Ives Bus Station');
+  check('a pending update to ANOTHER map does not refuse this one', clear([{ ...pending, title: pending.title.replace('"St Ives Bus Station"', '"March"') }]).ok);
+  check('a portal that could not be read refuses — unread is not clear', !clear(undefined, 'st-ives-bus-station', { error: 'the portal could not be read (/api/maps -> 503)' }).ok);
+  check('a slug the portal does not know refuses', !clear([], 'wisbech').ok && /no map with slug wisbech/.test(clear([], 'wisbech').why));
 }
 
 console.log('\n5. It runs what npm runs');

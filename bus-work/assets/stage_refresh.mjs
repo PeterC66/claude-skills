@@ -18,6 +18,10 @@
  *   - a build already staged is refused, so a second run is never a second email.
  *     The record is `staged` on the map in `_gtfs/ink-review_<scan>.json`, beside
  *     Peter's answer, and a LATER build of the same map is deliverable afresh.
+ *     A staging made by hand is recorded there with `ink_review.mjs --staged`;
+ *   - and because the record cannot know of a hand staging nobody recorded, the
+ *     portal is asked as well: an update to the map already waiting on its customer
+ *     refuses, and so does a portal that cannot be read (buses-data OA-573).
  *
  * ONE EMAIL PER CUSTOMER PER SCAN (buses-data OA-152). The loop stages one town a
  * tick, and `propose-update` would email each map's customer as it went — one
@@ -59,7 +63,8 @@
  *   node stage_refresh.mjs --scan <scan> --flush                                        dry run
  *   node stage_refresh.mjs --scan <scan> --flush --apply --by <who>
  *
- * The read-back needs BUSMAPS_URL and BUSMAPS_TOKEN, and the digest DEPLOY_HOST
+ * The portal guard and the read-back need BUSMAPS_URL and BUSMAPS_TOKEN, a dry run
+ * included, and the digest DEPLOY_HOST
  * and DEPLOY_APP_DIR (DEPLOY_SSH_KEY optional), all of which the portal's own .env
  * carries. Exit 0 on success, 2 on a refusal or a hold (the message names which).
  */
@@ -68,36 +73,15 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
-import { deliverable, markStaged, markNotified, Refused, commitRecord, reportCommit } from './ink_review.mjs';
+import { deliverable, markStaged, markNotified, Refused, commitRecord, reportCommit, newestRender, isRenderOf } from './ink_review.mjs';
 
 /* The portal's `deliver` npm script, run as its own command line rather than
  * through npm, because npm on Windows is a .cmd that Node will not spawn without
  * a shell. `main()` refuses if package.json no longer says exactly this. */
 export const DELIVER_SCRIPT = 'node --env-file-if-exists=.env scripts/deliver-map.mjs';
 
-const RUN_KEY = /(\d{4}-\d{2}-\d{2})_(\d{4})$/;
-const runKey = (id) => { const m = String(id || '').match(RUN_KEY); return m ? `${m[1]}_${m[2]}` : ''; };
-
-/** The newest S5 run in a manifest, by its own name rather than manifest order. */
-export function newestRender(manifest) {
-  const runs = ((manifest && manifest.stages && manifest.stages.S5 && manifest.stages.S5.runs) || [])
-    .filter((r) => runKey(r.id)).sort((a, b) => (runKey(a.id) < runKey(b.id) ? -1 : runKey(a.id) > runKey(b.id) ? 1 : 0));
-  return runs.length ? runs[runs.length - 1] : null;
-}
-
-/**
- * Is this S5 run the render of that S4 build? NOT by id: S5 names its folder by
- * its own start minute, so Ramsey's v3.6 is `_1141` in S4 and `_1142` in S5. A
- * run that declares `basedOn.S4` is taken at its word; most do not, and for those
- * the build's version, which is never reused, is the join.
- */
-const versionOf = (id) => (String(id || '').match(/^v(\d+(?:\.\d+)*)_/) || [])[1] || null;
-export function isRenderOf(render, s4Id) {
-  if (!render || !s4Id) return false;
-  if (render.basedOn && render.basedOn.S4) return render.basedOn.S4 === s4Id;
-  const v = render.version || versionOf(render.id);
-  return !!v && v === versionOf(s4Id);
-}
+/* The render helpers live in ink_review.mjs, which `--staged` needs them in; re-exported for this tool's readers. */
+export { newestRender, isRenderOf };
 
 /**
  * The folder a review entry says the map lives in, relative to the buses repository,
@@ -154,6 +138,23 @@ export function readBack({ maps, items, slug }) {
 }
 
 /**
+ * The second guard, asked of the PORTAL before the deliver command runs (buses-data
+ * OA-573): is an update to this map already waiting on its customer? The record's
+ * `staged` is the first guard, and it cannot know of a staging made by hand — St
+ * Ives Bus Station's #171 sat unrecorded for six days while `--deliverable` named
+ * the map. So a pending proposal refuses, whoever made it, and so does a portal
+ * that cannot be read: an unread portal is not a clear one. It cannot see a hand
+ * staging the customer has ALREADY accepted — that is `ink_review.mjs --staged`'s job.
+ */
+export function portalClear({ maps, items, slug, error }) {
+  if (error) return { ok: false, why: `${error}, so whether an update to ${slug} is already waiting could not be read — nothing was delivered` };
+  const rb = readBack({ maps, items, slug });
+  if (!rb.name) return { ok: false, why: `${rb.why}, so there is nothing to deliver it to` };
+  if (rb.ok) return { ok: false, why: `the portal already has an update to "${rb.name}" waiting on its customer (${rb.key}), staged by this tool or by hand — a second would be a second proposal and a second email. If it is this build, record it with ink_review.mjs --staged; if it is an older one, a person declines it first` };
+  return { ok: true, name: rb.name };
+}
+
+/**
  * Is the scan's digest due, and for which maps? (buses-data OA-152.) A map is OWED
  * the email when its current build was staged by this tool with `notify: 'digest'`
  * and no `notified` is recorded. Stagings made before the digest existed carry no
@@ -190,9 +191,10 @@ export function flushArgs({ host, key, appDir, slugs }) {
 
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return null; } };
 
-async function fetchReadBack(slug) {
+/** The portal's maps and worklist items, or `{ error }`; never throws. */
+async function fetchPortal() {
   const base = (process.env.BUSMAPS_URL || '').replace(/\/$/, ''), token = process.env.BUSMAPS_TOKEN || '';
-  if (!base || !token) return { ok: false, why: 'BUSMAPS_URL and BUSMAPS_TOKEN are not both set, so the staging could not be read back' };
+  if (!base || !token) return { error: 'BUSMAPS_URL and BUSMAPS_TOKEN are not both set' };
   const get = async (p) => {
     const res = await fetch(`${base}${p}`, { headers: { authorization: `Bearer ${token}` } });
     if (!res.ok) throw new Error(`${p} -> ${res.status}`);
@@ -200,8 +202,14 @@ async function fetchReadBack(slug) {
   };
   try {
     const [maps, wl] = await Promise.all([get('/api/maps'), get('/api/admin/worklist')]);
-    return readBack({ maps: maps.maps, items: wl.worklist && wl.worklist.items, slug });
-  } catch (e) { return { ok: false, why: `the portal could not be read (${e.message})` }; }
+    return { maps: maps.maps, items: wl.worklist && wl.worklist.items };
+  } catch (e) { return { error: `the portal could not be read (${e.message})` }; }
+}
+
+async function fetchReadBack(slug) {
+  const p = await fetchPortal();
+  if (p.error) return { ok: false, why: `${p.error}, so the staging could not be read back` };
+  return readBack({ ...p, slug });
 }
 
 /* Send the digest if it is due, and record it. A non-zero exit is a HOLD, never a
@@ -256,6 +264,10 @@ async function main() {
   const deliverArgs = ['--map', plan.slug, '--kind', plan.kind, '--src', src, '--note', plan.note, '--no-notify'];
   console.log(`stage_refresh: ${plan.town} ${plan.after} is deliverable. The command, in ${portal}:`);
   console.log(`  npm run deliver -- ${deliverArgs.map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ')}`);
+  /* Asked in a dry run too, so the tick that reads the dry run sees the refusal its --apply would get. */
+  const clear = portalClear({ ...(await fetchPortal()), slug: plan.slug });
+  if (!clear.ok) throw new Refused(`${plan.town} is not staged: ${clear.why}.`);
+  console.log(`  the portal has no update to "${clear.name}" waiting on its customer.`);
   if (!args.apply) {
     console.log('  dry run: nothing was staged and nobody was emailed. Add --apply --by <who> to stage it.');
     const after = planFlush(markStaged(review, plan.town, { slug: plan.slug, by: 'dry-run', at: '', notify: 'digest' }));

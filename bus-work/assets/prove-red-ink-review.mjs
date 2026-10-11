@@ -24,6 +24,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import {
   commitRecord, reportCommit, neutralise, inkChange, runDate, pickRuns, collect, mergeAnswers, answer, deliverable, page, resolvePlaces, carriedNames, withCarried, sameInkAsAnswered, Refused, SCHEMA,
+  recordStaged, markStaged, newestRender,
 } from './ink_review.mjs';
 
 let bad = 0, ran = 0;
@@ -296,6 +297,34 @@ console.log('\n7. The record commits itself — by pathspec, read back, never pu
   check('a commit that exits 0 but landed nothing fails the read-back', commitRecord({ root, file: rec, subject: 'ink-review: lie', git: liar }).status === 'failed');
   check('reportCommit is false for a failure and true for clean', reportCommit({ status: 'clean' }) === true && (console.error = () => {}, reportCommit({ status: 'failed', why: 'x' })) === false);
   rmSync(root, { recursive: true, force: true });
+}
+
+console.log('\n8. A staging made by hand is recorded against the build the review compared (OA-573)');
+{
+  const AFTER = 'v1.31_2026-10-03_0049', NEWER = 'v1.32_2026-10-07_0300';
+  const r = { schema: 1, scan: SCAN, maps: [{ map: 'St Ives Bus Station', kind: 'place', dir: 'Areas/St Ives/Places/St Ives Bus Station', status: 'ink-moved', before: 'v1.29_2026-09-29_1425', after: AFTER, sheets: [], answer: { verdict: 'accept', by: 'p', at: 'T0', after: AFTER } }] };
+  /* S5 names its folder by its own start minute, so the render's id is NOT the S4 id. */
+  const s5 = (id) => ({ id: id.replace(/_\d{4}$/, '_0059'), dir: `S5-render/${id}`, version: id.match(/^v([\d.]+)_/)[1] });
+  const opts = (extra = {}) => ({ slug: 'st-ives-bus-station', proposal: 171, by: 'peter', at: 'T1', render: s5(AFTER), ...extra });
+  check('before the record, the hand-staged map is under deliver — the fault OA-573 names', deliverable(r).deliver.join() === 'St Ives Bus Station');
+  const rec = recordStaged(r, 'st ives bus station', opts());
+  const st = rec.maps[0].staged;
+  check('recorded, it is staged and no longer deliverable', deliverable(rec).staged.join() === 'St Ives Bus Station' && !deliverable(rec).deliver.length, JSON.stringify(deliverable(rec)));
+  check('  against the review\'s after build, with the proposal number and who recorded it', st.after === AFTER && st.proposal === 171 && st.madeBy === 'hand' && st.by === 'peter' && st.slug === 'st-ives-bus-station', JSON.stringify(st));
+  check('  and owing no digest unless told to', st.notify === undefined && recordStaged(r, 'St Ives Bus Station', opts({ notify: 'digest' })).maps[0].staged.notify === 'digest');
+  check('a newest render that is NOT the review\'s build refuses', refuses(() => recordStaged(r, 'St Ives Bus Station', opts({ render: s5(NEWER) })), /not a staging of the build the review compared/));
+  check('  and with the matching render it does not — the render is what the refusal turned on', !refuses(() => recordStaged(r, 'St Ives Bus Station', opts())));
+  check('no render at all refuses', refuses(() => recordStaged(r, 'St Ives Bus Station', opts({ render: null })), /no S5 render/));
+  check('newestRender picks the newest by name, so a newer render on disk is what the refusal sees', newestRender({ stages: { S5: { runs: [s5(NEWER), s5(AFTER)] } } }).dir === `S5-render/${NEWER}`);
+  check('recording it twice refuses, naming the proposal', refuses(() => recordStaged(rec, 'St Ives Bus Station', opts()), /already recorded as staged by peter .* #171/));
+  check('a build stage_refresh already staged refuses too', refuses(() => recordStaged(markStaged(r, 'St Ives Bus Station', { slug: 'st-ives-bus-station', by: 'sched-0100', at: 'T' }), 'St Ives Bus Station', opts()), /already recorded/));
+  check('a proposal that is not a number refuses', refuses(() => recordStaged(r, 'St Ives Bus Station', opts({ proposal: '#171' })), /proposed-update number/));
+  check('no --by refuses', refuses(() => recordStaged(r, 'St Ives Bus Station', opts({ by: ' ' })), /--by is required/));
+  check('a slug that is not a slug refuses', refuses(() => recordStaged(r, 'St Ives Bus Station', opts({ slug: 'St Ives' })), /slug/));
+  check('a notify other than digest refuses', refuses(() => recordStaged(r, 'St Ives Bus Station', opts({ notify: 'email' })), /--notify/));
+  check('a map not in the review refuses', refuses(() => recordStaged(r, 'Ely', opts()), /not in the 2026-10-01 review/));
+  const kept = mergeAnswers(rec, { schema: 1, scan: SCAN, maps: [{ ...r.maps[0] }] });
+  check('re-collecting the same build keeps the hand staging and its proposal', kept.maps[0].staged && kept.maps[0].staged.proposal === 171 && deliverable(kept).staged.length === 1, JSON.stringify(kept.maps[0].staged));
 }
 
 console.log(`\n${ran - bad} of ${ran} passed`);

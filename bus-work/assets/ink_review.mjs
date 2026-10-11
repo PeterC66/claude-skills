@@ -94,6 +94,14 @@
  *   node ink_review.mjs ... --no-commit                     leave the record written and uncommitted
  *   node ink_review.mjs --scan <scan> --answer "<Town>" --verdict accept|hold --by <who> [--note "<why>"]
  *   node ink_review.mjs --scan <scan> --deliverable [--json] which maps a tick may deliver
+ *   node ink_review.mjs --scan <scan> --staged --town "<Map>" --map <slug> --proposal <n> --by <who> [--at <date>] [--notify digest]
+ *                                                            record a staging made by hand, not by stage_refresh.mjs
+ *
+ * For `--staged`, <Map> is the map's name as the review lists it, a town or a place;
+ * <slug> is the portal map's slug; <n> is the portal's proposed-update number; <date> is
+ * when the staging was made, e.g. 2026-10-05, defaulting to now; and
+ * `--notify digest` is added only if that staging went with `--no-notify` and its
+ * customer is still owed the round's email (buses-data OA-573).
  *
  * Exit 0 on success, 2 on a refusal (the message names the remedy).
  */
@@ -190,6 +198,31 @@ export function pickRuns(manifest, scan) {
   const before = runs.filter((r) => runDate(r.id) < scan).pop();
   if (!before) return { status: 'no-before', after };
   return { status: 'ok', before, after };
+}
+
+/**
+ * The newest S5 run in a manifest, by its own name rather than manifest order.
+ * Here rather than in `stage_refresh.mjs`, which re-exports it, because `--staged`
+ * asks the same question and this module must not import that one (it imports this).
+ */
+export function newestRender(manifest) {
+  const runs = ((manifest && manifest.stages && manifest.stages.S5 && manifest.stages.S5.runs) || [])
+    .filter((r) => runKey(r.id)).sort((a, b) => (runKey(a.id) < runKey(b.id) ? -1 : runKey(a.id) > runKey(b.id) ? 1 : 0));
+  return runs.length ? runs[runs.length - 1] : null;
+}
+
+/**
+ * Is this S5 run the render of that S4 build? NOT by id: S5 names its folder by
+ * its own start minute, so Ramsey's v3.6 is `_1141` in S4 and `_1142` in S5. A
+ * run that declares `basedOn.S4` is taken at its word; most do not, and for those
+ * the build's version, which is never reused, is the join.
+ */
+const versionOf = (id) => (String(id || '').match(/^v(\d+(?:\.\d+)*)_/) || [])[1] || null;
+export function isRenderOf(render, s4Id) {
+  if (!render || !s4Id) return false;
+  if (render.basedOn && render.basedOn.S4) return render.basedOn.S4 === s4Id;
+  const v = render.version || versionOf(render.id);
+  return !!v && v === versionOf(s4Id);
 }
 
 /**
@@ -359,6 +392,38 @@ export function markStaged(review, town, { slug, by, at, notify }) {
   return { ...review, maps };
 }
 
+/**
+ * Record a staging made OUTSIDE `stage_refresh.mjs` (buses-data OA-573). On 5 Oct
+ * Peter delivered St Ives Bus Station by hand as proposed update #171, because
+ * stage_refresh then refused places, and the record never learnt of it — so
+ * `--deliverable` kept naming the map under `deliver`, and the one thing between a
+ * tick and a second proposal was this same record. The staging recorded is of the
+ * review's `after` build, so it refuses unless the map's newest S5 render IS that
+ * build: a hand delivery of a newer render is not the build the review compared,
+ * and recording it against `after` would pass off one sheet as the other.
+ *
+ * `render` is the newest S5 run, read by the edge. `proposal` is the portal's
+ * proposed-update number, kept so the record can be checked against the portal.
+ * `notify` is `'digest'` only when the hand staging went with `--no-notify` and its
+ * customer is still owed the round's email; left out, nothing is owed, as for a
+ * staging that emailed its customer itself or one already accepted.
+ */
+export function recordStaged(review, town, { slug, proposal, by, at, render, notify }) {
+  if (!review || !Array.isArray(review.maps)) throw new Refused('there is no ink review for this scan, so there is nothing to record a staging against.');
+  if (!slug || typeof slug !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) throw new Refused(`--map must be the portal map's slug, not ${JSON.stringify(slug)}.`);
+  if (!/^[1-9]\d*$/.test(String(proposal ?? ''))) throw new Refused(`--proposal must be the portal's proposed-update number, e.g. 171, not ${JSON.stringify(proposal)}.`);
+  if (!by || typeof by !== 'string' || !by.trim()) throw new Refused('--by is required: a staging nobody recorded is not a record.');
+  if (notify !== undefined && notify !== null && notify !== 'digest') throw new Refused(`--notify is "digest" or left out, not ${JSON.stringify(notify)}.`);
+  const m = review.maps.find((x) => x.map.toLowerCase() === String(town || '').toLowerCase());
+  if (!m) throw new Refused(`${town} is not in the ${review.scan} review; it holds ${review.maps.map((x) => x.map).join(', ') || 'nothing'}.`);
+  if (m.staged && m.staged.after === m.after) throw new Refused(`${m.map} ${m.after} is already recorded as staged by ${m.staged.by} at ${m.staged.at}${m.staged.proposal ? ` (proposed update #${m.staged.proposal})` : ''}.`);
+  if (!render) throw new Refused(`${m.map} has no S5 render in its manifest, so no staging of ${m.after} can have been made.`);
+  if (!isRenderOf(render, m.after)) throw new Refused(`${m.map}'s newest render is ${render.id} and the review's build is ${m.after}, so a staging of the newest render is not a staging of the build the review compared — re-run ink_review.mjs --scan ${review.scan} first.`);
+  const staged = markStaged(review, m.map, { slug, by: by.trim(), at, ...(notify ? { notify } : {}) });
+  const maps = staged.maps.map((x) => (x.map === m.map ? { ...x, staged: { ...x.staged, proposal: Number(proposal), madeBy: 'hand' } } : x));
+  return { ...staged, maps };
+}
+
 /** Record that the round's digest email went for these towns' current stagings (buses-data OA-152). */
 export function markNotified(review, towns, { by, at }) {
   const want = new Set(towns.map((t) => String(t).toLowerCase()));
@@ -483,6 +548,22 @@ function main() {
     const m = next.maps.find((x) => x.map.toLowerCase() === args.answer.toLowerCase());
     console.log(`ink_review: ${m.map} ${m.answer.verdict} for ${m.after}, recorded in ${file}`);
     if (!args['no-commit'] && !reportCommit(commitRecord({ root: busesDir, file, subject: `ink-review: ${m.map} ${m.answer.verdict} for ${m.after}` }))) process.exitCode = 2;
+    return;
+  }
+  if (args.staged) {
+    if (!prev) throw new Refused(`there is no review for ${scan} yet (${file}); collect it first.`);
+    const town = typeof args.town === 'string' ? args.town : typeof args.place === 'string' ? args.place : '';
+    const entry = prev.maps && prev.maps.find((x) => x.map.toLowerCase() === town.toLowerCase());
+    const mapDir = entry ? path.join(busesDir, entry.dir === undefined ? path.join('Areas', entry.map) : entry.dir) : null;
+    const render = mapDir ? newestRender(readJson(path.join(mapDir, 'manifest.json'))) : null;
+    /* `--at` is when the staging was MADE, which a hand staging recorded later is not now. */
+    const at = typeof args.at === 'string' ? args.at : new Date().toISOString();
+    if (!/^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/.test(at) || Number.isNaN(Date.parse(at))) throw new Refused(`--at must be a date such as 2026-10-05, not ${JSON.stringify(at)}.`);
+    const next = recordStaged(prev, town, { slug: args.map, proposal: args.proposal, by: typeof args.by === 'string' ? args.by : '', at, render, notify: typeof args.notify === 'string' ? args.notify : undefined });
+    writeFileSync(file, JSON.stringify(next, null, 2) + '\n');
+    const m = next.maps.find((x) => x.map === entry.map);
+    console.log(`ink_review: ${m.map} ${m.after} recorded as staged by hand, proposed update #${m.staged.proposal}${m.staged.notify ? ', its customer owed the digest' : ', no email owed'}, in ${file}`);
+    if (!args['no-commit'] && !reportCommit(commitRecord({ root: busesDir, file, subject: `ink-review: ${m.map} ${m.after} recorded as staged by hand (proposed update #${m.staged.proposal})` }))) process.exitCode = 2;
     return;
   }
   if (args.deliverable) {

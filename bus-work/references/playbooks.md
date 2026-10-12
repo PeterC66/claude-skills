@@ -327,6 +327,21 @@ The first of each pair is a dry run: it asks Overpass, which is a read, and writ
 
 **Find a map's latest S4 run from its `manifest.json`, `stages.S4.latest` — never `ls S4-generate/*/ | tail -1`**, which sorts by name and so puts `v3.12` before `v3.9`: on 2026-09-25 that picked Ramsey's `v3.9` run instead of `v3.12`.
 
+### Adopt the placed layout — one `adopt-knobs-<map>` row per town or place since 2026-10-13
+
+The map's newest S3 still types something the engine now works out for itself (buses-data OA-437): a top-level `mapNotes` entry with an `x` or `y` and no `at` (its `w` goes with it), `legendAt`, `legendWrap`, `design.howToUse.width`, `badgeOffset`, `externalNoteAt` (which nothing reads), typed `design.howToUse.bullets`, or a demand-responsive line that `fact_notes.js`'s own check says is not the register's tagged block. A typed value is still obeyed and no rebuild strips one, so the engine half, live since 2026-10-12, reaches a sheet only through a new S3. `panelCols.keyAt` and `keyCols` raise nothing yet, because their engine half is not built, and `parked.` raises nothing, because no generator draws it. A stop-anchored note keeps its `x`/`y`, which `gen_internal.js` reads only when the stop is unknown. The row is computed by `assets/knob_adopt.mjs` from the newest S3 alone and goes when that S3 is clean; a register or `fact_notes.js` that cannot be read prints a warning instead of judging the lines. `npm run test:prove-red-knob-adopt`, run from `bus-work/`, holds every branch, the real `checkConfig` and the wire.
+
+It is a SESSION row: the loop takes only the row kinds its prompt names, and a re-placed note, legend or help panel is a new layout that someone compares with the previous version before it is accepted. Do not take it for a map whose sheet is with a local reviewer. The row's own steps are the commands, run from `C:\Buses\claude-skills\make-bus-leaflet\assets`; in them `<Town>` is the town's folder name under `Areas/`, `<Place>` a place map's folder name as `status.js` prints it, `<notes.json>` a UTF-8 file holding `{"mapNotes":[...]}` — the whole new array, because `--set-file` replaces an array — `<keys>` the row's own `--unset` list, and `<who>` the session's name:
+
+```powershell
+node fact_notes.js --name "<Town>" --facts "C:/Buses/buses-data/service-facts.json"
+node adopt_config.js --town "<Town>" --set-file "<notes.json>" <keys>
+node adopt_config.js --town "<Town>" --set-file "<notes.json>" <keys> --apply --by <who> --note "OA-437 adoption: the engine places these"
+node rollout.js --town "<Town>" --apply --commit --note "OA-437 adoption"
+```
+
+A place takes `--place "<Place>"` and `rollout_places.js`. Before accepting, put the previous and new S4 sheets side by side with `node crop_compare.js <previous S4 svg> <new S4 svg> <out-prefix> --diff 3` for each sheet, then enrol the map in the month's ink review with `ink_review.mjs --scan <scan date> --town "<Town>"`, the gate before delivery.
+
 ### S6 missing or stale
 
 S6 is the independent, antagonistic verification pass — a cross-model red-team that re-derives the services from scratch and is diffed against ours. It is what catches the worst class of error: a route we still draw that no longer runs.

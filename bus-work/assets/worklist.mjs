@@ -82,6 +82,7 @@ import { annotateRequest } from './complexity_band.mjs';
 import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { freshPullItems, readCurrentQuery, readRecordedQuery, s2Row } from './fresh_pull.mjs';
+import { knobAdoptItems, readKnobInputs } from './knob_adopt.mjs';
 import { localDecisionItems } from './local_decisions.mjs';
 import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, foldHeldRows, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems, loopSilentItems, readSchedule } from './loop_runs.mjs';
@@ -1081,6 +1082,7 @@ for (const t of tree.towns.filter((t) => !t.built)) {
 const freshPull = freshPullItems({ towns: tree.towns, places: tree.places || [], currentQuery: readCurrentQuery(SK), readRecorded: readRecordedQuery, sk: SK || '' });
 if (freshPull.warning) warnings.push(freshPull.warning);
 for (const it of freshPull.items) add(it);
+{ const k = knobAdoptItems({ towns: tree.towns, places: tree.places || [], ...readKnobInputs(SK || '', BUSES) }); if (k.warning) warnings.push(k.warning); for (const it of k.items) add(it); } // OA-437: adopt-knobs-<map>, a typed layout the engine now places
 /*
  * ONE REBUILD ROW PER MAP, NOT ONE ROW FOR THE ESTATE (buses-data OA-430, R9 item 6).
  * This was a single `engine-stale` row naming every behind town in its `why`, with

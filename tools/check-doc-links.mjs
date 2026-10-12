@@ -410,6 +410,41 @@ if (WALK_WHOLE_TREE) {
  * widening would have been untestable by the harness that exists to test it. */
 for (const root of WALK_WHOLE_TREE ? [ROOT] : DIRS.map((d) => path.join(ROOT, d)))
   for (const d of archiveDirsUnder(root)) walk(d, archived);
+
+/* A DOCUMENT GIT IGNORES IS NOT IN THE CORPUS (buses-data, 2026-10-12). The
+ * declared folders are walked from the disk, so a gitignored file inside one —
+ * buses-data's generated `Development Docs/open-actions-index.md` is the one
+ * that bit — was read here and in no checkout. When that index went stale it
+ * cited a retired action, the link checker exited 1 on the laptop only, and
+ * session after session stopped mid-push to work out that the finding was in a
+ * file CI never sees. It is L4 read the other way: L4 is a link INTO ignored
+ * territory, this is a document that lives there.
+ *
+ * IGNORED, NOT UNTRACKED. A new document nobody has committed yet is exactly
+ * what the hook exists to check, so only a file `.gitignore` excludes is
+ * dropped, and `git check-ignore` honours the negations (`loop/README.md`) the
+ * same way the L4 block below relies on. One call for both lists. Where git
+ * cannot be asked — `--root` at a scratch tree — every document stays in,
+ * because a corpus that shrinks when the question fails is the coverage fault
+ * this checker's sibling has had twice. */
+let ignoredDocs = 0;
+{
+  const all = [...corpus, ...archived];
+  const shown = all.map((p) => path.relative(ROOT, p).replace(/\\/g, '/'));
+  const r = all.length
+    ? spawnSync('git', ['-C', ROOT, 'check-ignore', '--stdin', '-z'], { input: shown.join('\0') + '\0', encoding: 'utf8' })
+    : null;
+  if (r && !r.error && r.status === 0) {
+    const ignored = new Set((r.stdout || '').split('\0').filter(Boolean));
+    const keep = (list) => {
+      const kept = list.filter((p) => !ignored.has(path.relative(ROOT, p).replace(/\\/g, '/')));
+      ignoredDocs += list.length - kept.length;
+      list.splice(0, list.length, ...kept);
+    };
+    keep(corpus);
+    keep(archived);
+  }
+}
 const ARCHIVED = new Set(archived);
 
 /* ---------- reading a document ---------- */
@@ -904,6 +939,9 @@ if (advisories.length) {
 
 if (ignoreUnasked)
   console.log(`\n${ignoreUnasked} link target${ignoreUnasked === 1 ? '' : 's'} not checked against .gitignore — git could not be asked here, so nothing says whether any of them is missing from a checkout. This line reads 0 in any repository.`);
+
+if (ignoredDocs)
+  console.log(`\n${ignoredDocs} document${ignoredDocs === 1 ? '' : 's'} on this disk not read, because git ignores ${ignoredDocs === 1 ? 'it' : 'them'} — no checkout has ${ignoredDocs === 1 ? 'it' : 'them'}, so CI could never agree with a finding in ${ignoredDocs === 1 ? 'it' : 'them'}.`);
 
 if (legal)
   console.log(`\n${legal} licence or statute clause citation${legal === 1 ? '' : 's'} skipped — a § preceded by ODbL, GDPR or the like belongs to a document we did not write.`);

@@ -478,15 +478,22 @@ report(d4.code === 2 && /does not parse/.test(d4.out),
  * the only thing separating "the repository this is about" from "the folder I am
  * standing in". Defaulting to the root is what every case here did before
  * OA-275, and it is why none of them could see the fault. */
-function repoFixture(files, { staged = true, from = '' } = {}) {
+/* `untracked` is written AFTER the `git add`, so it sits on the disk beside
+ * tracked documents without being tracked itself — a draft before its first
+ * commit, which is what the hook sees. */
+function repoFixture(files, { staged = true, from = '', untracked = {} } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'doclinks-repo-'));
-  for (const [name, body] of Object.entries(files)) {
-    const p = path.join(dir, name);
-    mkdirSync(path.dirname(p), { recursive: true });
-    writeFileSync(p, body, 'utf8');
-  }
+  const write = (set) => {
+    for (const [name, body] of Object.entries(set)) {
+      const p = path.join(dir, name);
+      mkdirSync(path.dirname(p), { recursive: true });
+      writeFileSync(p, body, 'utf8');
+    }
+  };
+  write(files);
   spawnSync('git', ['-C', dir, 'init', '-q'], { encoding: 'utf8' });
   if (staged) spawnSync('git', ['-C', dir, 'add', '-A'], { encoding: 'utf8' });
+  write(untracked);
   const r = spawnSync(process.execPath, [CHECKER], { cwd: path.join(dir, from), encoding: 'utf8' });
   rmSync(dir, { recursive: true, force: true });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
@@ -711,6 +718,39 @@ console.log('\nA link whose target git ignores — alive here, dead in every che
   report(r.status === 0 && /not checked against .gitignore/.test(out),
     'a tree git cannot be asked about says how many targets went unchecked'
     + (r.status === 0 ? '' : `  <-- exited ${r.status}\n${out}`), 'GREEN');
+}
+
+/* ---------- A DOCUMENT GIT IGNORES (buses-data, 2026-10-12) ----------
+ *
+ * The other direction from L4: not a link INTO ignored territory but a document
+ * that LIVES there, inside a declared folder the checker walks from the disk.
+ * buses-data's generated, gitignored `open-actions-index.md` went stale, cited a
+ * retired action, and turned the push preflight red on the laptop alone. The
+ * first case is the one that was red before the fix; the second is its control,
+ * because dropping UNTRACKED documents instead of IGNORED ones would also pass
+ * the first and would stop the hook checking a document before its first commit. */
+console.log('\nA document git ignores, inside a declared folder:\n');
+{
+  const ignoredDoc = repoFixture({
+    '.gitignore': 'docs/generated-index.md\n',
+    '.doc-links.json': '{ "dirs": ["docs"] }',
+    'docs/page.md': '# Page\n\nAll well.\n',
+    'docs/generated-index.md': '# Index\n\nSee [a retired action](actions/OA-1.md).\n',
+  });
+  report(ignoredDoc.code === 0 && /1 document on this disk not read, because git ignores it/.test(ignoredDoc.out),
+    'a dead link inside a gitignored document is not a finding, and the run says it skipped one'
+    + (ignoredDoc.code === 0 ? '' : `  <-- exited ${ignoredDoc.code}, a file no checkout has turned the run red\n${ignoredDoc.out}`), 'GREEN');
+  const n = counted(ignoredDoc.out);
+  report(!!n && n.corpus === 1, `it read ${n ? n.corpus : 'no'} documents — the tracked page, not the ignored index`, 'GREEN');
+}
+{
+  const draft = repoFixture({
+    '.doc-links.json': '{ "dirs": ["docs"] }',
+    'docs/page.md': '# Page\n\nAll well.\n',
+  }, { untracked: { 'docs/new-draft.md': '# Draft\n\nSee [nothing at all](no-such-file.md).\n' } });
+  report(draft.code === 1 && /new-draft\.md/.test(draft.out),
+    'L1  an untracked document git does NOT ignore is still read — the hook checks it before its first commit'
+    + (draft.code === 1 ? '' : `  <-- exited ${draft.code}\n${draft.out}`));
 }
 
 console.log(`\n${failed ? `${failed} CHECK${failed === 1 ? '' : 'S'} COULD NOT BE FALSIFIED` : 'Every check was watched go red, every control stayed green, the portability cases behave the same on any platform, and the default corpus was counted rather than assumed.'}`);

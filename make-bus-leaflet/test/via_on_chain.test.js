@@ -64,9 +64,9 @@ test('with no register nothing is called off-chain, and it says it did not run',
   assert.match(r.notRun, /no NaPTAN register/);
 });
 
-test('not yet a gate: off-chain places are SOFT until OA-636 flips GATES', () => {
-  assert.strictEqual(GATES, false);
-  assert.strictEqual(run(V60).severity, 'soft');
+test('a gate: an off-chain place is HARD (buses-data OA-636)', () => {
+  assert.strictEqual(GATES, true);
+  assert.strictEqual(run(V60).severity, 'hard');
 });
 
 test('viaPlaces reads the panel\'s own grammar', () => {

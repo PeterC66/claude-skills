@@ -41,13 +41,15 @@
  */
 const fs = require('fs');
 
-/* NOT YET A GATE. Run across the estate on 2026-10-12 it raised 24 off-chain
- * places on 8 maps besides Huntingdon's route 9 — some look like real sheet
- * errors, some like places an express passes without stopping — and none has
- * been ruled on. Until they are, an off-chain place is SOFT: reported on every
- * S6, blocking none. Flipping this to true is the gate, and it is buses-data
- * OA-636's to flip once each of those findings has an answer. */
-const GATES = false;
+/* A GATE SINCE buses-data OA-636 (2026-10-12). The estate run that landed this
+ * check SOFT raised 24 off-chain places on 8 maps besides Huntingdon's route 9.
+ * Every one was ruled a SHEET ERROR against every trip of the route in the feeds
+ * and the operator's timetable page: none is a stop filed under another locality,
+ * and the two that looked like pass-throughs (103 by Eton, 102 by West Drayton,
+ * each about 340 m off the road) name places no passenger can board at. So the
+ * rule needs no exception: a sheet names only places the bus calls at. The fix
+ * for each is in OA-636 and lands in that map's next S3; this makes its S6 say so. */
+const GATES = true;
 
 function normPlace(s) {
   return String(s || '').toLowerCase()

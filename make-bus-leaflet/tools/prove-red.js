@@ -3200,9 +3200,9 @@ const MUTATIONS = [
     to: "  const mine = claims;" },
 
   { suite: 'via_on_chain.test.js', file: 'via_on_chain.js',
-    what: 'the gate is switched on before OA-636 has ruled on the estate\'s findings',
-    find: "const GATES = false;",
-    to: "const GATES = true;" },
+    what: 'the gate is switched off, so a sheet sending a route through a place it never calls at is delivered',
+    find: "const GATES = true;",
+    to: "const GATES = false;" },
 
   { suite: 'via_on_chain.test.js', file: 'via_on_chain.js',
     what: 'a bracket is read as places, so "(some via Gransden)" becomes a stop',

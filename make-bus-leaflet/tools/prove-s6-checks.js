@@ -1902,7 +1902,7 @@ console.log('\n23. Via places — a place the sheet sends a route through must b
     check('LOUD — via Hartford, a register locality on none of route 9\'s stops, is found in the panel AND on the spoke', 'two via-off-chain findings on 9, one per place it is written',
       l.length === 2 && l.some(f => /internalDesc/.test(f.evidence.where)) && l.some(f => /external/.test(f.evidence.where)),
       JSON.stringify(l.map(f => f.severity + ' ' + f.evidence.where)));
-    check('and it is SOFT until OA-636 makes it a gate', 'severity soft', l.length > 0 && l.every(f => f.severity === 'soft'), JSON.stringify(l.map(f => f.severity)));
+    check('and it is HARD, a gate since OA-636', 'severity hard', l.length > 0 && l.every(f => f.severity === 'hard'), JSON.stringify(l.map(f => f.severity)));
 
     const quiet = verify(withText('via-good', 'Godmanchester'), { VERIFY_NAPTAN: reg });
     check('QUIET — the same run via Godmanchester, which IS on the chain, raises nothing', 'no via-off-chain on 9',

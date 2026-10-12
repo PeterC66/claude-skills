@@ -53,6 +53,7 @@ const { checkDrawnWindow } = require('./window_contiguity');
 const { displayedRoutes } = require('./displayed_routes');
 const { continuationBearing } = require('./direction_continuation');
 const { trunkFindings } = require('./trunk_segments');
+const { viaOnChain, openRegister } = require('./via_on_chain');
 
 function main() {   // OA-344: the body is guarded, not re-indented — see test/asset_load.test.js
 const DIR = process.env.VERIFY_DIR || process.cwd();
@@ -785,6 +786,12 @@ if (termUnavailable.length) {
     + ` Nothing was compared on these routes, so this is a limit of the check rather than evidence about the sheet — read the termini on _latest/internal.jpg instead.`,
     { routes: termUnavailable, checkedRoutes: termChecked, skipped: termSkipped, displayedRoutes: displayed.size, allBlind }, null);
 }
+
+// S-4b (buses-data OA-631): every spoke stop and Services-panel "via" place lies on the route's own chain; the rule is via_on_chain.js.
+const via = viaOnChain({ routes, displayed, norm: normRoute, chainOf: r => fullAllStops(fullEntry(r)),
+  register: openRegister(process.env.VERIFY_NAPTAN || findUp(DIR, '_gtfs', 'naptan.sqlite')) });
+for (const o of via.offChain) add(via.severity, 'via-off-chain', `Route ${o.route}: the sheet sends it through ${o.name} (${o.where}), a NaPTAN locality on none of its own chain's stops (${o.chainLocalities.join(', ')}).`, o, o.route);
+if (via.notRun || via.unverifiable.length) add('soft', 'via-unverifiable', via.notRun ? `Via places not checked: ${via.notRun}.` : `Via places not checkable (${via.checked} checked): ${via.unverifiable.map(u => `${u.route} ${u.name} — ${u.why}`).join('; ')}.`, { notRun: via.notRun, unverifiable: via.unverifiable, checked: via.checked }, null);
 
 /* S-5: direction sanity — the drawn edge stop heads toward the terminus.
  *

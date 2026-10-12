@@ -3178,6 +3178,37 @@ const MUTATIONS = [
     find: "    for (const f of trunkFindings(corr.trunks)) add('hard', 'trunk-stack-incomplete',",
     to: "    for (const f of trunkFindings(corr.trunks)) add('soft', 'trunk-stack-incomplete'," },
 
+  // via_on_chain.js — S6's "via" check (buses-data OA-631 part 2, 2026-10-12).
+  { suite: 'via_on_chain.test.js', file: 'via_on_chain.js',
+    what: 'any chain at all vouches for any place, so Huntingdon v6.0 sends route 9 through Hartford unseen',
+    find: "    if (locs.some(l => samePlace(c.name, l))) continue;",
+    to: "    if (locs.length) continue;" },
+
+  { suite: 'via_on_chain.test.js', file: 'via_on_chain.js',
+    what: 'every name the chain lacks is HARD, so "Wyton" and "the Busway" block a sheet over a word',
+    find: "    if (register.isLocality(c.name)) offChain.push(",
+    to: "    if (true) offChain.push(" },
+
+  { suite: 'via_on_chain.test.js', file: 'via_on_chain.js',
+    what: 'the spoke destination is asked too, so every chain cut at the region edge goes red',
+    find: "    for (const name of (sp.stops || []).filter(n => !samePlace(n, sp.label || ''))) claims.push(",
+    to: "    for (const name of (sp.stops || [])) claims.push(" },
+
+  { suite: 'via_on_chain.test.js', file: 'via_on_chain.js',
+    what: 'a route the sheet does not draw is asked about',
+    find: "  const mine = claims.filter(c => c.routes.some(r => displayed.has(norm(r))));",
+    to: "  const mine = claims;" },
+
+  { suite: 'via_on_chain.test.js', file: 'via_on_chain.js',
+    what: 'the gate is switched on before OA-636 has ruled on the estate\'s findings',
+    find: "const GATES = false;",
+    to: "const GATES = true;" },
+
+  { suite: 'via_on_chain.test.js', file: 'via_on_chain.js',
+    what: 'a bracket is read as places, so "(some via Gransden)" becomes a stop',
+    find: "  for (const seg of String(text || '').replace(/\\([^)]*\\)/g, ' ').split('·')) {",
+    to: "  for (const seg of String(text || '').split('·')) {" },
+
 
   // portal_listing.js and engine_lag.js — buses-data OA-607. "Off the portal" may
   // drop a map from the ceiling only on a list somebody read, and only by its name.

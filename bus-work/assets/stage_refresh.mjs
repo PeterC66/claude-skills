@@ -21,7 +21,10 @@
  *     A staging made by hand is recorded there with `ink_review.mjs --staged`;
  *   - and because the record cannot know of a hand staging nobody recorded, the
  *     portal is asked as well: an update to the map already waiting on its customer
- *     refuses, and so does a portal that cannot be read (buses-data OA-573).
+ *     refuses, and so does a portal that cannot be read (buses-data OA-573);
+ *   - the deliver script's own step 0 is asked first, in the dry run too: an S6 that
+ *     is not a fresh pass refuses here unless the portal's waiver file defers it
+ *     (buses-data OA-615, `s6Clear()` below).
  *
  * ONE EMAIL PER CUSTOMER PER SCAN (buses-data OA-152). The loop stages one town a
  * tick, and `propose-update` would email each map's customer as it went — one
@@ -71,7 +74,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 import { deliverable, markStaged, markNotified, Refused, commitRecord, reportCommit, newestRender, isRenderOf } from './ink_review.mjs';
 
@@ -155,6 +158,29 @@ export function portalClear({ maps, items, slug, error }) {
 }
 
 /**
+ * The portal deliver script's STEP 0, asked before this tool says "deliverable"
+ * (buses-data OA-615 item 4). `deliver-map.mjs` refuses a map whose newest S6 is not
+ * a pass newer than its newest S1-S3 data, unless a dated entry in the portal's
+ * `scripts/s6-waivers.json` defers it. On 2026-10-11 this tool's dry run called
+ * Godmanchester Co-op Cambridge Road deliverable, Peter approved the --apply on that
+ * strength, and step 0 refused it: nothing left the laptop, but the approval was for
+ * a run that could not happen. So the question is now asked in the dry run, and of
+ * the portal's own code rather than a copy: `r` is its `checkS6()` result, `refuses`
+ * its predicate and `waiver` its `findWaiver()` answer. Mirrors `gateS6()` branch for
+ * branch: fresh and not-applicable pass, a refusing verdict passes only under a live
+ * deferral, and anything else — no manifest, a verdict step 0 does not know — refuses.
+ */
+export function s6Clear(r, { refuses, waiver = null }) {
+  if (!r || !r.verdict) return { ok: false, why: 'the S6 freshness check returned no verdict' };
+  if (r.verdict === 'fresh') return { ok: true, said: `S6 fresh — ${r.message}` };
+  if (r.verdict === 'not-applicable') return { ok: true, said: `S6 not applicable — ${r.message}` };
+  if (r.verdict === 'no-manifest') return { ok: false, why: `the deliver script's step 0 cannot tell: ${r.message}` };
+  if (!refuses(r.verdict)) return { ok: false, why: `the deliver script's step 0 does not know the verdict "${r.verdict}" and would refuse it: ${r.message}` };
+  if (waiver && !waiver.expired) return { ok: true, said: `S6 ${r.verdict}, deferred until ${waiver.until} in the portal's scripts/s6-waivers.json — ${r.message}` };
+  return { ok: false, why: `the deliver script's step 0 would refuse it (S6 ${r.verdict}): ${r.message}${waiver ? ` Its deferral in scripts/s6-waivers.json expired on ${waiver.until}.` : ''} Re-run S6 for it — redteam_source.js from the new S6 run dir first — and stage after that` };
+}
+
+/**
  * Is the scan's digest due, and for which maps? (buses-data OA-152.) A map is OWED
  * the email when its current build was staged by this tool with `notify: 'digest'`
  * and no `notified` is recorded. Stagings made before the digest existed carry no
@@ -204,6 +230,19 @@ async function fetchPortal() {
     const [maps, wl] = await Promise.all([get('/api/maps'), get('/api/admin/worklist')]);
     return { maps: maps.maps, items: wl.worklist && wl.worklist.items };
   } catch (e) { return { error: `the portal could not be read (${e.message})` }; }
+}
+
+/** Step 0 asked of the portal checkout the deliver command runs from; never throws. */
+export async function askS6(portal, src, kind) {
+  const lib = path.join(portal, 'scripts', 'lib', 's6-freshness.mjs');
+  if (!existsSync(lib)) return { ok: false, why: `the portal at ${portal} has no scripts/lib/s6-freshness.mjs, so the deliver script's step 0 could not be asked` };
+  try {
+    const { checkS6, refuses, findWaiver } = await import(pathToFileURL(lib).href);
+    const wf = path.join(portal, 'scripts', 's6-waivers.json');
+    const waivers = existsSync(wf) ? JSON.parse(readFileSync(wf, 'utf8')) : { waive: [] };
+    const r = checkS6({ srcDir: src, kind });
+    return s6Clear(r, { refuses, waiver: findWaiver(waivers, r.town) });
+  } catch (e) { return { ok: false, why: `the deliver script's step 0 could not be asked (${e.message})` }; }
 }
 
 async function fetchReadBack(slug) {
@@ -262,8 +301,12 @@ async function main() {
   const pkg = readJson(path.join(portal, 'package.json'));
   if (!pkg || !pkg.scripts || pkg.scripts.deliver !== DELIVER_SCRIPT) throw new Refused(`the portal's deliver script is no longer \`${DELIVER_SCRIPT}\` (${portal}), so this tool would not be running what npm runs — update DELIVER_SCRIPT.`);
   const deliverArgs = ['--map', plan.slug, '--kind', plan.kind, '--src', src, '--note', plan.note, '--no-notify'];
+  /* Before "deliverable" is said, so a dry run never promises what step 0 refuses (OA-615). */
+  const s6 = await askS6(portal, src, plan.kind);
+  if (!s6.ok) throw new Refused(`${plan.town} ${plan.after} is not deliverable: ${s6.why}.`);
   console.log(`stage_refresh: ${plan.town} ${plan.after} is deliverable. The command, in ${portal}:`);
   console.log(`  npm run deliver -- ${deliverArgs.map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ')}`);
+  console.log(`  ${s6.said}`);
   /* Asked in a dry run too, so the tick that reads the dry run sees the refusal its --apply would get. */
   const clear = portalClear({ ...(await fetchPortal()), slug: plan.slug });
   if (!clear.ok) throw new Refused(`${plan.town} is not staged: ${clear.why}.`);

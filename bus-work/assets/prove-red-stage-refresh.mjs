@@ -14,7 +14,7 @@
  * answer would flip if the rule were gone, shown beside it, so each rule is
  * load-bearing rather than merely present. No disk, no portal, no clock.
  */
-import { planStage, mapLocation, readBack, portalClear, newestRender, planFlush, flushArgs, DELIVER_SCRIPT } from './stage_refresh.mjs';
+import { planStage, mapLocation, readBack, portalClear, newestRender, planFlush, flushArgs, s6Clear, DELIVER_SCRIPT } from './stage_refresh.mjs';
 import { deliverable, markStaged, markNotified, mergeAnswers, answer, Refused } from './ink_review.mjs';
 
 let bad = 0, ran = 0;
@@ -155,6 +155,25 @@ console.log('\n6. One digest per scan, when the last town is staged (OA-152)');
   check('the ssh argv runs the portal\'s own caller in its app folder, in batch mode', (() => { const a = flushArgs({ host: 'u@h', key: 'k', appDir: '/opt/x', slugs: ['march', 'ely'] }); return a.join(' ') === '-i k -o BatchMode=yes u@h cd /opt/x && docker compose exec -T portal node scripts/notify-update-round.mjs --map march,ely'; })());
   check('  and refuses with no host, rather than guessing one', /DEPLOY_HOST/.test(refusal(() => flushArgs({ host: '', appDir: '/opt/x', slugs: ['march'] })) || ''));
   check('  and refuses a slug that could carry a shell word', /not all slugs/.test(refusal(() => flushArgs({ host: 'u@h', appDir: '/opt/x', slugs: ['march;rm'] })) || ''));
+}
+
+console.log('\n7. The deliver script\'s step 0, asked before "deliverable" is said (OA-615)');
+{
+  // The portal's REFUSING_VERDICTS as of 2026-10-11; the tool is handed the portal's own predicate.
+  const refuses = (v) => ['stale', 'never', 'failed', 'unverified', 'no-verdict'].includes(v);
+  const r = (verdict) => ({ verdict, town: 'Godmanchester Co-op Cambridge Road', message: `S6 says ${verdict}` });
+  check('a fresh pass is clear, and the dry run says why', s6Clear(r('fresh'), { refuses }).ok && /S6 fresh/.test(s6Clear(r('fresh'), { refuses }).said));
+  const stale = s6Clear(r('stale'), { refuses });
+  check('an S6 older than the data refuses, as step 0 did on 2026-10-11 after the dry run said deliverable', !stale.ok && /step 0 would refuse it \(S6 stale\)/.test(stale.why) && /redteam_source\.js/.test(stale.why), stale.why);
+  check('  and a live deferral in the waiver file lets it through, as step 0 does', s6Clear(r('stale'), { refuses, waiver: { until: '2099-01-01', expired: false } }).ok);
+  const expired = s6Clear(r('stale'), { refuses, waiver: { until: '2026-01-01', expired: true } });
+  check('  but an expired one does not, and is named', !expired.ok && /expired on 2026-01-01/.test(expired.why), expired.why);
+  check('a BLOCKED S6 refuses however recent it is', !s6Clear(r('failed'), { refuses }).ok);
+  check('never verified refuses', !s6Clear(r('never'), { refuses }).ok);
+  check('no S6 stage at all is an exemption step 0 prints and passes', s6Clear(r('not-applicable'), { refuses }).ok);
+  check('no manifest refuses, and a waiver cannot buy it off', !s6Clear(r('no-manifest'), { refuses, waiver: { until: '2099-01-01', expired: false } }).ok);
+  check('a verdict step 0 does not know refuses rather than passing', !s6Clear(r('maybe'), { refuses, waiver: { until: '2099-01-01', expired: false } }).ok);
+  check('no answer at all refuses', !s6Clear(null, { refuses }).ok);
 }
 
 console.log(`\n${ran - bad} of ${ran} passed`);

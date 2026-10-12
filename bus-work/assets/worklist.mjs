@@ -97,7 +97,8 @@ import { unsentLetterItem } from './outbound_letter.mjs';
 import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_pending.mjs';
 import { readScanState, bodsScanItems, readGtfsDirt, gtfsUncommittedItems } from './bods_scan.mjs';
 import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh, nothingOwed, placeGradeOpts } from './refresh_grades.mjs';
-import { earliestEffective, compareRows } from './refresh_deadline.mjs';
+import { compareRows } from './refresh_deadline.mjs';
+import { parseUpcoming, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
@@ -394,7 +395,7 @@ function fromMapTree() {
    * services calling at THESE STOPS. That is evidence rather than a verdict, and
    * a row that did not say so would read as a stronger result than it is.
    */
-  const places = findPlaces(findTowns(BUSES)).map((p) => {
+  const places = findPlaces(findTowns(BUSES), BUSES).map((p) => {
     const m = readJson(path.join(p.dir, 'manifest.json'));
     const s4 = latestRunDir(m, p.dir, 'S4');
     const row = { name: p.name, town: p.town, dir: p.dir, built: !!s4, version: s4 ? s4.rec.version : null };
@@ -428,9 +429,8 @@ function fromMapTree() {
 }
 
 // ---- local map tree: upcoming BODS changes ---------------------------------
-// Same report and same town->map matching rule as the portal's own
-// scripts/check-upcoming-refreshes.mjs, so the two never disagree about which
-// map a town section belongs to.
+// The section-to-map join is the portal's (scripts/lib/upcoming-report.mjs), in
+// upcoming_sections.mjs; this file kept an older one until OA-615 found it out.
 function fromUpcomingReport() {
   const dir = path.join(BUSES, '_gtfs', 'upcoming');
   if (!existsSync(dir)) return null;
@@ -439,11 +439,8 @@ function fromUpcomingReport() {
   const file = path.join(dir, files[files.length - 1]);
   const date = (files[files.length - 1].match(/(\d{4}-\d{2}-\d{2})/) || [])[1];
   const md = readFileSync(file, 'utf8');
-  const sections = md.split(/^## /m).slice(1).map((part) => {
-    const m = part.match(/^(.+?) — (\d+) upcoming(?:, (\d+) to verify)?\r?\n([\s\S]*)$/);
-    return m ? { town: m[1].trim(), upcoming: Number(m[2]), toVerify: Number(m[3] || 0), body: m[4], effective: earliestEffective(m[4]) } : null;
-  }).filter(Boolean);
-  return { file, date, ageDays: daysSince(date), sections };
+  const all = parseUpcoming(md);
+  return { file, date, ageDays: daysSince(date), sections: all.filter((s) => s.actionable), placeAware: all.some((s) => s.kind === 'place') };
 }
 
 // ---- correspondence: real people waiting on us -----------------------------
@@ -798,28 +795,9 @@ const haveKey = (k) => items.some((i) => i.key === k);
  * hides rows without saying so has the same problem as one carrying rows nobody can
  * clear.
  */
-/*
- * COUNTED ONCE PER MAP, which the row path gets for free and this one does not.
- * `townMaps()` matches a place by its `subject` CONTAINING the section's town, so a
- * place whose own subject also contains its own section name matches twice: once
- * from the parent town's section, once from its own. St Ives Bus Station is exactly
- * that — subject "St Ives Bus Station" contains both "st ives" and "st ives bus
- * station" — while St Neots Co-op is not, because its subject is only "St Neots".
- *
- * A duplicate ROW cannot happen, because `haveKey('refresh-<slug>')` sees the first
- * one. But an ADJUDICATED map never adds a row, so that guard never arms and the
- * second match pushed the same map onto this list again. Observed 2026-09-03: eleven
- * suppressed maps reported as twelve. That is only a count, but the count is the
- * whole oversight mechanism this block exists for — the header says how many were
- * suppressed precisely so a suppression that has gone wrong is visible to whoever is
- * already reading, and a list that cannot count cannot do that job.
- *
- * NOT COVERED BY prove-red-refresh-review.mjs, deliberately said out loud rather than
- * left to be discovered: that harness runs with `--portal` at a directory which does
- * not exist, so it exercises the `refresh-local` row and never reaches `townMaps()`
- * at all. The local path cannot reproduce this — it resolves a section to a town by
- * exact name, so a place's section matches no town and pushes nothing.
- */
+/* COUNTED ONCE PER MAP: an adjudicated map adds no row, so `haveKey` cannot stop a
+ * map that two sections match being listed twice (eleven suppressed maps reported as
+ * twelve, 2026-09-03). prove-red-refresh-review.mjs cases 18-22 reach this join. */
 const adjudicated = [];
 const adjudicatedSeen = new Set();
 const noteAdjudicated = (key, entry) => {
@@ -838,11 +816,9 @@ const reviewedAgainst = (mapDir, scanDate) => {
 };
 /*
  * A PLACE HAS ITS OWN FILE, and this resolver is the reason that is true rather
- * than hoped for. `townMaps()` below matches a place by its `subject` containing
- * the town name, so `High Wycombe Aldi` gets a row out of the High Wycombe section
- * of the scan — but its map folder is its OWN, so the town's review is not found
- * for it. Adjudicating a town does not adjudicate a place whose frame is different
- * and whose sheet draws a different set of services (OA-205 item 4).
+ * than hoped for: a place's row is suppressed by a review in its OWN folder, never
+ * its town's, whose frame and services differ (OA-205 item 4); and the folder's
+ * name is the second key `sectionMaps()` joins a place section on (OA-615).
  */
 const localDirOf = (m) => {
   if (m.kind === 'area') {
@@ -861,15 +837,11 @@ const grades = readGradeState({ busesDir: BUSES });
 /* A refresh row's FIRST step: the one command when a tick can do it, the skill otherwise. */
 const rebuildStep = (u, what) => (u ? { kind: 'shell', cwd: u.cwd, cmd: u.cmd } : { kind: 'skill', what });
 for (const w of gradeWarnings(grades, upcoming ? upcoming.date : null)) warnings.push(w);
-const townMaps = (town) => {
-  const lower = town.toLowerCase();
-  return (portal ? portal.maps : []).filter((m) => m.built && (
-    m.kind === 'area' ? m.name.toLowerCase() === lower : (m.subject || '').toLowerCase().includes(lower)
-  ));
-};
+const folderOf = (m) => { const d = localDirOf(m); return d ? path.basename(d) : null; };
+const townMaps = (s) => sectionMaps(portal ? portal.maps : [], s, { placeAware: upcoming.placeAware, folderOf });
 if (upcoming) {
   for (const s of upcoming.sections) {
-    const maps = townMaps(s.town);
+    const maps = townMaps(s);
     const when = s.effective ? `, the first taking effect ${s.effective}` : ''; // the scan's own earliest date (refresh_deadline.mjs)
     const localTown = tree.towns.find((t) => t.name.toLowerCase() === s.town.toLowerCase());
     for (const m of maps) {
@@ -882,7 +854,7 @@ if (upcoming) {
       const un = unattendedRefresh(grades, s.town, upcoming.date, { kind: m.kind, assetsDir: SK });
       add({
         key: `refresh-${m.slug}`, rank: 5, type: 'refresh',
-        title: `Refresh "${m.name}" — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'} in ${s.town}${when}`,
+        title: `Refresh "${m.name}" — ${changesPhrase(s)} in ${s.town}${when}`,
         why: `The ${upcoming.date} BODS scan found changes this map does not draw yet. Not yet flagged in the portal — run \`npm run check-upcoming\` to record it there too.${gradeSentence(grades, s.town, upcoming.date, gk)}`,
         grade: gradeFor(grades, s.town, upcoming.date, gk),
         unattended: un, effectiveDate: s.effective, map: m.name,
@@ -911,7 +883,7 @@ if (upcoming) {
       const unLocal = unattendedRefresh(grades, localTown.name, upcoming.date, { kind: 'area', assetsDir: SK });
       add({
         key: `refresh-local-${localTown.name}`, rank: 7, type: 'refresh-local',
-        title: `Refresh the ${localTown.name} leaflet — ${s.upcoming} upcoming service change${s.upcoming === 1 ? '' : 's'}${when}`,
+        title: `Refresh the ${localTown.name} leaflet — ${changesPhrase(s)}${when}`,
         why: `${localTown.name} has a built leaflet (v${localTown.version}) but no portal map, so nothing flags it. The printed sheet is going stale.${gradeSentence(grades, localTown.name, upcoming.date)}`,
         grade: gradeFor(grades, localTown.name, upcoming.date),
         unattended: unLocal, effectiveDate: s.effective, map: localTown.name,

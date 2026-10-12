@@ -67,6 +67,8 @@ const RUNS = {
   //  route T5 leaves south-east to Fordham, then turns south-west to Cambridge:
   //  101 degrees between its edge stop and its terminus, on a correct sheet (OA-416)
   soham: 'Areas/Soham/S6-verify/2026-09-24_1414',
+  //  route 9 has a spoke and a panel row; v6.0 sent it via Hartford (OA-631)
+  huntingdon: 'Areas/Huntingdon/S6-verify/2026-10-12_0709',
 };
 
 const TMP = scratchDir('prove-s6-');
@@ -1138,8 +1140,10 @@ console.log('\n13. The stop register — it may only ever REMOVE a terminus find
     // differ in nothing but the register, so any finding present with the
     // resolving register and absent without it would be one this code invented.
     const key = (f) => f.severity + '/' + f.category + '/' + (f.route || '-') + '/' + String(f.message).slice(0, 60);
+    // The via check (section 23) is the one reader that ADDS from the register by design —
+    // it cannot call a place off-chain without one — so this claim is about everything else.
     const bareKeys = new Set((bare.v ? bare.v.findings : []).map(key));
-    const invented = (good.v ? good.v.findings : []).filter(f => !bareKeys.has(key(f)));
+    const invented = (good.v ? good.v.findings : []).filter(f => !bareKeys.has(key(f)) && !f.category.startsWith('via-'));
     check('and it never ADDS a finding', 'no finding present with the register and absent without it',
       invented.length === 0, JSON.stringify(invented.map(key)));
   } else if (token) {
@@ -1840,6 +1844,70 @@ console.log('\n22. Direction — a route that turns after leaving town is SOFT, 
   check('the same route genuinely reversed still goes HARD', 'hard direction on T5, its continuation more than 90 degrees off too',
     !!h && h.evidence.continuationApart > 90,
     r.v ? JSON.stringify(r.v.findings.filter(f => f.route === 'T5').map(f => `${f.severity}/${f.category} ${f.evidence.continuationApart}`)) : 'no report');
+}
+
+/* ------------------- 23. via places — on the route's own chain (buses-data OA-631) */
+console.log('\n23. Via places — a place the sheet sends a route through must be on that route\'s chain');
+{
+  /*
+   * Huntingdon v6.0 sent route 9 "via Hartford & Wyton" in the panel and on the
+   * spoke; it runs Godmanchester and the Hemingfords. The rule is via_on_chain.js
+   * and its unit test holds every clause; this section holds the WIRING — that
+   * verify_report.js asks the question, of the run's own chain, through the
+   * register it is given. Same register discipline as section 13: a register built
+   * here, because CI has none, and the register arms NOT RUN where node:sqlite is
+   * absent. Route 9's chain stops are all filed as Godmanchester, and one stop that
+   * is on no chain is Hartford, so the ONLY variable between the arms is the text.
+   */
+  const DatabaseSync = (() => {
+    const emit = process.emitWarning;
+    process.emitWarning = (w, ...rest) => (/SQLite is an experimental feature/.test(typeof w === 'string' ? w : (w && w.message) || '') ? undefined : emit.call(process, w, ...rest));
+    try { return require('node:sqlite').DatabaseSync; } catch { return null; } finally { process.emitWarning = emit; }
+  })();
+  const viaOn9 = (v) => (v ? v.findings : []).filter(f => f.category === 'via-off-chain' && f.route === '9');
+  const withText = (name, place) => {
+    const d = stage('huntingdon', name);
+    const rj = readJ(d, 'routes.json');
+    const sp = (rj.external || []).find(s => String(s.route) === '9');
+    if (!sp || !rj.internalDesc || !rj.internalDesc['9']) throw new Error('prove-s6-checks: Huntingdon no longer draws route 9 with a spoke and a panel row — pick another route, do not delete the case');
+    sp.stops = [place, sp.label];
+    rj.internalDesc['9'] = [rj.internalDesc['9'][0], `Mon & Fri · via ${place}`];
+    writeJ(d, 'routes.json', rj);
+    return d;
+  };
+  const bad = withText('via-bad', 'Hartford');
+
+  const bare = verify(bad, { VERIFY_NAPTAN: path.join(TMP, 'no-such-register.sqlite') });
+  check('with no register nothing is called off-chain, and the report says it did not run', 'no via-off-chain on 9, a soft via-unverifiable naming the missing register',
+    viaOn9(bare.v).length === 0 && !!bare.v && bare.v.findings.some(f => f.category === 'via-unverifiable' && f.evidence.notRun),
+    bare.v ? JSON.stringify(bare.v.findings.filter(f => f.category.startsWith('via-')).map(f => f.severity + '/' + f.category)) : 'no report');
+
+  if (!DatabaseSync) {
+    console.log(`  NOT RUN  the two register arms — this Node (${process.version}) has no node:sqlite`);
+  } else {
+    const reg = path.join(TMP, 'via-register.sqlite');
+    const db = new DatabaseSync(reg);
+    db.exec('create table naptan (ATCOCode text, LocalityName text, ParentLocalityName text)');
+    const ins = db.prepare('insert into naptan values (?, ?, ?)');
+    const full = readJ(bad, 'routes_full_atco.json');
+    const k9 = Object.keys(full).find(k => String(k).toUpperCase() === '9');
+    const stops9 = new Set(k9 ? (full[k9].all || Object.values(full[k9].directions || {}).flatMap(d => d.stops || [])) : []);
+    if (!stops9.size) throw new Error('prove-s6-checks: Huntingdon route 9 has no chain in routes_full_atco.json — pick another route, do not delete the case');
+    for (const a of stops9) ins.run(a, 'Godmanchester', null);
+    ins.run('0500HXXXX001', 'Hartford', 'Huntingdon');     // on no chain
+    db.close();
+
+    const loud = verify(bad, { VERIFY_NAPTAN: reg });
+    const l = viaOn9(loud.v);
+    check('LOUD — via Hartford, a register locality on none of route 9\'s stops, is found in the panel AND on the spoke', 'two via-off-chain findings on 9, one per place it is written',
+      l.length === 2 && l.some(f => /internalDesc/.test(f.evidence.where)) && l.some(f => /external/.test(f.evidence.where)),
+      JSON.stringify(l.map(f => f.severity + ' ' + f.evidence.where)));
+    check('and it is SOFT until OA-636 makes it a gate', 'severity soft', l.length > 0 && l.every(f => f.severity === 'soft'), JSON.stringify(l.map(f => f.severity)));
+
+    const quiet = verify(withText('via-good', 'Godmanchester'), { VERIFY_NAPTAN: reg });
+    check('QUIET — the same run via Godmanchester, which IS on the chain, raises nothing', 'no via-off-chain on 9',
+      viaOn9(quiet.v).length === 0, JSON.stringify(viaOn9(quiet.v).map(f => f.message)));
+  }
 }
 console.log('\n' + '='.repeat(78));
 console.log(failures

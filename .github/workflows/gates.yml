@@ -584,6 +584,13 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-fresh-pull
 
+      # buses-data OA-437 (2026-10-13): the adopt-knobs row, one per map whose newest
+      # S3 still types a layout the engine now places. Judges demand-responsive lines
+      # through the REAL fact_notes.js, so a change to its check reaches the row.
+      - name: Prove the adopt-knobs row can go red
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-knob-adopt
+
       # buses-data OA-251 (2026-09-05): the CI-red worklist row. Nine sections over
       # run FIXTURES -- no gh, no network, no GitHub account -- because the verdict
       # is what can be wrong, not whether the GitHub CLI works.

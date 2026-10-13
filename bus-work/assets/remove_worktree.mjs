@@ -32,6 +32,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { findLinks } from './worktree_sweep.mjs';
+import { parseArgs } from './engine.mjs';
 
 const git = (dir, ...argv) => {
   try { return { ok: true, out: execFileSync('git', ['-C', dir, ...argv], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim() }; }
@@ -99,12 +100,13 @@ export function removeWorktree(wtArg, { apply = false, log = console.log, warn =
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const a = process.argv.slice(2);
-  const named = a.filter((x) => !x.startsWith('--'));
-  const unknown = a.filter((x) => x.startsWith('--') && x !== '--apply');
+  const args = parseArgs(process.argv.slice(2));
+  // `--apply "<path>"` parses as apply = the path; take it as the path either way round.
+  const named = [...args._, ...(typeof args.apply === 'string' ? [args.apply] : [])];
+  const unknown = Object.keys(args).filter((k) => k !== '_' && k !== 'apply');
   if (named.length !== 1 || unknown.length) {
-    console.error('usage: node remove_worktree.mjs "<worktree path>" [--apply]' + (unknown.length ? ` — unknown flag ${unknown[0]}` : ''));
+    console.error('usage: node remove_worktree.mjs "<worktree path>" [--apply]' + (unknown.length ? ` — unknown flag --${unknown[0]}` : ''));
     process.exit(2);
   }
-  process.exit(removeWorktree(named[0], { apply: a.includes('--apply') }));
+  process.exit(removeWorktree(named[0], { apply: args.apply !== undefined }));
 }

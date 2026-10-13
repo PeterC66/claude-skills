@@ -101,6 +101,29 @@ function argsOf() {
   return { as: i >= 0 ? a[i + 1] : null, force: a.includes('--force') };
 }
 
+/*
+ * WHICH TOWN FOLDER — the one named on the line, else the one the cwd is in.
+ * Until 2026-10-13 these five commands read the cwd and nothing else, so
+ * `detach --as <s> "<town folder>"` run from the repository root ignored the path
+ * and refused; `git worktree remove` ran after it anyway and deleted through the
+ * still-standing junctions. A named folder must hold manifest.json itself (no walk
+ * up from a path somebody typed), and any other argument is refused, never ignored.
+ */
+function townDirOf(findTownDir, die) {
+  const [cmd, ...a] = process.argv.slice(2), named = [];
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === '--as') { i++; continue; }
+    if (a[i] === '--force') continue;
+    if (a[i].startsWith('--')) die(cmd + ': unknown flag ' + a[i] + ' — this command takes --as <session>, --force and one town folder', 2);
+    named.push(a[i]);
+  }
+  if (named.length > 1) die(cmd + ': one town folder at most, got ' + named.length + ': ' + named.join(' | '), 2);
+  if (!named.length) return findTownDir();
+  const dir = path.resolve(named[0]);
+  if (!fs.existsSync(path.join(dir, 'manifest.json'))) die(cmd + ': no manifest.json in ' + dir + ' — name the town or place folder itself', 2);
+  return dir;
+}
+
 // The commands, called from stage.js's dispatch with its own `die`. attach and lock take the town's lock
 // (town_lock.js) in the MAIN checkout's town folder; detach and unlock give it back.
 function run(cmd, townDir, die) {
@@ -116,8 +139,12 @@ function run(cmd, townDir, die) {
   }
   if (cmd === 'unlock' || cmd === 'detach') {
     if (cmd === 'detach') {
+      // Exit 0 from detach means "no attach junction is left in this folder", so `detach && git worktree remove` is safe.
+      if (where.main) die('detach: ' + townDir + ' is in the main checkout, where nothing is attached — name the WORKTREE\'s town folder (`unlock` gives a lock back)', 2);
       const gone = detachLinks(townDir);
       console.log(gone.length ? 'detached: ' + gone.join(', ') : 'nothing attached');
+      const left = ATTACH_DIRS.filter(d => isLink(path.join(townDir, d)));
+      if (left.length) die('detach: still a link after detach: ' + left.join(', ') + ' — do NOT remove this worktree', 1);
     }
     if (!as && !force) { console.log('lock left as it is — pass --as <session name> to release yours'); return; }
     const r = lock.release(lockedDir, as, { force });
@@ -140,4 +167,4 @@ function run(cmd, townDir, die) {
   if (r.refused.length) die('attach: ' + r.refused.length + ' folder(s) refused, nothing in them was touched (the town lock is still yours — unlock to give it back)', 1);
 }
 
-module.exports = { attachLinks, detachLinks, mainTownDir, ATTACH_DIRS, run };
+module.exports = { attachLinks, detachLinks, mainTownDir, townDirOf, ATTACH_DIRS, run };

@@ -42,8 +42,14 @@
  *             rather than trusting that the non-forced path cannot do the same.
  *             Measured when this was built: with the guard mutated out, git's
  *             non-forced remove took a worktree holding an IGNORED junction and
- *             left the target intact — so the guard is a second layer, not the
- *             only one, and it costs one row for a person when it fires.
+ *             left the target intact. That is NOT general: on 2026-10-13 a plain
+ *             non-forced remove of a clean buses-data worktree still carrying
+ *             `stage.js attach`'s junctions (whose CONTENTS are ignored, and one
+ *             of which holds tracked files) exited 0 and emptied the main
+ *             checkout's S4-S6 runs of a map. So this guard is load-bearing, and
+ *             a person clearing a row it raises uses `remove_worktree.mjs`, which
+ *             unlinks attach's junctions first (make-bus-leaflet's
+ *             test/stage_attach.test.js holds the Windows control).
  *
  * Removal is `git worktree remove` without --force, so git itself refuses
  * anything dirty a second time. The branch is deleted afterwards only when the

@@ -14,7 +14,12 @@
  *   4. the output a worktree built is still there once the worktree is REMOVED
  *      (the control asserts it is lost without `attach`, so the test can fail);
  *   5. the per-town lock: one holder per town, two towns at once, a held town
- *      refused before anything is junctioned, an expired lease taken over.
+ *      refused before anything is junctioned, an expired lease taken over;
+ *   6. a town folder NAMED on the line is the one used, from any cwd, and an
+ *      argument that cannot be honoured is refused, never ignored (2026-10-13);
+ *   7. bus-work's remove_worktree.mjs unlinks attach's junctions before git
+ *      removes the tree, and refuses a link it did not make. On Windows the
+ *      control shows plain `git worktree remove` emptying the main checkout.
  *
  * Run from `C:\u3a St Ives\.claude\skills\make-bus-leaflet`, no arguments:
  *     npm test
@@ -42,10 +47,13 @@ function fixture() {
   const main = path.join(root, 'main');
   const wt = path.join(root, 'wt');
   fs.mkdirSync(path.join(main, 'Areas', 'Town', 'S6-verify', 'r1'), { recursive: true });
-  fs.writeFileSync(path.join(main, 'Areas', 'Town', 'manifest.json'), JSON.stringify({ town: 'Town', stages: {} }) + '\n');
+  // A full manifest, as `init` writes it: a partial one is rewritten by the first stage.js call, and that one
+  // modified file is all that made git refuse a plain remove here until 2026-10-13 — a real town's tree is clean.
+  assert.strictEqual(spawnSync(process.execPath, [STAGE, 'init', path.join(main, 'Areas', 'Town'), 'Town']).status, 0);
   fs.writeFileSync(path.join(main, 'Areas', 'Town', 'S6-verify', 'r1', 'redteam.json'), '{"a":1}\n');
   fs.writeFileSync(path.join(main, '.gitignore'), 'Areas/**/S4-generate/**\nAreas/**/S5-render/**\nAreas/**/_latest/**\nAreas/**/S6-verify/**\n!Areas/**/S6-verify/**/redteam.json\n');
   git(main, 'init', '-q', '-b', 'main');
+  git(main, 'config', 'core.autocrlf', 'false');
   git(main, 'add', '-A');
   git(main, 'add', '-f', 'Areas/Town/S6-verify/r1/redteam.json');
   git(main, 'commit', '-q', '-m', 'init');
@@ -178,5 +186,98 @@ test('heldTowns lists every held town, Places included, and nothing else', () =>
     assert.strictEqual(stage(f.mainTown, 'lock', '--as', 'sess-a').status, 0);
     assert.strictEqual(stage(place, 'lock', '--as', 'sess-b').status, 0);
     assert.deepStrictEqual(heldTowns(f.main).map((t) => t.name + ':' + t.holder).sort(), ['Shop:sess-b', 'Town:sess-a']);
+  } finally { done(f); }
+});
+
+// 6. The named town folder (buses-data 3e177140): `detach --as <s> "<town>"` from the repository root ignored the path.
+const links = (town) => ['S4-generate', 'S5-render', 'S6-verify', '_latest'].filter((d) => { try { return fs.lstatSync(path.join(town, d)).isSymbolicLink(); } catch (e) { return false; } });
+
+test('detach honours a named town folder from the repository root, and exits 0 only with no junction left', () => {
+  const f = fixture();
+  try {
+    assert.strictEqual(stage(f.wtTown, 'attach', '--as', 'sess-a').status, 0);
+    const r = stage(f.wt, 'detach', '--as', 'sess-a', f.wtTown);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.deepStrictEqual(links(f.wtTown), [], 'a junction is still standing after a detach that exited 0');
+    assert.ok(fs.existsSync(path.join(f.mainTown, 'S4-generate', 'v1.0_x', 'internal.svg')));
+    assert.ok(!fs.existsSync(path.join(f.mainTown, '.lock.d')), 'the named town\'s lock was not released');
+  } finally { done(f); }
+});
+
+test('an argument that cannot be honoured is refused with exit 2 and nothing is detached', () => {
+  const f = fixture();
+  try {
+    assert.strictEqual(stage(f.wtTown, 'attach', '--as', 'sess-a').status, 0);
+    for (const [why, args, says] of [
+      ['a folder with no manifest.json (the repository root)', ['detach', '--as', 'sess-a', f.wt], /no manifest\.json in/],
+      ['a folder BELOW the town (no walk up from a typed path)', ['detach', '--as', 'sess-a', path.join(f.wtTown, 'S4-generate')], /no manifest\.json in/],
+      ['two folders', ['detach', '--as', 'sess-a', f.wtTown, f.wtTown], /one town folder at most/],
+      ['an unknown flag', ['detach', '--as', 'sess-a', '--town', f.wtTown], /unknown flag --town/],
+      ['the MAIN checkout\'s town, where nothing is attached', ['detach', '--as', 'sess-a', f.mainTown], /main checkout/],
+    ]) {
+      const r = stage(f.wtTown, ...args);
+      assert.strictEqual(r.status, 2, why + ': exit ' + r.status + ' ' + r.stdout + r.stderr);
+      assert.match(r.stderr, says, why);
+      assert.strictEqual(links(f.wtTown).length, 4, why + ': a refused detach removed a junction');
+    }
+    assert.match(stage(f.wt, 'who', f.wtTown).stdout, /held by sess-a/, 'who ignored the named folder');
+  } finally { done(f); }
+});
+
+// 7. Removing the worktree. The remover is bus-work's, run by path as a session runs it.
+const REMOVER = path.join(__dirname, '..', '..', 'bus-work', 'assets', 'remove_worktree.mjs');
+const remover = (...a) => spawnSync(process.execPath, [REMOVER, ...a], { encoding: 'utf8' });
+const mainRuns = (f) => ['S4-generate/v1.0_x/internal.svg', 'S5-render/v1.0_y/a.jpg', 'S6-verify/r1/redteam.json', 'S6-verify/r1/verification.json', '_latest/a.txt']
+  .filter((p) => !fs.existsSync(path.join(f.mainTown, p)));
+function attachedWithRuns(f) {
+  assert.strictEqual(stage(f.wtTown, 'attach', '--as', 'sess-a').status, 0);
+  fs.mkdirSync(path.join(f.wtTown, 'S5-render', 'v1.0_y'));
+  fs.writeFileSync(path.join(f.wtTown, 'S5-render', 'v1.0_y', 'a.jpg'), 'x');
+  fs.writeFileSync(path.join(f.wtTown, 'S6-verify', 'r1', 'verification.json'), '{}');
+  fs.writeFileSync(path.join(f.wtTown, '_latest', 'a.txt'), 'x');
+  assert.deepStrictEqual(mainRuns(f), [], 'the fixture did not put every run in the main checkout');
+}
+
+test('control (Windows): a plain `git worktree remove` of a clean, still-attached worktree empties the main checkout', { skip: process.platform !== 'win32' && 'git deletes through a junction only on Windows' }, () => {
+  const f = fixture();
+  try {
+    attachedWithRuns(f);
+    assert.strictEqual(git(f.wt, 'status', '--porcelain').trim(), '', 'the worktree is not clean, so this control proves nothing');
+    git(f.main, 'worktree', 'remove', f.wt);
+    assert.ok(mainRuns(f).length > 0, 'git did not delete through the junctions — the hazard remove_worktree.mjs guards is gone, so ask whether it is still needed');
+  } finally { done(f); }
+});
+
+test('remove_worktree.mjs: report-only touches nothing; --apply unlinks attach\'s junctions, restores the tracked files, removes the tree, and every run is still in the main checkout', () => {
+  const f = fixture();
+  try {
+    attachedWithRuns(f);
+    const look = remover(f.wt);
+    assert.strictEqual(look.status, 0, look.stdout + look.stderr);
+    assert.strictEqual(links(f.wtTown).length, 4, 'report-only unlinked something');
+    assert.ok(fs.existsSync(f.wt));
+    const r = remover(f.wt, '--apply');
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    assert.ok(!fs.existsSync(f.wt), 'the worktree is still there');
+    assert.deepStrictEqual(mainRuns(f), [], 'removing the worktree took runs out of the main checkout');
+    assert.doesNotMatch(git(f.main, 'worktree', 'list'), /[\/]wt\b/, 'the worktree is still registered');
+  } finally { done(f); }
+});
+
+test('remove_worktree.mjs refuses a link it did not make, touches nothing, and refuses the main checkout', () => {
+  const f = fixture();
+  try {
+    const elsewhere = path.join(f.root, 'elsewhere');
+    fs.mkdirSync(elsewhere);
+    fs.writeFileSync(path.join(elsewhere, 'precious.txt'), 'x');
+    fs.symlinkSync(elsewhere, path.join(f.wt, 'borrowed'), 'junction');
+    const r = remover(f.wt, '--apply');
+    assert.strictEqual(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stderr, /FOREIGN link\s+borrowed/);
+    assert.ok(fs.existsSync(path.join(f.wt, 'borrowed', 'precious.txt')), 'a refused remove unlinked or deleted something');
+    assert.ok(fs.existsSync(f.wt));
+    fs.unlinkSync(path.join(f.wt, 'borrowed'));
+    assert.strictEqual(remover(f.main, '--apply').status, 2, 'the main checkout was not refused');
+    assert.strictEqual(remover(f.wt, '--force').status, 2, 'an unknown flag was not refused');
   } finally { done(f); }
 });

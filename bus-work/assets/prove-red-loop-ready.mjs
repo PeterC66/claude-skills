@@ -97,9 +97,36 @@ console.log('\n2. CONTROL — a tick that TAKES the file clears the row');
   const rs = rows(t, at(14, 0));
   check('places-issues has no row once the newest tick took it', !rs.some((r) => r.file === 'places-issues.md'), keys(rs));
   check('wisbech still has one: that tick did not take it', rs.some((r) => r.file === 'wisbech-capacity.md'), keys(rs));
-  // An adhoc tick that took ANOTHER file and lists this one has passed it over.
-  const other = [at(13, 15), 'adhoc', '# sched\n\n**Feed: adhoc — google-search.md: the search round**\n\n`ready/` still has `places-issues.md`.\n'];
-  check('an adhoc tick that took a different file counts as a pass', verdict({ feed: 'adhoc', text: other[2] }, 'places-issues.md') === 'passed');
+  // An adhoc run that took a file sorting AFTER this one skipped it: a pass.
+  const later = '# sched\n\n**Feed: adhoc — zz-weekly-backlog-triage.md: the triage**\n\n`ready/` still has `places-issues.md`.\n';
+  check('an adhoc run that took a LATER file counts as a pass', verdict({ feed: 'adhoc', text: later }, 'places-issues.md') === 'passed');
+  // One that took a file sorting BEFORE it has queued it (OA-638).
+  const earlier = '# sched\n\n**Feed: adhoc — google-search.md: the search round**\n\n`ready/` still has `places-issues.md`.\n';
+  check('an adhoc run that took an EARLIER file has queued it', verdict({ feed: 'adhoc', text: earlier }, 'places-issues.md') === 'queued');
+  check('but a bus tick with the same Feed wording queues nothing', verdict({ feed: 'OA', text: earlier }, 'places-issues.md') === 'passed');
+}
+
+console.log('\n2b. the real 12 October (OA-638): files queued behind a taken one raise nothing');
+{
+  // Two runs as written on 2026-10-12, each taking the first due file and
+  // describing the rest in words the not-due test does not match.
+  const R = { 'doc-triage.md': at(7, 0, 12), 'review-tab-wrong.md': at(7, 0, 12), 'status-diagram.md': at(7, 0, 12), 'zz-weekly-backlog-triage.md': at(7, 0, 12), 'zzz-oa-when-idle.md': at(7, 0, 12) };
+  const r1102 = [at(11, 2, 12), 'adhoc', '# sched-adhoc-1102 — adhoc\n\n**Feed: adhoc — review-tab-wrong.md: find why the button opens the wrong tab.**\n\n- Pre-test: review-tab-wrong.md and status-diagram.md UNDECLARED; the four zz files STANDING.\n\n## Not due / not taken\n\n- status-diagram.md: UNDECLARED, left in ready/ for a later run (one unit per run).\n'];
+  const r2103 = [at(21, 3, 12), 'adhoc', '# sched-adhoc-2103 — adhoc\n\n**Feed: adhoc — doc-triage.md: fix the three moved memory paths**\n\nSTANDING files not opened this run, as only one unit is taken: zz-weekly-backlog-triage.md, zzz-oa-when-idle.md, status-diagram.md.\n'];
+  const t = mkLoop('queued-1012', R, [r1102, r2103]);
+  const rs = rows(t, at(23, 0, 12));
+  check('no row for status-diagram or the standing files', rs.length === 0, keys(rs));
+  // THE ROW CAN STILL GO RED for a real refusal: a later file is taken over it.
+  const skip = (ms) => [ms, 'adhoc', '# sched\n\n**Feed: adhoc — zzz-oa-when-idle.md: an idle OA**\n\n- status-diagram.md: left in ready/.\n'];
+  const t2 = mkLoop('skipped-1012', R, [skip(at(11, 2, 12)), skip(at(21, 3, 12))]);
+  check('RED — runs that took a LATER file over it raise the row', keys(rows(t2, at(23, 0, 12))) === 'adhoc-not-taken/status-diagram', keys(rows(t2, at(23, 0, 12))));
+  // And an idle run that names it without the not-due form still passes it.
+  const idle = (ms) => [ms, 'idle', '# sched\n\n- status-diagram.md: left in ready/.\n'];
+  const t3 = mkLoop('idle-1012', R, [idle(at(11, 2, 12)), idle(at(21, 3, 12))]);
+  check('RED — idle runs that name it without excusing it raise the row', keys(rows(t3, at(23, 0, 12))) === 'adhoc-not-taken/status-diagram', keys(rows(t3, at(23, 0, 12))));
+  // A queued verdict decides as the newest: an older pass does not bring the row back.
+  const t4 = mkLoop('pass-then-queued', R, [skip(at(9, 0, 12)), skip(at(10, 0, 12)), r1102]);
+  check('passed twice, then queued by the newest run: no row', !rows(t4, at(23, 0, 12)).some((r) => r.file === 'status-diagram.md'), keys(rows(t4, at(23, 0, 12))));
 }
 
 console.log('\n3. CONTROL — the exact not-due form clears it, and a later pass brings it back');

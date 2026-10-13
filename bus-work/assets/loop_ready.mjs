@@ -29,10 +29,19 @@
  *     "only `zz-weekly-backlog-triage.md`; `backlog-triage-2026-09-25.md` is in
  *     done/, so it is not due until 2026-10-02". So the span cannot stop at the
  *     next filename, only at the next file this row is also asking about.
+ *   - QUEUED (buses-data OA-638, 2026-10-13): an `-adhoc` run whose Feed line
+ *     took a file sorting BEFORE this one. A run takes the first due file in
+ *     filename order and does one unit, so everything after it is waiting its
+ *     turn, not refused. The runs of 12 October wrote that as "STANDING files
+ *     not opened this run, as only one unit is taken" and "UNDECLARED, left in
+ *     ready/ for a later run", and the row went red for four files behind a
+ *     file that was being worked. It reads the Feed line, not that prose, so no
+ *     wording is required of the run. A run that took a file sorting AFTER this
+ *     one skipped it, and that is still a pass.
  * Any other mention counts as a PASS. A tick that names a file without taking it
  * or excusing it has left Peter's request where it was. That is the fault this
  * row reports. The NEWEST tick that named the file decides whether there is a row
- * at all: if it took the file or excused it, the loop is handling it now.
+ * at all: if it took the file, excused it or queued it, the loop is handling it now.
  *
  * AGE IS THE FILE'S mtime. Promoting a file into `ready/` is a rename, which keeps
  * the mtime, so for a file written long before it was promoted the age reads
@@ -94,9 +103,9 @@ export function readRunsSince(dir, since, where = 'loop/runs') {
 }
 
 /**
- * What one run did with one ready/ file: 'took', 'not-due', 'passed', or null if
- * the run never names it. `others` are the other ready/ filenames, where a
- * mention's span stops. See the header for the two forms this depends on.
+ * What one run did with one ready/ file: 'took', 'queued', 'not-due', 'passed',
+ * or null if the run never names it. `others` are the other ready/ filenames,
+ * where a mention's span stops. See the header for the forms this depends on.
  */
 export function verdict(run, file, others = []) {
   const text = String((run && run.text) || '');
@@ -104,6 +113,8 @@ export function verdict(run, file, others = []) {
   const lines = text.split('\n');
   const feedLine = lines.find((l) => /\*\*Feed:/i.test(l)) || '';
   if (run.feed === 'adhoc' && feedLine.includes(file)) return 'took';
+  const taken = run.feed === 'adhoc' && (feedLine.match(/\*\*Feed:\s*adhoc\s*[—–-]+\s*`?([^\s:`*]+\.md)/i) || [])[1];
+  if (taken && taken.localeCompare(file) < 0) return 'queued';   // the order readReady sorts by
   for (const line of lines) {
     let at = line.indexOf(file);
     while (at !== -1) {

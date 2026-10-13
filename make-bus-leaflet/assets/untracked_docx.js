@@ -1,7 +1,10 @@
 /* OA-424 — an S6 commit leaves its report behind unless somebody stages it.
- * `.gitignore` re-includes every `*.docx` under Areas/ and Places/, so they are
- * meant to be tracked, yet `disagreements.docx` (copied in by `pull S1`) and
- * `_latest/verification.docx` were left untracked by four builds. The buses-data
+ * `.gitignore` re-includes every `*.docx` under Areas/ and Places/, so a run's
+ * reports are meant to be tracked, yet `disagreements.docx` (copied in by
+ * `pull S1`) was left untracked by four builds. `_latest/` is NOT asked about:
+ * buses-data ignores `Areas/**\/_latest/**` after that re-include, so no map
+ * tracks its mirror, and until 2026-10-13 this module passed `_latest` to a
+ * query whose `--exclude-standard` could never return it. The buses-data
  * pre-commit hook REFUSES the run-folder case; this is the earlier, engine-side
  * half: it names the files while the person who ran the build is still looking.
  * A NOTE, never a refusal, for the reason refreshLatestMirror() in stage.js gives:
@@ -12,7 +15,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 function note(townDir, runDir) {
-  const r = spawnSync('git', ['-C', townDir, 'ls-files', '--others', '--exclude-standard', '--', runDir, path.join(townDir, '_latest')], { encoding: 'utf8' });
+  const r = spawnSync('git', ['-C', townDir, 'ls-files', '--others', '--exclude-standard', '--', runDir], { encoding: 'utf8' });
   if (r.status !== 0) return;
   const docx = String(r.stdout || '').split(/\r?\n/).filter(l => /\.docx$/i.test(l));
   if (!docx.length) return;

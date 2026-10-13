@@ -388,16 +388,15 @@ function printOwed(st, townDir, runDir, outputs) {
  *
  * S6 ONLY, deliberately. The S5 path already refreshes (rollout.js line 413 and
  * rollout_places.js do it immediately after their `commit S5`), so S6 is the one
- * stage with no driver at all, and it is the stage whose mirror is now GATED:
- * `tools/latest-mirror-gate.js` fails CI on a `_latest/verification.docx` that
- * does not match the S6 run the manifest names. Widening this to every stage
- * would duplicate the rollout's own call rather than fix anything.
+ * stage with no driver at all, and the one whose mirror has a check, run by hand
+ * (`npm run gate:latest-mirrors`; `_latest/` is gitignored, so no CI can). Widening
+ * this to every stage would duplicate the rollout's own call rather than fix anything.
  *
  * A WARNING AND NOT A REFUSAL. By the time this runs the manifest is already
  * written and the commit has happened, so there is nothing to refuse — exiting
  * non-zero here would report a completed commit as a failure to every caller.
- * A mirror that did not refresh is caught by the gate on the next push, which
- * is exactly the backstop that case wants.
+ * A mirror that did not refresh is PRINTED here with the command that refreshes
+ * it, and `gate:latest-mirrors` finds it later if that is missed; no push does.
  */
 function refreshLatestMirror(townDir) {
   const { spawnSync } = require('child_process');
@@ -415,7 +414,7 @@ function refreshLatestMirror(townDir) {
     console.log('  ' + (line || '_latest refreshed'));
   } else {
     console.log(`  WARNING: _latest was NOT refreshed — the mirror now disagrees with this run, and`
-      + `\n  tools/latest-mirror-gate.js will say so on the next push. Refresh it with:`
+      + `\n  tools/latest-mirror-gate.js will say so when it is next run. Refresh it with:`
       + `\n    node "${tool}" "${townDir}"`);
     const why = String(r.stderr || '').trim().split('\n')[0];
     if (why) console.log('  (' + why + ')');

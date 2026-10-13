@@ -40,7 +40,9 @@
  *         and, for S6, refuses a redteam.json with no redteam-source.json decision
  *         beside it, or one that says WAIT (--force-decision overrides; OA-427),
  *         and, for S5, refuses a routes.json that differs (bar "version") from the
- *         S4 it renders (--force-stale-config overrides; buses-data OA-318)
+ *         S4 it renders (--force-stale-config overrides; buses-data OA-318), and
+ *         an S5 lacking any file its S4 holds, which deliver ships as the payload
+ *         (--force-partial-payload overrides; High Wycombe Aldi v1.43)
  *   stamps [runDir]                   write BOTH S4 provenance stamps into that
  *         run's routes.json — the engine hash and the footer's build stamp — then
  *         re-run the generators so the sheets carry them
@@ -774,6 +776,33 @@ function main() {
               + `    node "%SK%\\stage.js" pull S4 "${runDir}"\n`
               + `  Override with --force-stale-config only if the difference is deliberate.`);
           console.log(`  WARNING: committing an S5 whose routes.json differs from S4 ${s4Id} (--force-stale-config)`);
+        }
+      }
+
+      /* Guard (buses-data adhoc s5-payload-fix, 2026-10-13): an S5 carries EVERY file of
+       * the S4 it renders, because the S5 folder is what `npm run deliver --src` ships and
+       * the host's pre-flight verify re-draws from it. High Wycombe Aldi's v1.43 S5 was
+       * assembled by hand in a worktree, where `pull` resolves the main checkout's
+       * manifest, and held only the sheets and routes.json; deliver failed on the host with
+       * ENOENT atco2name.json, and `--dry-run` skips that step so nothing local saw it.
+       * `pull S4` copies the lot, so this is green on every S5 that came through it —
+       * measured the same day: 94 S5 runs with an S4 on disk, none short of one file.
+       * Flat files only, as `pull` copies; a pruned S4 is noted above and not asked here. */
+      const s4Dir = s4Rec && path.join(townDir, s4Rec.dir);
+      if (s4Dir && fs.existsSync(s4Dir)) {
+        const flat = (d) => fs.readdirSync(d).filter(n => fs.statSync(path.join(d, n)).isFile());
+        const have = new Set(flat(runDir));
+        const missing = flat(s4Dir).filter(n => !have.has(n));
+        if (missing.length) {
+          const list = missing.slice(0, 8).join(', ') + (missing.length > 8 ? ` and ${missing.length - 8} more` : '');
+          if (!f['force-partial-payload'])
+            die(`S5 run ${id} cannot be committed: it lacks ${missing.length} file(s) its S4 ${s4Id} holds: ${list}\n`
+              + `  The S5 folder is the payload \`npm run deliver\` ships, and the host's pre-flight verify\n`
+              + `  re-draws from it, so this run would fail there (High Wycombe Aldi v1.43, ENOENT atco2name.json).\n`
+              + `  Pull the S4 into it, which copies every file, and re-render:\n`
+              + `    node "%SK%\\stage.js" pull S4 "${runDir}"\n`
+              + `  Override with --force-partial-payload only if this S5 will never be delivered.`);
+          console.log(`  WARNING: committing an S5 that lacks ${missing.length} file(s) of S4 ${s4Id} (--force-partial-payload)`);
         }
       }
     }

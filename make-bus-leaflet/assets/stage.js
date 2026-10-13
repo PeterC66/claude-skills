@@ -45,8 +45,8 @@
  *         run's routes.json — the engine hash and the footer's build stamp — then
  *         re-run the generators so the sheets carry them
  *   status                             print a manifest summary
- *   attach | detach --as <session>     in a WORKTREE: take the town lock, junction S4-S6 and _latest onto the main
- *                                      checkout's, or undo that; also lock | unlock | who (OA-552; attach_links.js)
+ *   attach | detach --as <session> [townDir]  in a WORKTREE: take the town lock, junction S4-S6 and _latest onto
+ *         the main checkout's, or undo that (detach exits 0 only with none left); also lock | unlock | who (OA-552)
  *   nextver [--bump major|minor]       print the version `new S4` would assign (no side effects)
  *   stampver [runDir]                  force routes.json "version" to match the run dir's v<N.N>
  *
@@ -438,13 +438,13 @@ function main() {
     return;
   }
 
-  const townDir = findTownDir();
+  const atCmd = ['attach', 'detach', 'lock', 'unlock', 'who'].includes(cmd), townDir = atCmd ? require('./attach_links').townDirOf(findTownDir, die) : findTownDir();
   if (!townDir) die('no manifest.json found above ' + process.cwd() + ' — run `stage.js init` first', 2);
   const m = loadManifest(townDir);
   if (backfillStages(m)) saveManifest(townDir, m); // one-time migration for pre-S6 manifests
   const stage = (s) => { if (!STAGE_NAME[s]) die('unknown stage ' + s + ' (use S1..S6)', 2); return m.stages[s]; };
 
-  if (['attach', 'detach', 'lock', 'unlock', 'who'].includes(cmd)) return require('./attach_links').run(cmd, townDir, die);
+  if (atCmd) return require('./attach_links').run(cmd, townDir, die);
 
   if (cmd === 'nextver') { console.log(computeVersion(m, f.bump === 'major' ? 'major' : 'minor')); return; }
 

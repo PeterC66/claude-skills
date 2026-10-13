@@ -40,7 +40,10 @@
  * (unknown verb, missing argument, a git error) is UNREADABLE and the file is
  * DUE: it must never supersede a file on a test it could not run. A file with
  * neither line is UNDECLARED and falls back to the run's own fourteen-day
- * re-check. A standing file (`zz…`) is STANDING: it has a cadence gate of its own.
+ * re-check. A standing file is STANDING: it has a cadence gate of its own. It is
+ * standing when its name begins `zz`, or (2026-10-13) when it carries a line
+ * `**Standing:** <why>` under its H1, so that a file that restores itself can keep
+ * its own place in the filename order instead of sorting last.
  *
  * `prove-red-adhoc-pretest.mjs` breaks each verdict on purpose.
  */
@@ -109,7 +112,7 @@ export function evaluate(cond, buses) {
 
 /** Verdict for one file's text. */
 export function pretest(name, text, buses) {
-  if (/^zz/i.test(name)) return { name, verdict: 'STANDING', why: 'a standing file has its own cadence gate' };
+  if (/^zz/i.test(name) || /^\*\*Standing:\*\*/im.test(text)) return { name, verdict: 'STANDING', why: 'a standing file has its own cadence gate' };
   const still = conditionsOf(text, 'Still needed if');
   const needs = conditionsOf(text, 'Needs Peter if');
   if (!still?.length && !needs?.length) return { name, verdict: 'UNDECLARED', why: 'no pre-test lines; the run applies its fourteen-day re-check' };

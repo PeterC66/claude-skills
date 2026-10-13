@@ -80,17 +80,20 @@ check('unchanged with a bad sha → DUE', run('**Still needed if:** `unchanged z
 check('a readable false still wins over an unreadable one', run('**Still needed if:** `frobnicate` `oa-open OA-999`').verdict === 'SUPERSEDED');
 check('no declaration → UNDECLARED', pretest('b.md', '# a request\n\nDo it.\n', root).verdict === 'UNDECLARED');
 check('standing file → STANDING, even with a false condition', pretest('zz-weekly.md', '# w\n**Still needed if:** `oa-open OA-999`\n', root).verdict === 'STANDING');
+check('**Standing:** line → STANDING, whatever the name', pretest('oa-1-repeat.md', '# r\n**Standing:** restores itself\n**Still needed if:** `oa-open OA-999`\n', root).verdict === 'STANDING');
+check('"Standing" in prose is not the marker', pretest('oa-2-prose.md', '# r\nStanding: no, this is prose.\n**Still needed if:** `oa-open OA-999`\n', root).verdict === 'SUPERSEDED');
 check('conditionsOf: absent line → null', conditionsOf('# x\n', 'Still needed if') === null);
 
 console.log('the whole folder');
 put('adhoc/ready/10-gone.md', '# gone\n**Still needed if:** `oa-open OA-999`\n');
 put('adhoc/ready/20-live.md', '# live\n**Still needed if:** `oa-open OA-100`\n');
 put('adhoc/ready/30-plain.md', '# plain\n');
+put('adhoc/ready/40-marked.md', '# m\n**Standing:** restores itself\n');
 put('adhoc/ready/zz-standing.md', '# s\n');
 put('adhoc/ready/notes.txt', 'not a prompt');
 const all = pretestAll(root);
-check('filename order, .md only', all.map((r) => r.name).join() === '10-gone.md,20-live.md,30-plain.md,zz-standing.md', all.map((r) => r.name).join());
-check('verdicts per file', all.map((r) => r.verdict).join() === 'SUPERSEDED,DUE,UNDECLARED,STANDING', all.map((r) => r.verdict).join());
+check('filename order, .md only', all.map((r) => r.name).join() === '10-gone.md,20-live.md,30-plain.md,40-marked.md,zz-standing.md', all.map((r) => r.name).join());
+check('verdicts per file', all.map((r) => r.verdict).join() === 'SUPERSEDED,DUE,UNDECLARED,STANDING,STANDING', all.map((r) => r.verdict).join());
 check('absent ready/ → []', pretestAll(path.join(root, 'nowhere')).length === 0);
 
 fs.rmSync(root, { recursive: true, force: true });

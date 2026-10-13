@@ -116,6 +116,40 @@ test('OVERRIDE — --force-stale-config commits and says so', () => {
   assert.match(r.stdout, /WARNING: committing an S5 whose routes\.json differs/);
 });
 
+/* The payload guard. High Wycombe Aldi v1.43's S5 (2026-10-13) held the sheets and
+ * routes.json but none of the S4's data files, and deliver failed on the host with ENOENT
+ * atco2name.json. Every file the S4 holds must be in the S5 that renders it. */
+function s4Has(town, name, s4Id = 'v4.0_2026-09-11_1200') {
+  fs.writeFileSync(path.join(town, 'S4-generate', s4Id, name), '{}');
+}
+
+test('CONTROL — an S5 carrying every file of its S4 commits', () => {
+  const town = townWithS4();
+  s4Has(town, 'atco2name.json');
+  const d = s5With(town, CONFIG);
+  fs.writeFileSync(path.join(d, 'atco2name.json'), '{}');
+  const r = commitS5(town, d);
+  assert.strictEqual(r.status, 0, 'a full payload must commit: ' + r.stderr);
+});
+
+test('REFUSE — an S5 lacking a file its S4 holds (the High Wycombe Aldi v1.43 shape)', () => {
+  const town = townWithS4();
+  s4Has(town, 'atco2name.json');
+  s4Has(town, 'atco2ll.json');
+  const r = commitS5(town, s5With(town, CONFIG));
+  assert.notStrictEqual(r.status, 0, 'a partial payload must not commit');
+  assert.match(r.stderr + r.stdout, /lacks 2 file\(s\) its S4 v4\.0_2026-09-11_1200 holds: atco2ll\.json, atco2name\.json|lacks 2 file\(s\) its S4 v4\.0_2026-09-11_1200 holds: atco2name\.json, atco2ll\.json/);
+  assert.strictEqual(s5Latest(town), null, 'nothing may be recorded for a refused run');
+});
+
+test('OVERRIDE — --force-partial-payload commits and says so', () => {
+  const town = townWithS4();
+  s4Has(town, 'atco2name.json');
+  const r = commitS5(town, s5With(town, CONFIG), '--force-partial-payload');
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /WARNING: committing an S5 that lacks 1 file\(s\)/);
+});
+
 test('CONTROL — an S4 folder that has been pruned is noted, not refused', () => {
   const town = townWithS4();
   fs.rmSync(path.join(town, 'S4-generate'), { recursive: true, force: true });

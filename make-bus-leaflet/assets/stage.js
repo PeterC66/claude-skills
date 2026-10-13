@@ -40,7 +40,7 @@
  *         and, for S6, refuses a redteam.json with no redteam-source.json decision
  *         beside it, or one that says WAIT (--force-decision overrides; OA-427),
  *         and, for S5, refuses a routes.json that differs (bar "version") from the
- *         S4 it renders (--force-stale-config overrides; buses-data OA-318)
+ *         S4 it renders (--force-stale-config; OA-318), or lacks a file of it (s5_payload.js)
  *   stamps [runDir]                   write BOTH S4 provenance stamps into that
  *         run's routes.json — the engine hash and the footer's build stamp — then
  *         re-run the generators so the sheets carry them
@@ -776,6 +776,7 @@ function main() {
           console.log(`  WARNING: committing an S5 whose routes.json differs from S4 ${s4Id} (--force-stale-config)`);
         }
       }
+      require('./s5_payload').guard({ townDir, s4Rec, s4Id, runDir, id, force: f['force-partial-payload'], die });
     }
 
     const rec = { id, dir: relDir, at: isoNow(), outputs };

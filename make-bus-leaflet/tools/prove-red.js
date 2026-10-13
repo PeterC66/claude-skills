@@ -2332,6 +2332,17 @@ const MUTATIONS = [
     find: "          try { const j = JSON.parse(t); delete j.version; return JSON.stringify(j); } catch (e) { return t; } };",
     to: "          try { const j = JSON.parse(t); return JSON.stringify(j); } catch (e) { return t; } };" },
 
+  /* The S5 payload guard (High Wycombe Aldi v1.43, 2026-10-13), both ways it can be undone. */
+  { suite: 'stage_s5_config.test.js', file: 's5_payload.js',
+    what: 'an S5 holding only the sheets commits, so deliver ships a payload the host verify fails on (ENOENT atco2name.json)',
+    find: "  if (!missing.length) return;",
+    to: "  return;" },
+
+  { suite: 'stage_s5_config.test.js', file: 's5_payload.js',
+    what: 'the payload guard looks at the S5 instead of the S4, so a short S5 always matches itself',
+    find: "  return flat(s4Dir).filter(n => !have.has(n));",
+    to: "  return flat(runDir).filter(n => !have.has(n));" },
+
   /* buses-data OA-318, the last item. The area S4 generator guard. */
   { suite: 'stage_s4_generators.test.js', file: 'stage.js',
     what: 'an area S4 drawn in place commits without its generators, so the host pre-flight fails with Cannot find module gen_external.js',

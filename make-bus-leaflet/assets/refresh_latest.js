@@ -29,9 +29,11 @@
 // `powershell`, so a call from `commit` would make an engine unit test depend on
 // a Windows shell, and `commit` is spawned by a dozen of them. And
 // `Collected_latests/` is untracked (.gitignore:152), so no gate, no byte and no
-// CI run depends on it, while `_latest/verification.docx` IS tracked and IS
-// gated — `latest-mirror-gate.js` fails on a mirror that does not match the S6
-// run its own manifest names. So the half with a gate behind it moves into the
+// CI run depends on it, while `_latest/verification.docx` has a check —
+// `latest-mirror-gate.js` fails on a mirror that does not match the S6 run its
+// own manifest names. (Neither is tracked: buses-data ignores `_latest/**` too,
+// so that check is local and run by hand, and buses-data dropped its CI step on
+// 2026-10-05, 8a455d89.) So the half with a check behind it moves into the
 // boundary and the half with none stays where a person drives it; the skipped
 // sweep is PRINTED rather than silent, with the command that does it.
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');

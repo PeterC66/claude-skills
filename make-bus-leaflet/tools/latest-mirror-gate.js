@@ -21,12 +21,14 @@
  * `verification.json` from the newest run. The folder a person opens was the one
  * nothing read.
  *
- * THE SUBJECT SURVIVES `actions/checkout`, WHICH IS WHY THIS RUNS IN CI.
- * `.gitignore` re-includes `*.docx` from inside the stage folders, so both sides
- * of the comparison — the S6 run's `verification.docx` and the mirror's — are
- * tracked. That is the question `CLAUDE.md` says to ask before writing any
- * check, and here the answer is yes, unlike `staleInputs()` whose subject is a
- * working tree.
+ * HALF THE SUBJECT DOES NOT SURVIVE `actions/checkout`, SO THIS RUNS BY HAND.
+ * It was written believing both sides of the comparison were tracked. The S6
+ * run's `verification.docx` is; the mirror is not, because buses-data's
+ * `.gitignore` ignores `Areas/**\/_latest/**` AFTER its `*.docx` re-include. On
+ * a fresh clone every map read MISSING, and buses-data dropped the CI step on
+ * 2026-10-05 (8a455d89). That is the question `CLAUDE.md` says to ask before
+ * writing any check, answered wrongly the first time. It is a local instrument
+ * now, run from make-bus-leaflet as `npm run gate:latest-mirrors`.
  *
  * IT COMPARES HASHES, NEVER SIZES. March's mirror and March's current report
  * were both 38,590 bytes and were different files on the day the fault was

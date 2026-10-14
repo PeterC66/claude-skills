@@ -258,6 +258,29 @@ class TheGrade(Town):
         self.assertEqual(res["status"], "WOULD-APPLY")
         self.assertEqual(res["sidecarGrade"], "SAFE")
 
+    # --grade-only (OA-571): loop_health asks it of a town the sidecar graded ESCALATE
+    def test_grade_only_returns_an_ESCALATE_grade_with_its_routes_instead_of_refusing(self):
+        self.changes.append(("RE-EVAL", "400", "decision to re-confirm"))
+        res = self.run_main("--grade-only")
+        self.assertEqual((res["status"], res["grade"]), ("GRADED", "ESCALATE"))
+        self.assertEqual(res["rows"], [{"tag": "RE-EVAL", "route": "400"}])
+        self.assertEqual(self.stage.calls, [])
+
+    def test_grade_only_grades_now_and_not_by_the_sidecar(self):
+        """A decision confirmed since the scan: the sidecar still says ESCALATE, the files do not."""
+        self.changes = [("CONFIRMED", "400", "recorded fingerprint matches")]
+        self.write_sidecar("2026-10-01", towns={TOWN: {"grade": "ESCALATE"}})
+        res = self.run_main("--grade-only", "--scan", "2026-10-01")
+        self.assertEqual((res["status"], res["grade"], res["rows"]), ("GRADED", "NOTHING", []))
+
+    def test_grade_only_writes_nothing_even_with_apply(self):
+        os.remove(self.holder)   # and needs no --by, because it performs nothing
+        res = self.run_main("--grade-only", "--apply")
+        self.assertEqual((res["status"], res["grade"]), ("GRADED", "SAFE"))
+        self.assertFalse(res["applied"])
+        self.assertNothingCommitted()
+        self.assertEqual(self.stage.calls, [])
+
 
 class ThePatch(Town):
     """What the patch may touch, and the dry run that touches nothing."""

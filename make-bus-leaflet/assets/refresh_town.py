@@ -27,6 +27,11 @@ person has to drive.
              must be that same run or the refresh refuses (see THE SIDECAR below)
     --note   the note recorded on every stage this run commits
     --json   print one JSON object on stdout instead of prose, for a caller
+    --grade-only  derive the grade, print it with the rows that decided it, and stop:
+             never refuses on the grade and never writes, whatever else is passed.
+             `loop_health.mjs` asks this of a town the month's sidecar graded ESCALATE,
+             because a decision confirmed since (a matching feedFingerprint) answers
+             the grade and the sidecar is not rewritten until the next scan (OA-571)
 
 WHY THIS IS NOT `rollout.js`. That tool refuses a data change on purpose -- `staleInputs()`
 stops it with STALE-INPUTS -- because it seeds geometry from the previous S4, so it would
@@ -580,7 +585,11 @@ def main(argv=None):
     ap.add_argument("--note", default=None)
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--grade-only", action="store_true",
+                    help="print the grade derived now and the rows that decided it, then stop; writes nothing (OA-571)")
     a = ap.parse_args(argv)
+    if a.grade_only:
+        a.apply = False   # a grade is a read, whatever else the caller passed
 
     root = cli.resolve_buses(a.root)
     a.by = resolve_by(a.by, root, required=a.apply)   # before the estate is read, so a refusal touches nothing
@@ -604,6 +613,16 @@ def main(argv=None):
     result["grade"] = grade
     result["reasons"] = sorted({r[0] for r in rows})
     result["actionable"] = len(rr.actionable_rows(d["changes"]))
+
+    # ---- or stop here, with the grade as data (OA-571) --------------------------------
+    # The same diff_town() and classify() the monthly report grades with, asked against
+    # the town files as they are now, so a decision whose feedFingerprint was confirmed
+    # after the scan no longer counts. Each deciding row names its route and its tag,
+    # which is what a reader needs to know what would answer it.
+    if a.grade_only:
+        result["status"] = "GRADED"
+        result["rows"] = [{"tag": r[0], "route": str(r[1])} for r in rows]
+        return result
 
     if grade == "NOTHING":
         result["status"] = "NOTHING"

@@ -171,13 +171,14 @@ export function bucketActions(actions, today) {
  * worklist printed: a `refresh` row is finishable only with an `unattended` block; an
  * `engine-rebuild` row is finishable unless a town in it is graded ESCALATE with no
  * `no-rebuild` review for that grades file's scan date (`bw.reviewed`), or the map
- * sits under `_portal-fixture/`. A grade is computed from the scan and never clears;
- * a person's `no-rebuild` verdict in `refresh-reviews.json` is the only thing that
- * answers it (buses-data OA-563). Judged from the grade, the review and the folder
+ * sits under `_portal-fixture/`. The scan's grade is written once a month; a person's
+ * `no-rebuild` verdict in `refresh-reviews.json` answers it (buses-data OA-563), and
+ * so does a decision confirmed since, which `regradeEscalated()` finds by grading the
+ * town again before this runs (OA-571). Judged from the grade, the review and the folder
  * only, so a row listed as finishable may still stop at its own dry run (LOST or REGRESSED).
  */
 export function classifyBusWork(bw) {
-  const out = { finishable: [], escalate: [], fixture: [], person: [], towns: [], refresh: [] };
+  const out = { finishable: [], escalate: [], fixture: [], person: [], towns: [], refresh: [], routes: bw.escalateRoutes || {} };
   const grades = bw.grades || {};
   const fixtures = new Set(bw.fixtures || []);
   const reviewed = new Set(bw.reviewed || []);
@@ -196,6 +197,39 @@ export function classifyBusWork(bw) {
     }
   }
   return out;
+}
+
+/**
+ * Grade again, against the town files as they are now, each town a rebuild row names
+ * that the month's sidecar calls ESCALATE and no `no-rebuild` review answers (buses-data
+ * OA-571). The sidecar is written once a month, so a RE-EVAL decision whose
+ * `feedFingerprint` was confirmed the same afternoon stayed ESCALATE in it for weeks,
+ * and the town read as stopped when nothing a person could do would clear it.
+ * `regrade(town)` returns `{ grade, rows }` from `refresh_town.py --grade-only` — the
+ * report's own `diff_town()` and `classify()`, not a copy — or null when it could not
+ * run, and then the sidecar's grade stands: a grade this cannot read is never a pass.
+ */
+export function regradeEscalated(bw, regrade) {
+  const grades = { ...(bw.grades || {}) };
+  const reviewed = new Set(bw.reviewed || []);
+  const towns = new Set();
+  for (const r of bw.rows || []) if (r.kind !== 'refresh') for (const t of r.towns || []) if (grades[t] === 'ESCALATE' && !reviewed.has(t)) towns.add(t);
+  const escalateRoutes = {}, regraded = {};
+  for (const t of towns) {
+    const g = regrade(t);
+    if (!g || !g.grade) continue;
+    regraded[t] = { was: grades[t], now: g.grade };
+    grades[t] = g.grade;
+    if (g.grade === 'ESCALATE') escalateRoutes[t] = g.rows || [];
+  }
+  return { ...bw, grades, escalateRoutes, regraded };
+}
+
+/** One town's grade now, by `refresh_town.py --grade-only`; null if it could not run or answer. */
+function regradeTown(busesDir, town) {
+  const r = spawnSync('python', [path.join(assetsDir(), 'refresh_town.py'), '--town', town, '--root', busesDir, '--grade-only', '--json'], { encoding: 'utf8', timeout: 120000, maxBuffer: 16 * 1024 * 1024 });
+  if (r.error || r.status !== 0) return null;
+  try { const j = JSON.parse(r.stdout); return j.status === 'GRADED' ? { grade: j.grade, rows: j.rows || [] } : null; } catch { return null; }
 }
 
 const UNIT = {
@@ -289,7 +323,13 @@ export function assessCapacity(f, ctx) {
   // 5. what a person can do, most rows first
   if (cap.busWork && cap.busWork.escalate.length) {
     const n = cap.busWork.escalate.length;
-    lever(n, cap.busWork.escalate, `${n} row${n === 1 ? ' is' : 's are'} stopped by an ESCALATE grade${cap.busWork.towns.length ? ` (${cap.busWork.towns.join(', ')})` : ''}, which only a person reviews.`, 'Read the newest `_gtfs/refresh-grades_<date>.json` for those towns and settle the grade; the rebuild then goes back to the loop.');
+    // Name the town and the routes, and what records the answer (OA-571): "settle the
+    // grade" had no honest form, because a grade is computed and never edited.
+    const named = cap.busWork.towns.map((t) => {
+      const rs = (cap.busWork.routes || {})[t];
+      return rs && rs.length ? `${t}: ${rs.map((r) => `${r.tag} ${r.route}`).join(', ')}` : t;
+    });
+    lever(n, cap.busWork.escalate, `${n} row${n === 1 ? ' is' : 's are'} stopped by an ESCALATE grade${named.length ? ` (${named.join('; ')})` : ''}, which only a person reviews.`, 'For each route named: re-confirm a RE-EVAL decision and record its `feedFingerprint` in the town\'s file, or rule `no-rebuild` for the scan in `Areas/<Town>/refresh-reviews.json`; anything else is decided in a refresh by hand. The rebuild then goes back to the loop.');
   }
   if (cap.busWork && cap.busWork.fixture.length) lever(cap.busWork.fixture.length, cap.busWork.fixture, `${cap.busWork.fixture.length} map${cap.busWork.fixture.length === 1 ? ' sits' : 's sit'} under \`_portal-fixture/\`, which moves only with a pin bump and so never in a tick.`, 'Rebuild it in a session with the pin bump, or accept that it stays behind.');
   if (f.holds && f.holds.length) lever(f.holds.length, f.holds.map((h) => h.ref), `${f.holds.length} hold${f.holds.length === 1 ? '' : 's'} in \`loop/your-move/\` wait on you.`, 'Answer or retire each; `/triage` checks them against real state.');
@@ -672,6 +712,7 @@ function probeFacts(busesDir, deep, which) {
   if (deep) {
     const wl = probe([path.join(HERE, 'worklist.mjs'), '--json', '--buses', busesDir], { cwd: HERE, timeout: 300000 });
     facts.busWork = wl ? parseBusWork(wl.out, gradesAndFixtures(busesDir)) : null;
+    if (facts.busWork) facts.busWork = regradeEscalated(facts.busWork, (t) => regradeTown(busesDir, t));
     if (facts.busWork) facts.busWork.review = readInkReview(busesDir, facts.busWork.scan);
   }
   return facts;

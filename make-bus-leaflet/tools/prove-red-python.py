@@ -1872,6 +1872,17 @@ MUTATIONS = [
      "find": "    if not a.apply:",
      "to": "    if False:"},
 
+    # OA-571: --grade-only is what loop_health asks of an ESCALATE town
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "--grade-only refuses an ESCALATE town like a refresh, so loop health cannot read the grade it asked for",
+     "find": "    if a.grade_only:\n        result[\"status\"] = \"GRADED\"",
+     "to": "    if False:\n        result[\"status\"] = \"GRADED\""},
+
+    {"suite": "test_refresh_town.py", "file": "refresh_town.py",
+     "what": "--grade-only with --apply writes, so a read loop health makes could commit a refresh",
+     "find": "        a.apply = False   # a grade is a read, whatever else the caller passed",
+     "to": "        pass"},
+
     {"suite": "test_refresh_town.py", "file": "refresh_town.py",
      "what": "S1 is committed before the sheets are built -- the order this module was first written in, which left Ramsey's data and sheets disagreeing",
      "find": '    stage(town_dir, "stamps", s4)',

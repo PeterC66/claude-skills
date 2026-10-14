@@ -105,7 +105,7 @@
  *
  * Exit 0 on success, 2 on a refusal (the message names the remedy).
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -443,6 +443,63 @@ export function deliverable(review) {
     else out.held.push(m.map);
   }
   return out;
+}
+
+/**
+ * The worklist's row for a review with maps WAITING on Peter's answer (buses-data,
+ * 2026-10-14). The review is the one human touch the monthly refresh keeps, and until
+ * this row nothing asked for it: on 2026-10-14 the 1 October review had held three maps
+ * as `waiting` for a fortnight while no worklist row, board line or hold named them, and
+ * an unanswered map is never delivered — and can lose the build it is compared against
+ * to the pruner (OA-639). `deliverable()` decides `waiting`, so the row and the gate
+ * cannot disagree about what is owed.
+ *
+ * `reviews` is `[{ scan, review, page }]`, as `readReviews()` gives it; `page` says
+ * whether the gitignored crops page is on disk. A map that a LATER scan's review also
+ * holds is that review's to ask about, so it is not asked twice. A record that will not
+ * parse is a rank-0 row, because nothing is deliverable from it and silence is the
+ * failure this row exists to end.
+ */
+export function waitingItems(reviews, { busesDir = '', assets = '', daysSince = () => null } = {}) {
+  const out = [];
+  const later = (i) => new Set(reviews.slice(i + 1).flatMap((r) => (r.review && Array.isArray(r.review.maps) ? r.review.maps.map((m) => m.map.toLowerCase()) : [])));
+  reviews.forEach((r, i) => {
+    const rel = `_gtfs/ink-review_${r.scan}.json`;
+    if (!r.review || !Array.isArray(r.review.maps)) {
+      out.push({
+        key: `ink-review-unreadable-${r.scan}`, rank: 0, type: 'ink-review',
+        title: `The ${r.scan} ink review will not parse`,
+        why: `${rel} is not a review record, so nothing from that scan can be delivered and no map in it can be answered.`,
+        who: 'Peter', runbook: 'R9',
+        do: [{ kind: 'chat', what: `Open ${rel} and repair it, or re-collect it with ink_review.mjs --scan ${r.scan}.` }],
+      });
+      return;
+    }
+    const newer = later(i);
+    const waiting = deliverable(r.review).waiting.filter((m) => !newer.has(m.toLowerCase()));
+    if (!waiting.length) return;
+    const pageRel = `loop/ink-review/${r.scan}/index.html`;
+    const steps = [r.page
+      ? { kind: 'chat', what: `Open ${busesDir ? path.join(busesDir, pageRel) : pageRel} in a browser (gitignored, so reach it through File Explorer in the main checkout) and look at the before-and-after of ${waiting.join(', ')}.` }
+      : { kind: 'shell', cwd: assets, cmd: `node ink_review.mjs --scan ${r.scan}`, note: `the page is not on disk; this re-collects the record, commits it and rebuilds ${pageRel} with its crops` }];
+    steps.push({ kind: 'chat', what: 'Tell Claude "accept <map>" or "hold <map>, <why>" for each one; it records the answer with ink_review.mjs --answer, which commits the record itself.' });
+    out.push({
+      key: `ink-waiting-${r.scan}`, rank: 5, type: 'ink-review',
+      title: `Ink review ${r.scan}: ${waiting.length} map${waiting.length === 1 ? '' : 's'} waiting for your accept or hold`,
+      why: `${waiting.join(', ')} — a sheet's ink moved in the ${r.scan} refresh, and nothing reaches its customer until you have looked. An unanswered map is never delivered, and its before-build can be pruned from under it (OA-639).`,
+      who: 'Peter', runbook: 'R9', ageDays: daysSince(r.scan),
+      do: steps,
+    });
+  });
+  return out;
+}
+
+/** Every `_gtfs/ink-review_<scan>.json`, oldest first; `review` is null for a file that will not parse. */
+export function readReviews(busesDir) {
+  const dir = path.join(busesDir, '_gtfs');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).map((f) => /^ink-review_(\d{4}-\d{2}-\d{2})\.json$/.exec(f)).filter(Boolean).map((m) => m[1]).sort()
+    .map((scan) => ({ scan, review: readJson(path.join(dir, `ink-review_${scan}.json`)), page: existsSync(path.join(busesDir, 'loop', 'ink-review', scan, 'index.html')) }));
 }
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

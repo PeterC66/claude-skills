@@ -1315,6 +1315,10 @@ export function needsOf(item) {
   // fixing a dead link edits directory.json and re-renders README.md. Nothing it
   // does needs the engine, and no other repository is involved.
   if (key.startsWith('directory-links')) return ['buses-tree'];
+  // 2026-10-14: the ink review's rows. Answering is `ink_review.mjs --answer`, which
+  // writes and commits _gtfs/ink-review_<scan>.json in the buses tree; looking at the
+  // page touches nothing, and no engine or portal is involved.
+  if (key.startsWith('ink-waiting-') || key.startsWith('ink-review-unreadable-')) return ['buses-tree'];
 
   switch (type) {
     case 'review': case 'application': case 'request-decision': case 'awaiting-customer': case 'commitment':

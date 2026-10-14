@@ -99,6 +99,7 @@ import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_
 import { readScanState, bodsScanItems, readGtfsDirt, gtfsUncommittedItems } from './bods_scan.mjs';
 import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh, nothingOwed, placeGradeOpts } from './refresh_grades.mjs';
 import { compareRows } from './refresh_deadline.mjs';
+import { waitingItems, readReviews } from './ink_review.mjs';
 import { parseUpcoming, parseDatasets, rebuiltFromScan, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
@@ -716,6 +717,9 @@ const tree = fromMapTree();
 const upcoming = fromUpcomingReport();
 for (const it of fromCorrespondence()) add(it);
 for (const it of fromCommitments()) add(it);
+// The month's ink review: maps whose ink moved and that Peter has not yet accepted or
+// held. Nothing else asked for these until 2026-10-14 (ink_review.mjs `waitingItems`).
+for (const it of waitingItems(readReviews(BUSES), { busesDir: BUSES, assets: HERE, daysSince })) add(it);
 
 // A deploy pending is a CHORE, and since 2026-09-17 (buses-data OA-396) this is
 // the row that carries it: the board prints a BEHIND deployment and no longer

@@ -255,6 +255,98 @@ class Pins(unittest.TestCase):
                       pr.load_pins(self.root))
 
 
+class InkReviewPins(unittest.TestCase):
+    """The runs an ink review compares against are pinned by the review itself.
+
+    The 2026-10-02 fault (buses-data OA-639): Ramsey was rebuilt five times after
+    the 1 Oct scan, the prune that afternoon kept the newest two S4 versions, and
+    the review's `before` - v3.13, the newest build dated before the scan - went
+    with the rest. Ramsey then read `unreadable` for eleven days.
+    """
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="prune-review-")
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.town = os.path.join(self.root, "Areas", "Ramsey")
+        self.s4 = ["v3.13_2026-09-27_2041", "v3.14_2026-10-01_1100", "v3.15_2026-10-01_1500",
+                   "v3.16_2026-10-02_0900", "v3.17_2026-10-02_1100", "v3.18_2026-10-02_1300"]
+        for r in self.s4:
+            os.makedirs(os.path.join(self.town, "S4-generate", r))
+            os.makedirs(os.path.join(self.town, "S5-render", r[:-1] + "2"))
+        self.manifest({})
+        os.makedirs(os.path.join(self.root, "_gtfs"))
+
+    def manifest(self, s5_based_on):
+        runs = [{"id": k, "basedOn": {"S4": v}} for k, v in s5_based_on.items()]
+        with io.open(os.path.join(self.town, "manifest.json"), "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"stages": {"S5": {"runs": runs}}}))
+
+    def review(self, scan, answer=None, before="v3.13_2026-09-27_2041",
+               after="v3.18_2026-10-02_1300"):
+        with io.open(os.path.join(self.root, "_gtfs", "ink-review_%s.json" % scan), "w",
+                     encoding="utf-8") as fh:
+            fh.write(json.dumps({"scan": scan, "maps": [
+                {"map": "Ramsey", "kind": "area", "dir": "Areas/Ramsey",
+                 "before": before, "after": after, "answer": answer}]}))
+
+    def dry_run(self):
+        """main() as an operator runs it, dry; returns the paths it would delete."""
+        out = io.StringIO()
+        saved_argv, saved_out = sys.argv, sys.stdout
+        sys.argv, sys.stdout = ["prune_runs.py", "--root", self.root], out
+        try:
+            pr.main()
+        finally:
+            sys.argv, sys.stdout = saved_argv, saved_out
+        paths = {line.split()[-1].replace("\\", "/") for line in out.getvalue().splitlines()
+                 if "Areas" in line and "->" not in line}
+        return {p[len("Areas/"):] for p in paths if p.startswith("Areas/")}
+
+    def test_an_unanswered_reviews_before_older_than_the_newest_two_versions_survives(self):
+        self.review("2026-10-01")
+        doomed = self.dry_run()
+        self.assertNotIn("Ramsey/S4-generate/v3.13_2026-09-27_2041", doomed)
+        self.assertNotIn("Ramsey/S5-render/v3.13_2026-09-27_2042", doomed)
+        # and the rule still runs for the runs nobody named
+        self.assertIn("Ramsey/S4-generate/v3.14_2026-10-01_1100", doomed)
+
+    def test_without_a_review_the_same_before_is_pruned(self):
+        """The control: the fixture really is one the old rule deletes."""
+        doomed = self.dry_run()
+        self.assertIn("Ramsey/S4-generate/v3.13_2026-09-27_2041", doomed)
+
+    def test_an_answered_map_on_an_older_scan_pins_nothing(self):
+        self.review("2026-09-01", answer={"verdict": "accept", "after": "v3.18_2026-10-02_1300"})
+        self.review("2026-10-01", answer={"verdict": "accept"}, before="v3.17_2026-10-02_1100")
+        pins = pr.load_review_pins(self.root)[os.path.normpath("Areas/Ramsey")]
+        self.assertTrue(all("2026-10-01" in why for _, why in pins))
+
+    def test_an_answered_map_on_the_newest_scan_keeps_its_answered_build(self):
+        self.review("2026-10-01", answer={"verdict": "accept", "after": "v3.14_2026-10-01_1100"})
+        doomed = self.dry_run()
+        self.assertNotIn("Ramsey/S4-generate/v3.14_2026-10-01_1100", doomed)
+
+    def test_a_render_that_declares_basedOn_is_joined_by_it_not_by_version(self):
+        self.manifest({"v3.13_2026-09-27_2042": "v3.12_2026-09-20_0900"})
+        self.review("2026-10-01")
+        doomed = self.dry_run()
+        self.assertIn("Ramsey/S5-render/v3.13_2026-09-27_2042", doomed)
+
+    def test_a_record_that_will_not_parse_stops_the_run(self):
+        with io.open(os.path.join(self.root, "_gtfs", "ink-review_2026-10-01.json"), "w",
+                     encoding="utf-8") as fh:
+            fh.write("{ not json")
+        err = io.StringIO()
+        saved, sys.stderr = sys.stderr, err
+        try:
+            with self.assertRaises(SystemExit) as ctx:
+                pr.load_review_pins(self.root)
+        finally:
+            sys.stderr = saved
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertIn("cannot be read", err.getvalue())
+
+
 class WhatGitKnows(unittest.TestCase):
     """The accounting that tells the operator what is recoverable.
 

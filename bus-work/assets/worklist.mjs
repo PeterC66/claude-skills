@@ -717,8 +717,6 @@ const tree = fromMapTree();
 const upcoming = fromUpcomingReport();
 for (const it of fromCorrespondence()) add(it);
 for (const it of fromCommitments()) add(it);
-// The month's ink review: maps whose ink moved and that Peter has not yet accepted or
-// held. Nothing else asked for these until 2026-10-14 (ink_review.mjs `waitingItems`).
 for (const it of waitingItems(readReviews(BUSES), { busesDir: BUSES, assets: HERE, daysSince })) add(it);
 
 // A deploy pending is a CHORE, and since 2026-09-17 (buses-data OA-396) this is

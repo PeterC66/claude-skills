@@ -62,6 +62,21 @@
  * Anything else — ink moved, a sheet added or dropped, the answered build pruned from
  * disk — supersedes as before, because nothing can then be compared.
  *
+ * A SESSION MAY ANSWER BY RULE, AND PETER IS LEFT THE CONTROVERSIAL ONES (2026-10-14).
+ * `--self-answer --by <who>` accepts an unanswered ink-moved map itself when (1) every
+ * string on every moved sheet is on the before build too — service numbers,
+ * destinations, stop names, times, the services panel — and (2) the build's inputs
+ * are unchanged, and every engine commit between the two builds that touches the
+ * moved sheet's generator has already been accepted by Peter on ANOTHER map (a
+ * "first sighting"), with no open hold. Anything else gets
+ * `selfCheck: { by, at, after, reason }` and stays waiting, and the reason is shown on
+ * the page and in the worklist row. The rule, its limits and the register are in
+ * `ink_self_answer.mjs`'s header. The sightings are kept ON the answers: `--answer`
+ * records `engine: { from, to, commits: [{ sha, subject, kinds }] }` on every answer it
+ * writes, and a self-answer carries `self: true` and never counts as a sighting. Like
+ * every local mutator here, it prints by default and writes only with `--apply`; with
+ * `--apply` it also backfills `engine` onto older answers whose builds are still on disk.
+ *
  * WHERE THINGS GO. The review and its answers are `_gtfs/ink-review_<scan>.json`,
  * tracked, beside the grading it was drawn from. The page and its crops are
  * rebuilt from the sheets on demand and go under `loop/ink-review/<scan>/`, which
@@ -93,6 +108,7 @@
  *   node ink_review.mjs --scan <scan> --no-crops            the record only, no sharp needed
  *   node ink_review.mjs ... --no-commit                     leave the record written and uncommitted
  *   node ink_review.mjs --scan <scan> --answer "<Town>" --verdict accept|hold --by <who> [--note "<why>"]
+ *   node ink_review.mjs --scan <scan> --self-answer --by <who> [--apply] answer by rule what needs no person; print, or write with --apply
  *   node ink_review.mjs --scan <scan> --deliverable [--json] which maps a tick may deliver
  *   node ink_review.mjs --scan <scan> --staged --town "<Map>" --map <slug> --proposal <n> --by <who> [--at <date>] [--notify digest]
  *                                                            record a staging made by hand, not by stage_refresh.mjs
@@ -112,6 +128,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, resolveBuses, assetsDir } from './engine.mjs';
 import { readGradeState, defaultReadGradeFiles } from './refresh_grades.mjs';
+import { gatherEvidence, recordable, registerFrom, selfAnswer, backfillEngine, engineEdge, diskInputs } from './ink_self_answer.mjs';
 
 export const SCHEMA = 1;
 export const VERDICTS = ['accept', 'hold'];
@@ -347,6 +364,8 @@ export function mergeAnswers(prev, next, ctx = null) {
     /* What was staged is carried whatever the build now is: `deliverable()` asks
      * whether it was THIS build, so a rebuilt map is deliverable again by itself. */
     m = { ...m, ...(p.staged ? { staged: p.staged } : {}), ...(p.stagedBefore ? { stagedBefore: p.stagedBefore } : {}) };
+    /* A self-answer's reason for waiting is about one build, as an answer is. */
+    if (p.selfCheck && p.selfCheck.after === m.after && m.status === 'ink-moved') m = { ...m, selfCheck: p.selfCheck };
     const superseded = [...(p.superseded || [])];
     if (p.answer) {
       if (m.status === 'ink-moved') {
@@ -362,8 +381,12 @@ export function mergeAnswers(prev, next, ctx = null) {
   }) };
 }
 
-/** Record Peter's answer for one map. `at` is passed in: the core reads no clock. */
-export function answer(review, town, verdict, { by, note = null, at }) {
+/**
+ * Record Peter's answer for one map. `at` is passed in: the core reads no clock.
+ * `engine` is what `ink_self_answer.mjs`'s `recordable()` made of this build's
+ * range, the sightings a later self-answer stands on; null when it could not be read.
+ */
+export function answer(review, town, verdict, { by, note = null, at, engine = null }) {
   if (!VERDICTS.includes(verdict)) throw new Refused(`--verdict must be ${VERDICTS.join(' or ')}, not ${JSON.stringify(verdict)}.`);
   if (!by || typeof by !== 'string' || !by.trim()) throw new Refused('--by is required: an answer nobody gave is not an answer.');
   const i = review.maps.findIndex((m) => m.map.toLowerCase() === String(town || '').toLowerCase());
@@ -373,7 +396,8 @@ export function answer(review, town, verdict, { by, note = null, at }) {
   const superseded = [...(m.superseded || [])];
   if (m.answer) superseded.push({ ...m.answer, why: 'answered again' });
   const maps = [...review.maps];
-  maps[i] = { ...m, answer: { verdict, by: by.trim(), at, after: m.after, note }, ...(superseded.length ? { superseded } : {}) };
+  const { selfCheck, ...rest } = m;
+  maps[i] = { ...rest, answer: { verdict, by: by.trim(), at, after: m.after, note, ...(engine ? { engine } : {}) }, ...(superseded.length ? { superseded } : {}) };
   return { ...review, maps };
 }
 
@@ -482,11 +506,16 @@ export function waitingItems(reviews, { busesDir = '', assets = '', daysSince = 
     const steps = [r.page
       ? { kind: 'chat', what: `Open ${busesDir ? path.join(busesDir, pageRel) : pageRel} in a browser (gitignored, so reach it through File Explorer in the main checkout) and look at the before-and-after of ${waiting.join(', ')}.` }
       : { kind: 'shell', cwd: assets, cmd: `node ink_review.mjs --scan ${r.scan}`, note: `the page is not on disk; this re-collects the record, commits it and rebuilds ${pageRel} with its crops` }];
+    /* A map no session has yet tried by rule is offered to the rule first: Peter is asked only what it refuses. */
+    const byMap = new Map(r.review.maps.map((m) => [m.map, m]));
+    const untried = waiting.filter((m) => { const e = byMap.get(m); return !(e && e.selfCheck && e.selfCheck.after === e.after); });
+    if (untried.length) steps.splice(r.page ? 0 : 1, 0, { kind: 'shell', cwd: assets, cmd: `node ink_review.mjs --scan ${r.scan} --self-answer --by <session> --apply`, note: `answers by rule what needs no person (${untried.join(', ')} not yet tried); <session> is the answering session's name` });
     steps.push({ kind: 'chat', what: 'Tell Claude "accept <map>" or "hold <map>, <why>" for each one; it records the answer with ink_review.mjs --answer, which commits the record itself.' });
+    const reasons = waiting.map((m) => { const e = byMap.get(m); return e && e.selfCheck && e.selfCheck.after === e.after ? `${m}: ${e.selfCheck.reason}` : null; }).filter(Boolean);
     out.push({
       key: `ink-waiting-${r.scan}`, rank: 5, type: 'ink-review',
       title: `Ink review ${r.scan}: ${waiting.length} map${waiting.length === 1 ? '' : 's'} waiting for your accept or hold`,
-      why: `${waiting.join(', ')} — a sheet's ink moved in the ${r.scan} refresh, and nothing reaches its customer until you have looked. An unanswered map is never delivered, and its before-build can be pruned from under it (OA-639).`,
+      why: `${waiting.join(', ')} — a sheet's ink moved in the ${r.scan} refresh, and nothing reaches its customer until you have looked. An unanswered map is never delivered, and its before-build can be pruned from under it (OA-639).${reasons.length ? ` Not answerable by rule — ${reasons.join(' · ')}.` : ''}`,
       who: 'Peter', runbook: 'R9', ageDays: daysSince(r.scan),
       do: steps,
     });
@@ -510,7 +539,8 @@ export function page(review, crops = {}) {
   const quiet = review.maps.filter((m) => m.status === 'no-ink');
   const other = review.maps.filter((m) => m.status !== 'ink-moved' && m.status !== 'no-ink');
   const sec = moved.map((m) => {
-    const ans = m.answer ? `<p class="ans">Answered <b>${esc(m.answer.verdict)}</b> by ${esc(m.answer.by)}${m.answer.note ? ` — ${esc(m.answer.note)}` : ''}</p>` : '<p class="ans">Not answered yet.</p>';
+    const ans = m.answer ? `<p class="ans">Answered <b>${esc(m.answer.verdict)}</b> by ${esc(m.answer.by)}${m.answer.self ? ' (by rule)' : ''}${m.answer.note ? ` — ${esc(m.answer.note)}` : ''}</p>`
+      : `<p class="ans">Not answered yet.${m.selfCheck && m.selfCheck.after === m.after ? ` Not answerable by rule: ${esc(m.selfCheck.reason)}.` : ''}</p>`;
     const sheets = m.sheets.filter((s) => s.change).map((s) => {
       const c = crops[`${m.map}/${s.sheet}`] || {};
       const imgs = (c.pairs || []).map((p) => `<img src="${esc(p)}" alt="${esc(s.sheet)} before and after">`).join('');
@@ -591,6 +621,15 @@ function cropsFor(review, busesDir, outDir) {
   return crops;
 }
 
+/* The real evidence for `ink_self_answer.mjs`: this estate's disk, the engine checkout's closures and its git. */
+function evidenceSource(busesDir) {
+  const sk = assetsDir();
+  if (!sk) throw new Refused('the engine assets folder was not found, so no engine commit can be attributed to a sheet.');
+  const engine = engineEdge(sk);
+  const io = { ...diskIo, readInputs: diskInputs(engine.notInputs) };
+  return (m, before, after) => gatherEvidence({ busesDir, entry: m, before, after, io, engine });
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const busesDir = resolveBuses(args);
@@ -600,11 +639,36 @@ function main() {
 
   if (typeof args.answer === 'string') {
     if (!prev) throw new Refused(`there is no review for ${scan} yet (${file}); collect it first.`);
-    const next = answer(prev, args.answer, args.verdict, { by: typeof args.by === 'string' ? args.by : '', note: typeof args.note === 'string' ? args.note : null, at: new Date().toISOString() });
+    /* The sightings a later self-answer stands on. Best effort: an answer is Peter's whether or not they can be read. */
+    const was = (prev.maps || []).find((x) => x.map.toLowerCase() === args.answer.toLowerCase());
+    let engine = null;
+    if (was && was.status === 'ink-moved') {
+      try { engine = recordable(evidenceSource(busesDir)(was, was.before, was.after)); } catch { engine = null; }
+      if (!engine) console.error(`ink_review: ${was.map}'s answer records no engine sightings (a build or its engineCommit could not be read), so it cannot vouch for an engine commit on another map.`);
+    }
+    const next = answer(prev, args.answer, args.verdict, { by: typeof args.by === 'string' ? args.by : '', note: typeof args.note === 'string' ? args.note : null, at: new Date().toISOString(), engine });
     writeFileSync(file, JSON.stringify(next, null, 2) + '\n');
     const m = next.maps.find((x) => x.map.toLowerCase() === args.answer.toLowerCase());
     console.log(`ink_review: ${m.map} ${m.answer.verdict} for ${m.after}, recorded in ${file}`);
     if (!args['no-commit'] && !reportCommit(commitRecord({ root: busesDir, file, subject: `ink-review: ${m.map} ${m.answer.verdict} for ${m.after}` }))) process.exitCode = 2;
+    return;
+  }
+  if (args['self-answer']) {
+    if (!prev) throw new Refused(`there is no review for ${scan} yet (${file}); collect it first.`);
+    const by = typeof args.by === 'string' ? args.by.trim() : '';
+    if (!by) throw new Refused('--by is required: a self-answer names the session that gave it.');
+    const evidenceFor = evidenceSource(busesDir);
+    const { review: filled, filled: n } = backfillEngine(prev, { evidenceFor });
+    const reviews = readReviews(busesDir).map((r) => (r.scan === scan ? { scan, review: filled } : r));
+    const { review: next, results } = selfAnswer(filled, { by, at: new Date().toISOString(), evidenceFor, register: registerFrom(reviews) });
+    for (const r of results) console.log(`  ${r.outcome === 'accept' ? 'ACCEPT ' : 'WAITING'} ${r.map} — ${r.why}`);
+    const acc = results.filter((r) => r.outcome === 'accept').length;
+    const summary = `${acc} accepted by rule, ${results.length - acc} left for Peter${n ? `, ${n} earlier answer${n === 1 ? '' : 's'} given engine sightings` : ''}`;
+    if (!results.length && !n) { console.log(`ink_review: ${scan} — no unanswered ink-moved map to try`); return; }
+    if (!args.apply) { console.log(`ink_review: ${scan} — ${summary}. Dry run: nothing written; add --apply to record it.`); return; }
+    writeFileSync(file, JSON.stringify(next, null, 2) + '\n');
+    console.log(`ink_review: ${scan} — ${summary}, recorded in ${file}`);
+    if (!args['no-commit'] && !reportCommit(commitRecord({ root: busesDir, file, subject: `ink-review: ${scan} self-answer by ${by} (${summary})` }))) process.exitCode = 2;
     return;
   }
   if (args.staged) {

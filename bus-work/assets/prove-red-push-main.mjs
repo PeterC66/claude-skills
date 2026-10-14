@@ -90,7 +90,7 @@ const minAgo = (m) => new Date(FIXED.getTime() - m * 60000).toISOString();
 {
   const w = world();
   const { r, calls } = run(w);
-  ok(r.exit === 0 && r.outcome === 'nothing-to-push' && calls.preflight === 0 && !fs.existsSync(path.join(w.work, 'loop')),
+  ok(r.exit === 0 && r.outcome === 'nothing-to-push' && calls.preflight === 0 && !fs.existsSync(lockPath(w)),
     '1 nothing ahead is exit 0, asks nothing and takes no lock', JSON.stringify(r));
 }
 
@@ -289,6 +289,62 @@ for (const [pf, exit, outcome] of [[1, 1, 'preflight-red'], [2, 2, 'preflight-un
   const code = src.split('\n').filter((l) => !/^\s*(\/\*|\*|\/\/)/.test(l)).join('\n');
   ok(!/--urgent/.test(code), '14 no line of code passes --urgent to the preflight');
   ok(!/push['"],\s*['"]--force|--force-with-lease|push', '-f'/.test(code), '14b nothing force-pushes');
+}
+
+/* 15. The record (buses-data OA-634): every --apply run is logged with its exit,
+ * a red preflight's own report goes with it, and two reds in a row raise ONE hold
+ * naming the red arm and the oldest held commit. */
+const RED_REPORT = 'preflight\n  [ ok ] stamps — the document stamps (0.4s)\n  [FAIL] links — the relative-link checker (1.2s)\nWOULD GO RED — 1 of 2:\n';
+const logOf = (w) => { const f = path.join(w.work, 'loop', 'push-main.log'); return fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : ''; };
+const redHold = (w) => path.join(w.work, 'loop', 'your-move', 'push-job-preflight-red.md');
+{
+  const w = world();
+  commit(w.work, 'a.txt', 'x\n', 'the oldest held');
+  commit(w.work, 'b.txt', 'y\n', 'the newer held');
+  const red = { status: 1, report: RED_REPORT };
+  run(w, { pf: red });
+  ok(!fs.existsSync(redHold(w)), '15 one red run raises no hold');
+  const { r } = run(w, { pf: red });
+  const text = fs.existsSync(redHold(w)) ? fs.readFileSync(redHold(w), 'utf8') : '';
+  ok(r.exit === 1 && r.outcome === 'preflight-red' && text !== '', '15b the second red in a row writes the hold', JSON.stringify(r));
+  ok(/^## What is needed from you$/m.test(text) && /\*\*Raised by:\*\* sched-push-1530, 2026-10-06/.test(text),
+    '15c the hold has the heading the worklist reads and a Raised-by date', text.slice(0, 300));
+  ok(text.includes('links — the relative-link checker') && text.includes('the oldest held') && !text.includes('the newer held') && text.includes('2 commits wait'),
+    '15d the hold names the red arm and the oldest held commit', text);
+  const log = logOf(w);
+  ok((log.match(/^=== \S+ exit 1 preflight-red$/gm) || []).length === 2 && (log.match(/\|\s+\[FAIL\] links/g) || []).length === 2,
+    '15e both runs are in the log with their exit and the preflight\'s own report', log);
+  fs.writeFileSync(redHold(w), 'answered in part\n');
+  run(w, { pf: red });
+  ok(fs.readFileSync(redHold(w), 'utf8') === 'answered in part\n' && fs.readdirSync(path.join(w.work, 'loop', 'your-move')).length === 1,
+    '15f a third red leaves the standing hold alone: exactly one hold');
+}
+{
+  // 15g a deferral between two reds ends the streak: no hold.
+  const w = world();
+  commit(w.work, 'a.txt', 'x\n', 'ahead');
+  const red = { status: 1, report: RED_REPORT };
+  run(w, { pf: red }); run(w, { pf: 3 }); run(w, { pf: red });
+  ok(!fs.existsSync(redHold(w)), '15g red, deferred, red is no streak of two: no hold');
+  // 15h a lock held between two reds asked nothing, so the streak survives it.
+  const w2 = world();
+  commit(w2.work, 'a.txt', 'x\n', 'ahead');
+  run(w2, { pf: red });
+  writeLock(w2, `sched-1500 ${minAgo(5)} a tick`, new Date(FIXED.getTime() + 60 * 60000).toISOString());
+  run(w2, { pf: red });
+  fs.rmSync(lockPath(w2), { recursive: true, force: true });
+  run(w2, { pf: red });
+  ok(fs.existsSync(redHold(w2)) && /exit 3 lock-held/.test(logOf(w2)), '15h a lock-held run between two reds is logged and does not break the streak');
+}
+{
+  // 15i a push logs no report; a dry run writes no log at all.
+  const w = world();
+  commit(w.work, 'a.txt', 'x\n', 'ahead');
+  run(w, { apply: false });
+  ok(logOf(w) === '', '15i a dry run writes nothing to the log');
+  run(w, { pf: { status: 0, report: RED_REPORT } });
+  const log = logOf(w);
+  ok(/^=== \S+ exit 0 pushed$/m.test(log) && !log.includes('[FAIL]'), '15j a pushed run is logged without the preflight report', log);
 }
 
 fs.rmSync(root, { recursive: true, force: true });

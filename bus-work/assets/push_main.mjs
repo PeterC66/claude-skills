@@ -33,6 +33,15 @@
  * 3 not now (inside the push interval, the lock held, tracked changes in the
  * way of a rebase) and the next run carries it.
  *
+ * WHAT IT LEAVES BEHIND (buses-data OA-634). The scheduler's wrapper discards
+ * stdout, and on 12 October a preflight that stayed red from 01:43 to 05:43
+ * held local main back with nothing to say which arm was red. So every --apply
+ * run appends its lines, a UTC stamp and its exit to `loop/push-main.log`
+ * (gitignored), with the preflight's own report whenever it exited neither 0
+ * nor 3. A red preflight on two consecutive runs that reached it writes ONE hold,
+ * `loop/your-move/push-job-preflight-red.md`, naming the FAIL arms and the
+ * oldest held commit; the streak lives in `loop/push-main.state.json`.
+ *
  * Usage, from any folder. The one placeholder is the buses-data checkout whose
  * local main is to be carried, and it is REQUIRED, never defaulted, because a
  * job that guessed which tree to rebase could rebase somebody else's:
@@ -41,7 +50,7 @@
  *
  * Zero dependencies (Node core only), matching the rest of assets/.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -62,6 +71,18 @@ export const LEASE_MIN = 40;
 export const PREFLIGHT_TIMEOUT_MS = 600000;
 
 const HOLD_FILE = 'push-job-rebase-conflict.md';
+export const RED_HOLD_FILE = 'push-job-preflight-red.md';
+export const LOG_FILE = 'push-main.log';
+export const STATE_FILE = 'push-main.state.json';
+/* Two reds in a row, not one: a single red can be a flaky arm the next hour
+ * clears, and the job runs hourly, so a second is an hour's delay, not a day's. */
+export const RED_RUNS_FOR_HOLD = 2;
+/* The log is trimmed to its newest half past this, so an hourly job cannot grow
+ * it without bound; a year of quiet runs is well under it. */
+export const LOG_MAX_BYTES = 1024 * 1024;
+/* Outcomes that answer "is the preflight red?" with a no, and so end a streak.
+ * A lock held, a fetch failed or an unanswered preflight asked nothing about red. */
+const STREAK_ENDERS = new Set(['pushed', 'nothing-to-push', 'deferred']);
 
 function git(repo, args, opts = {}) {
   const r = spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', input: opts.input, maxBuffer: 64 * 1024 * 1024 });
@@ -110,12 +131,105 @@ function writeHold(repo, name, d, why, files) {
   return file;
 }
 
+/* The arms the preflight's report marks `[FAIL]`, by id and label. */
+export function failedArms(report) {
+  const arms = [];
+  for (const line of String(report || '').split(/\r?\n/)) {
+    const m = /^\s*\[FAIL\]\s+(.+?)(?:\s+\(\d+(?:\.\d+)?s\))?\s*$/.exec(line);
+    if (m) arms.push(m[1]);
+  }
+  return arms;
+}
+
+function readState(file) {
+  try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return {}; }
+}
+
+function appendLog(file, text) {
+  appendFileSync(file, text, 'utf8');
+  try {
+    if (statSync(file).size > LOG_MAX_BYTES) {
+      const all = readFileSync(file, 'utf8');
+      const cut = all.indexOf('\n=== ', Math.floor(all.length / 2));
+      writeFileSync(file, cut > 0 ? all.slice(cut + 1) : all.slice(Math.floor(all.length / 2)), 'utf8');
+    }
+  } catch { /* a trim that fails leaves a long log, never a lost run */ }
+}
+
+function writeRedHold(repo, name, d, state, arms, oldest, ahead) {
+  const dir = path.join(repo, 'loop', 'your-move');
+  const file = path.join(dir, RED_HOLD_FILE);
+  if (existsSync(file)) return { file, written: false }; // one hold stands for as long as it is unanswered
+  mkdirSync(dir, { recursive: true });
+  const armList = arms.length ? arms.map((a) => `- ${a}`).join('\n') : '- (the report named no `[FAIL]` arm; read the log)';
+  writeFileSync(file, [
+    '# The push job\'s preflight has been red on consecutive runs, so local main is not reaching origin',
+    '',
+    `**Raised by:** ${name}, ${d.toISOString().slice(0, 10)}`,
+    '',
+    '## What is needed from you',
+    '',
+    `The hourly push job ran the preflight and got exit 1 (WOULD GO RED) on ${state.redRuns} consecutive runs since ${state.firstRedAt}, so it has pushed nothing, and ${ahead} commit${ahead === 1 ? '' : 's'} wait on local \`main\`, the oldest being \`${oldest || 'unknown'}\`. A session runs the preflight by hand from the buses-data root (\`node "C:/Buses/claude-skills/bus-work/assets/preflight.mjs" --repo .\`), fixes the red arm with a commit of its own, and deletes this file; the next push job run then carries everything.`,
+    '',
+    '## The red arms at the run that raised this',
+    '',
+    armList,
+    '',
+    `Every run's lines and the preflight's full report are in \`loop/${LOG_FILE}\` in the buses-data checkout, newest last.`,
+    '',
+  ].join('\n'), 'utf8');
+  return { file, written: true };
+}
+
 /* Everything outside git is injected, so the harness drives the real git against
- * throwaway repositories with a stub preflight, a stub stamper and a fixed clock. */
-export function pushMain({
+ * throwaway repositories with a stub preflight, a stub stamper and a fixed clock.
+ * This outer layer only records: it runs the carry, then (with --apply) appends
+ * the run to the log and keeps the red streak. */
+export function pushMain(opts = {}) {
+  const { repo, apply = false, now = () => new Date(), log = (s) => process.stdout.write(`push_main: ${s}\n`) } = opts;
+  const lines = [];
+  const res = pushMainOnce({ ...opts, log: (s) => { lines.push(s); log(s); } });
+  if (!apply || !repo || !existsSync(path.join(repo, '.git'))) return res;
+  try {
+    const loopDir = path.join(repo, 'loop');
+    mkdirSync(loopDir, { recursive: true });
+    const t = now();
+    const stateFile = path.join(loopDir, STATE_FILE);
+    const prev = readState(stateFile);
+    let state = { redRuns: prev.redRuns || 0, firstRedAt: prev.firstRedAt || null };
+    if (res.outcome === 'preflight-red') {
+      state = { redRuns: state.redRuns + 1, firstRedAt: state.firstRedAt || t.toISOString() };
+    } else if (STREAK_ENDERS.has(res.outcome)) {
+      state = { redRuns: 0, firstRedAt: null };
+    }
+    state.last = { at: t.toISOString(), exit: res.exit, outcome: res.outcome };
+    if (res.outcome === 'preflight-red' && state.redRuns >= RED_RUNS_FOR_HOLD) {
+      const oldest = git(repo, ['log', '--reverse', '--format=%h %s', 'origin/main..main']).out.split(/\r?\n/)[0] || '';
+      const ahead = Number(git(repo, ['rev-list', '--count', 'origin/main..main']).out) || 0;
+      const arms = failedArms(res.report);
+      const h = writeRedHold(repo, `sched-push-${localHHMM(t)}`, t, state, arms, oldest, ahead);
+      const said = h.written ? `wrote the hold ${h.file}` : `the hold ${h.file} already stands`;
+      lines.push(`preflight red on ${state.redRuns} consecutive runs since ${state.firstRedAt}; ${said}`);
+      log(lines[lines.length - 1]);
+      res.hold = h.file;
+    }
+    writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+    const block = [`=== ${t.toISOString()} exit ${res.exit} ${res.outcome}`, ...lines.map((l) => `  ${l}`)];
+    if (res.preflightExit !== undefined && res.preflightExit !== 0 && res.preflightExit !== 3) {
+      block.push('  --- the preflight\'s own report ---');
+      block.push(...String(res.report || '(it printed nothing)').replace(/\s+$/, '').split(/\r?\n/).map((l) => `  | ${l}`));
+    }
+    appendLog(path.join(loopDir, LOG_FILE), `${block.join('\n')}\n`);
+  } catch (e) {
+    log(`could not record this run under loop/: ${e.message}`);
+  }
+  return res;
+}
+
+function pushMainOnce({
   repo,
   apply = false,
-  preflight,                       // (repo) => exit status, or null when it could not run
+  preflight,                       // (repo) => exit status, or { status, report }, or null when it could not run
   docstamp,                        // (repo) => exit status
   readRemote = (repo) => git(repo, ['ls-remote', 'origin', 'refs/heads/main']).out.split(/\s+/)[0],
   now = () => new Date(),
@@ -227,15 +341,17 @@ export function pushMain({
       }
     }
 
-    const pf = preflight(repo);
+    const answer = preflight(repo);
+    const pf = answer !== null && typeof answer === 'object' ? answer.status : answer;
+    const pfx = { preflightExit: pf, report: answer !== null && typeof answer === 'object' ? answer.report : undefined };
     if (pf === 3) {
       log('preflight: DEFERRED (inside the push interval); nothing pushed, the next run carries it');
-      return res(EXIT_NOT_NOW, 'deferred');
+      return res(EXIT_NOT_NOW, 'deferred', pfx);
     }
     if (pf !== 0) {
       const exit = pf === 1 ? EXIT_NO : EXIT_CANNOT_TELL;
       log(`preflight exited ${pf === null ? 'without an answer (timed out or did not start)' : pf}; nothing pushed`);
-      return res(exit, pf === 1 ? 'preflight-red' : 'preflight-unanswered');
+      return res(exit, pf === 1 ? 'preflight-red' : 'preflight-unanswered', pfx);
     }
 
     const sending = Number(git(repo, ['rev-list', '--count', 'origin/main..main']).out);
@@ -256,11 +372,18 @@ export function pushMain({
   }
 }
 
-/* The real preflight and the real stamper, each by status with no shell and no pipe. */
+/* The real preflight and the real stamper, each by status with no shell and no pipe.
+ * The preflight's output is captured as well as passed through, so a red run's
+ * report reaches the log; its status is still read from spawnSync, never a pipe. */
 export function realPreflight(preflightScript = path.join(HERE, 'preflight.mjs')) {
   return (repo) => {
-    const r = spawnSync(process.execPath, [preflightScript, '--repo', repo], { stdio: 'inherit', timeout: PREFLIGHT_TIMEOUT_MS });
-    return r.status;
+    const r = spawnSync(process.execPath, [preflightScript, '--repo', repo], {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: PREFLIGHT_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024,
+    });
+    if (r.stdout) process.stdout.write(r.stdout);
+    if (r.stderr) process.stderr.write(r.stderr);
+    const report = [r.stdout, r.stderr].filter(Boolean).join('\n') + (r.error ? `\n(${r.error.code || r.error.message})` : '');
+    return { status: r.status, report };
   };
 }
 export function realDocstamp(script = path.resolve(HERE, '..', '..', 'stamp-docs', 'scripts', 'docstamp.py')) {

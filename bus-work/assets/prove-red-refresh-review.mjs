@@ -6,8 +6,9 @@
  *   node prove-red-refresh-review.mjs
  *
  * WHAT IS BEING FALSIFIED, and why both directions are mandatory. A `refresh` row is
- * a JOIN against the newest BODS scan report, so nothing could clear one except
- * rebuilding the map — which is what OA-205 was raised about, after all 40 High
+ * a JOIN against the newest BODS scan report, so before OA-205 only a rebuild was
+ * meant to clear one (and until OA-641 nothing read a rebuild either: the cases at
+ * the end) — which is what OA-205 was raised about, after all 40 High
  * Wycombe items were adjudicated to no-rebuild and the row came back unchanged.
  * `refresh-reviews.json` lets a map say the scan has been read. That introduces the
  * OPPOSITE failure, and it is the worse one: a suppression that never lifts is a
@@ -389,6 +390,97 @@ portalMaps(MAPS);
 //     rule, which there is a place's only route to a row.
 placeScan([SEC.dorking]);
 expectPlace('a pre-places report still reaches a place through its town', 'refresh-dorking-station', true);
+
+/* ---- a map REBUILT from the scan's own extract (buses-data OA-641) ----------
+ *
+ * Until OA-641 the only thing that cleared a refresh row was a `no-rebuild` review,
+ * whatever the headers said. On 2026-10-01 buses-data 10bc6040 rebuilt three St Neots
+ * place maps from S1 2026-10-01_1015, which reads the 1 Oct extract, and wrote no
+ * place review; their rows stood for twelve days. The rule now: a map whose newest S1
+ * was pulled at or after its region's dataset build (the report's own header) and
+ * whose newest S4 was drawn from no earlier pull owes this scan nothing. Each case is
+ * a pair again: quiet when rebuilt, back when it was not, or when a newer scan lands.
+ */
+console.log('\n== a map rebuilt from the scan\'s own extract: does the row go, and come back? ==');
+
+const header = (date, built) => `_Report ${date}; look-ahead 90d. Datasets used:_\n\n- **cambridgeshire** (\`cambridgeshire.sqlite\`) — built ${built}, feed valid x–y\n- **surrey** (\`surrey.sqlite\`) — built ${built}, feed valid x–y\n`;
+const scanWith = (date, built, sections) => {
+  const dir = path.join(proot, '_gtfs', 'upcoming');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `upcoming-report_${date}.md`), `# Upcoming\n${built ? header(date, built) : ''}\n${sections.join('\n')}`);
+};
+/** Give a map folder one S1 pull and one S4 drawing, by run id. */
+function builtAt(dir, name, s1, s4) {
+  const stages = Object.fromEntries(['S1', 'S2', 'S3', 'S4', 'S5', 'S6'].map((k) => [k, { runs: [], latest: null }]));
+  if (s1) stages.S1 = { runs: [{ id: s1, dir: `S1-services/${s1}` }], latest: s1 };
+  if (s4) stages.S4 = { runs: [{ id: s4, dir: `S4-generate/${s4}`, version: '1.1' }], latest: s4 };
+  for (const k of ['S1', 'S4']) for (const r of stages[k].runs) fs.mkdirSync(path.join(dir, r.dir), { recursive: true });
+  if (s4) fs.writeFileSync(path.join(dir, 'S4-generate', s4, 'routes.json'), JSON.stringify({ engine: 'deadbeef01' })); // latestRunDir reads a file, not the folder
+  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ town: name, stages }));
+}
+function rowsOfType(type) {
+  const out = execFileSync('node', [TOOL, '--json', '--local', '--buses', proot, '--portal', stubPortal],
+    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  const j = JSON.parse(out);
+  return { items: j.items.filter((i) => i.type === type), adjudicated: j.meta.adjudicated || [] };
+}
+const BUILT = `${SCAN} 08:00`;
+
+// 23. CONTROL: pulled a month before the extract was built. The row prints, so the
+//     quiet case below cannot pass on a join that found nothing.
+builtAt(elyCoop, 'Ely Co-op', `${OLDER}_1200`, `v1.0_${OLDER}_1230`);
+scanWith(SCAN, BUILT, [SEC.ely]);
+expectPlace('CONTROL: pulled before the scan\'s extract — the row prints', 'refresh-ely-co-op', true);
+
+// 24. THE CASE OA-641 WAS RAISED FOR: pulled after the extract was built, drawn from
+//     that pull, no review anywhere. Quiet, and said out loud.
+builtAt(elyCoop, 'Ely Co-op', `${SCAN}_0915`, `v1.1_${SCAN}_0930`);
+expectPlace('rebuilt from the scan\'s own extract, no review — no row', 'refresh-ely-co-op', false);
+{
+  const a = rowsOfType('refresh').adjudicated.find((x) => x.map === 'Ely Co-op' && x.scan === SCAN);
+  const ok = !!a && /rebuilt/.test(a.by || '');
+  console.log(`  ${ok ? 'SAID ' : 'MISS '} the rebuild is reported among the adjudicated maps`);
+  if (!ok) { bad++; console.log(`        meta.adjudicated held: ${JSON.stringify(rowsOfType('refresh').adjudicated)}`); }
+}
+
+// 25. The morning trap: pulled on the scan's own DATE but before the dataset was
+//     built, so it read the previous extract. A rule on dates alone would go quiet.
+builtAt(elyCoop, 'Ely Co-op', `${SCAN}_0700`, `v1.1_${SCAN}_0730`);
+expectPlace('pulled the same day but before the build — the row prints', 'refresh-ely-co-op', true);
+
+// 26. Pulled but never redrawn: a fresh S1 with the newest S4 older than it has
+//     changed nothing on the sheet.
+builtAt(elyCoop, 'Ely Co-op', `${SCAN}_0915`, `v1.0_${OLDER}_1230`);
+expectPlace('a fresh pull the sheet was not redrawn from — the row prints', 'refresh-ely-co-op', true);
+
+// 27. THE OTHER DIRECTION: rebuilt from this scan, then a NEWER scan lands, built
+//     after the pull. The row must come back.
+builtAt(elyCoop, 'Ely Co-op', `${SCAN}_0915`, `v1.1_${SCAN}_0930`);
+scanWith(NEWER, `${NEWER} 08:00`, [SEC.ely]);
+expectPlace('a NEWER scan lands after the rebuild — the row returns', 'refresh-ely-co-op', true);
+
+// 28. A report with no dataset header cannot say when its extract was built, so a
+//     rebuild proves nothing against it: FAIL SAFE, the row prints.
+scanWith(SCAN, null, [SEC.ely]);
+expectPlace('a report with no dataset header — the row still prints', 'refresh-ely-co-op', true);
+
+// 29. The town path takes the same rule: Dorking has no portal map, so its row is
+//     refresh-local, and a rebuild from this scan's extract clears it too.
+//     A report with no place section joins places by subject, so the stub portal
+//     keeps only Ely Co-op here, or Dorking Station would take Dorking's section.
+const dorkingDir = path.join(proot, 'Areas', 'Dorking');
+portalMaps([MAPS[0]]);
+scanWith(SCAN, BUILT, [SEC.dorking]);
+builtAt(dorkingDir, 'Dorking', `${OLDER}_1200`, `v1.0_${OLDER}_1230`);
+{
+  const before = rowsOfType('refresh-local').items.some((i) => i.key === 'refresh-local-Dorking');
+  builtAt(dorkingDir, 'Dorking', `${SCAN}_1004`, `v2.0_${SCAN}_1010`);
+  const after = rowsOfType('refresh-local').items.some((i) => i.key === 'refresh-local-Dorking');
+  const ok = before && !after;
+  console.log(`  ${ok ? 'QUIET' : 'MISS '} a town without a portal map, rebuilt from this scan — its local row goes`);
+  if (!ok) { bad++; console.log(`        before rebuild: ${before}, after: ${after}`); }
+}
 fs.rmSync(proot, { recursive: true, force: true });
 
 fs.rmSync(root, { recursive: true, force: true });

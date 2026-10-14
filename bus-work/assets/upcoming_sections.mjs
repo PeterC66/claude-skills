@@ -47,9 +47,49 @@ export function parseUpcoming(md) {
     const meta = (body.split('\n').find((l) => l.trim().startsWith('_')) || '').trim();
     return {
       town: h[1].trim(), kind: /^_kind place\b/.test(meta) ? 'place' : 'area',
+      region: (meta.match(/(?<![A-Za-z])region ([A-Za-z0-9-]+)/) || [])[1] || null, // OA-641: which dataset's build time this section was mined from
       upcoming, toVerify, actionable: upcoming > 0 || toVerify > 0, body, effective: earliestEffective(body),
     };
   }).filter(Boolean);
+}
+
+/**
+ * When each region's dataset was built, from the report's own header (buses-data
+ * OA-641): `{ cambridgeshire: '2026-10-01 08:00' }`. `gtfs_build.py` writes that
+ * stamp in local time, the clock stage.js names its run folders by, so the two
+ * compare as strings. Only the text before the first section is read; a report
+ * with no header gives {}, and a rebuild then proves nothing against it.
+ */
+export function parseDatasets(md) {
+  const head = String(md || '').split(/^## /m)[0];
+  const out = {};
+  for (const x of head.matchAll(/^- \*\*([\w-]+)\*\* \(`[^`]*`\) — built (\d{4}-\d{2}-\d{2} \d{2}:\d{2})/gm)) out[x[1]] = x[2];
+  return out;
+}
+
+/*
+ * WAS THIS MAP REBUILT FROM THIS SCAN'S EXTRACT? (buses-data OA-641) worklist.mjs
+ * asks it after a map's `refresh-reviews.json`, because the two are the only things
+ * that clear a refresh row. Until OA-641 the worklist's comments said a rebuild
+ * cleared one and nothing read a rebuild: on 2026-10-01 buses-data 10bc6040 rebuilt
+ * three St Neots place maps from the 1 Oct extract with reviews only for the town,
+ * and the place rows stood for twelve days. This reads facts every build already
+ * records, rather than one more step a rebuild can skip.
+ *
+ * Yes when the map's newest S1 was pulled at or after the build of the dataset the
+ * section was mined from, and its newest S4 was drawn from no earlier pull — a fresh
+ * S1 the sheet was not redrawn from changes nothing anyone sees. FAIL SAFE: no
+ * region, no header, no manifest or an unreadable run id suppresses nothing. A newer
+ * scan's dataset is built after the pull, so its row comes back.
+ */
+const runStamp = (id) => { const x = /(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})$/.exec(id || ''); return x ? `${x[1]} ${x[2]}:${x[3]}` : null; };
+export function rebuiltFromScan(manifest, section, built) {
+  const builtAt = section && section.region && built ? built[section.region] : null;
+  const st = (manifest && manifest.stages) || {};
+  const s1 = st.S1 && st.S1.latest, s4 = st.S4 && st.S4.latest;
+  const t1 = runStamp(s1), t4 = runStamp(s4);
+  if (!builtAt || !t1 || !t4 || t1 < builtAt || t4 < t1) return null;
+  return { by: 'rebuilt from this scan', note: `S1 ${s1} was pulled after the ${section.region} extract was built (${builtAt}); S4 ${s4} was drawn from it.` };
 }
 
 /** "5 upcoming service changes", or "1 upcoming service change, 2 to verify". */

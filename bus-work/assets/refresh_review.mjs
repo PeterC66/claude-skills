@@ -4,10 +4,16 @@
  *
  * WHY THIS EXISTS (buses-data OA-205). The worklist's `refresh` rows are a JOIN,
  * not a queue: `worklist.mjs` reads the newest `_gtfs/upcoming/upcoming-report_*.md`
- * and prints one row per map whose town has a section in it. Nothing can mark such a
- * row done except rebuilding the map — and on 2026-08-31 all 40 High Wycombe items
- * were worked to a conclusion and NONE of them needed a rebuild. The row came back
- * unchanged, with the same 40 on it.
+ * and prints one row per map whose town has a section in it. On 2026-08-31 all 40
+ * High Wycombe items were worked to a conclusion and NONE of them needed a rebuild.
+ * The row came back unchanged, with the same 40 on it.
+ *
+ * TWO THINGS CLEAR A ROW, and since buses-data OA-641 both are real: a `no-rebuild`
+ * review written by this script, or a rebuild from the scan's own extract — the
+ * map's newest S1 pulled after the report's dataset was built, and its newest S4
+ * drawn from that pull (`rebuiltFromScan` in upcoming_sections.mjs). Until OA-641 this header said
+ * a rebuild cleared the row and nothing read one; three St Neots places rebuilt on
+ * 2026-10-01 kept their rows for twelve days.
  *
  * That leaves the next session three options and two of them are bad: redo an
  * adjudication that cost an operator-timetable read in a browser, rebuild the map to
@@ -54,9 +60,11 @@ const VERDICTS = ['no-rebuild', 'rebuild-needed'];
 const README = [
   'Adjudications of a BODS upcoming-changes scan against THIS map (buses-data OA-205).',
   '',
-  'A worklist `refresh` row is derived from the newest scan report, so nothing can',
-  'clear one except rebuilding the map. This file is how a map says "somebody has',
-  'read that scan and this sheet does not need to change". worklist.mjs suppresses',
+  'A worklist `refresh` row is derived from the newest scan report. Two things clear',
+  'one: rebuilding the map from that scan\'s extract (its newest S1 pulled after the',
+  'report\'s dataset was built, its newest S4 drawn from that pull), or an entry here.',
+  'This file is how a map says "somebody has read that scan and this sheet does not',
+  'need to change", with no rebuild. worklist.mjs suppresses',
   'the row when the newest entry here names the CURRENT scan date with verdict',
   '"no-rebuild"; a newer scan brings the row back, because the match is on the date.',
   '',

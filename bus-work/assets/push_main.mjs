@@ -169,7 +169,7 @@ function writeRedHold(repo, name, d, state, arms, oldest, ahead) {
     '',
     '## What is needed from you',
     '',
-    `The hourly push job ran the preflight and got exit 1 (WOULD GO RED) on ${state.redRuns} consecutive runs since ${state.firstRedAt}, so it has pushed nothing, and ${ahead} commit${ahead === 1 ? '' : 's'} wait on local \`main\`, the oldest being \`${oldest || 'unknown'}\`. A session runs the preflight by hand from the buses-data root (\`node "C:/Buses/claude-skills/bus-work/assets/preflight.mjs" --repo .\`), fixes the red arm with a commit of its own, and deletes this file; the next push job run then carries everything.`,
+    `The hourly push job ran the preflight and got exit 1 (WOULD GO RED) on ${state.redRuns} consecutive runs since ${state.firstRedAt}, so it has pushed nothing, and ${ahead} commit${ahead === 1 ? '' : 's'} wait on local \`main\`, the oldest being \`${oldest || 'unknown'}\`. A session runs the push preflight by hand (claude-skills \`bus-work/assets/preflight.mjs\`, with \`--repo\` naming the buses-data checkout), fixes the red arm with a commit of its own, and deletes this file; the next push job run then carries everything.`,
     '',
     '## The red arms at the run that raised this',
     '',

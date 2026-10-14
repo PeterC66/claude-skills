@@ -99,7 +99,7 @@ import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_
 import { readScanState, bodsScanItems, readGtfsDirt, gtfsUncommittedItems } from './bods_scan.mjs';
 import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh, nothingOwed, placeGradeOpts } from './refresh_grades.mjs';
 import { compareRows } from './refresh_deadline.mjs';
-import { parseUpcoming, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
+import { parseUpcoming, parseDatasets, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
@@ -441,7 +441,7 @@ function fromUpcomingReport() {
   const date = (files[files.length - 1].match(/(\d{4}-\d{2}-\d{2})/) || [])[1];
   const md = readFileSync(file, 'utf8');
   const all = parseUpcoming(md);
-  return { file, date, ageDays: daysSince(date), sections: all.filter((s) => s.actionable), placeAware: all.some((s) => s.kind === 'place') };
+  return { file, date, ageDays: daysSince(date), sections: all.filter((s) => s.actionable), placeAware: all.some((s) => s.kind === 'place'), built: parseDatasets(md) };
 }
 
 // ---- correspondence: real people waiting on us -----------------------------
@@ -779,11 +779,19 @@ const haveKey = (k) => items.some((i) => i.key === k);
 /*
  * HAS THIS MAP ALREADY BEEN ADJUDICATED AGAINST THIS SCAN? (buses-data OA-205)
  *
- * A refresh row is a JOIN against the newest scan report, so nothing can clear one
- * except rebuilding the map. On 2026-08-31 all 40 High Wycombe items were worked to
- * a conclusion and none of them needed a rebuild; the row came back unchanged, with
- * the same 40 on it. `refresh_review.mjs` writes `<mapDir>/refresh-reviews.json`
- * and this reads it.
+ * A refresh row is a JOIN against the newest scan report, and TWO things clear one:
+ * a `no-rebuild` review of that scan in the map's own folder, or a rebuild from that
+ * scan's extract (`rebuiltFrom`, below). On 2026-08-31 all 40 High Wycombe items
+ * were worked to a conclusion and none of them needed a rebuild; the row came back
+ * unchanged, with the same 40 on it. `refresh_review.mjs` writes
+ * `<mapDir>/refresh-reviews.json` and this reads it.
+ *
+ * UNTIL OA-641 THIS COMMENT SAID A REBUILD CLEARED THE ROW, AND NOTHING DID. On
+ * 2026-10-01 buses-data 10bc6040 rebuilt three St Neots place maps from the 1 Oct
+ * extract and wrote reviews only for the town, so the place rows stood for twelve
+ * days. The rebuild test reads facts the build already records — the report's
+ * dataset build time and the map's own S1 and S4 run ids — rather than one more step
+ * a rebuild can skip.
  *
  * MATCHED ON THE SCAN DATE AND NOTHING ELSE, which is what makes the suppression
  * safe: reviewing 2026-08-31 cannot silence 2026-09-30, because the row is rebuilt
@@ -814,6 +822,27 @@ const reviewedAgainst = (mapDir, scanDate) => {
   try { j = JSON.parse(readFileSync(f, 'utf8')); } catch { return null; }
   const hit = (j.reviews || []).find((r) => r.scan === scanDate && r.verdict === 'no-rebuild');
   return hit || null;
+};
+/*
+ * WAS THIS MAP REBUILT FROM THIS SCAN'S EXTRACT? (buses-data OA-641) Yes when its
+ * newest S1 was pulled at or after the build of the dataset the section was mined
+ * from, and its newest S4 was drawn from no earlier pull — a fresh S1 the sheet was
+ * not redrawn from changes nothing anyone sees. Run ids and the report's `built`
+ * stamp are both local time (stage.js, gtfs_build.py). FAIL SAFE: a section with no
+ * region, a report with no dataset header or an unreadable manifest suppresses
+ * nothing. A newer scan's dataset is built after the pull, so its row comes back.
+ */
+const runStamp = (id) => { const x = /(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})$/.exec(id || ''); return x ? `${x[1]} ${x[2]}:${x[3]}` : null; };
+const rebuiltFrom = (mapDir, section) => {
+  const builtAt = mapDir && section.region && upcoming.built ? upcoming.built[section.region] : null;
+  if (!builtAt) return null;
+  let m = null;
+  try { m = JSON.parse(readFileSync(path.join(mapDir, 'manifest.json'), 'utf8')); } catch { return null; }
+  const st = (m && m.stages) || {};
+  const s1 = st.S1 && st.S1.latest, s4 = st.S4 && st.S4.latest;
+  const t1 = runStamp(s1), t4 = runStamp(s4);
+  if (!t1 || !t4 || t1 < builtAt || t4 < t1) return null;
+  return { by: 'rebuilt from this scan', note: `S1 ${s1} was pulled after the ${section.region} extract was built (${builtAt}); S4 ${s4} was drawn from it.` };
 };
 /*
  * A PLACE HAS ITS OWN FILE, and this resolver is the reason that is true rather
@@ -847,7 +876,7 @@ if (upcoming) {
     const localTown = tree.towns.find((t) => t.name.toLowerCase() === s.town.toLowerCase());
     for (const m of maps) {
       if (haveKey(`refresh-${m.slug}`)) continue; // the portal already flagged this one
-      const seen = reviewedAgainst(localDirOf(m), upcoming.date);
+      const seen = reviewedAgainst(localDirOf(m), upcoming.date) || rebuiltFrom(localDirOf(m), s);
       if (seen) { noteAdjudicated(`map:${m.slug}`, { map: m.name, scan: upcoming.date, by: seen.by, note: seen.note }); continue; }
       const gk = placeGradeOpts(m, tree.places.find((x) => x.dir === localDirOf(m))); const none = nothingOwed(grades, s.town, upcoming.date, gk); // OA-574, OA-628: a NOTHING grade owes nothing; a place reads only its own
       if (none) { noteAdjudicated(`map:${m.slug}`, { map: m.name, scan: upcoming.date, by: 'graded NOTHING', note: none.note }); continue; }
@@ -876,7 +905,7 @@ if (upcoming) {
       });
     }
     if (!maps.length && localTown) {
-      const seenLocal = reviewedAgainst(localTown.dir, upcoming.date);
+      const seenLocal = reviewedAgainst(localTown.dir, upcoming.date) || rebuiltFrom(localTown.dir, s);
       if (seenLocal) { noteAdjudicated(`local:${localTown.name.toLowerCase()}`, { map: localTown.name, scan: upcoming.date, by: seenLocal.by, note: seenLocal.note }); continue; }
       const noneLocal = nothingOwed(grades, localTown.name, upcoming.date); // OA-574
       if (noneLocal) { noteAdjudicated(`local:${localTown.name.toLowerCase()}`, { map: localTown.name, scan: upcoming.date, by: 'graded NOTHING', note: noneLocal.note }); continue; }

@@ -47,9 +47,24 @@ export function parseUpcoming(md) {
     const meta = (body.split('\n').find((l) => l.trim().startsWith('_')) || '').trim();
     return {
       town: h[1].trim(), kind: /^_kind place\b/.test(meta) ? 'place' : 'area',
+      region: (meta.match(/(?<![A-Za-z])region ([A-Za-z0-9-]+)/) || [])[1] || null, // OA-641: which dataset's build time this section was mined from
       upcoming, toVerify, actionable: upcoming > 0 || toVerify > 0, body, effective: earliestEffective(body),
     };
   }).filter(Boolean);
+}
+
+/**
+ * When each region's dataset was built, from the report's own header (buses-data
+ * OA-641): `{ cambridgeshire: '2026-10-01 08:00' }`. `gtfs_build.py` writes that
+ * stamp in local time, the clock stage.js names its run folders by, so the two
+ * compare as strings. Only the text before the first section is read; a report
+ * with no header gives {}, and a rebuild then proves nothing against it.
+ */
+export function parseDatasets(md) {
+  const head = String(md || '').split(/^## /m)[0];
+  const out = {};
+  for (const x of head.matchAll(/^- \*\*([\w-]+)\*\* \(`[^`]*`\) — built (\d{4}-\d{2}-\d{2} \d{2}:\d{2})/gm)) out[x[1]] = x[2];
+  return out;
 }
 
 /** "5 upcoming service changes", or "1 upcoming service change, 2 to verify". */

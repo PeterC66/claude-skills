@@ -310,6 +310,18 @@ expect('and onto the waiting row', { key: 'corr-asked-Test Market', present: tru
 // row would nag about every question Peter has deliberately left open.
 write('Areas/Testtown/Places/Test Market/local-decisions.json', unasked({ state: 'open' }));
 expect('a question somebody marked "open" is not called never-asked', { key: 'corr-unasked-Test Market', present: false });
+
+// 4c. A QUESTION ASKED AND NEVER ANSWERED CAN BE CLOSED (buses-data OA-642).
+// Soham's Thursday 117 question was scored not answered on 2026-10-10, but the
+// only terminal states were `answered` and `dont-know`, and `dont-know` records
+// a statement nobody made, so the waiting row stood for ever. `unanswered` is
+// terminal for this source and NOT an answer for delivery (the portal still
+// treats it as outstanding). Against a reader that raised the waiting row for
+// any state other than `answered` or `dont-know`, the first case goes red.
+write('Areas/Testtown/Places/Test Market/local-decisions.json',
+  unasked({ state: 'unanswered', note: 'Nothing came back by the scoring date; our default stands.', at: '2026-10-10' }));
+expect('closing it as "unanswered" takes it off the waiting row', { key: 'corr-asked-Test Market', present: false });
+expect('and does not put it back on the never-asked row', { key: 'corr-unasked-Test Market', present: false });
 fs.rmSync(path.join(root, 'Areas', 'Testtown', 'Places'), { recursive: true, force: true });
 
 // 5. a tree with no Correspondence at all must be silent, not an error

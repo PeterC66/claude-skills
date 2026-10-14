@@ -53,7 +53,9 @@ export function localDecisionItems(buses, daysSince) {
 
     // A question we asked and never got an answer to. WAITING ON OTHERS, not
     // your move -- and one of these is a question the correspondent volunteered
-    // to go and research for us.
+    // to go and research for us. The match is exact on purpose: a question
+    // closed as `unanswered` (asked, waited for, no reply; buses-data OA-642)
+    // is terminal here and raises neither this row nor the never-asked one.
     const asked = all.filter((d) => d?.answer?.state === 'asked');
     if (asked.length) {
       const oldest = oldestOf(asked);

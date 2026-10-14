@@ -166,12 +166,11 @@ console.log('\n4. a pull request that has been open too long');
 console.log(`\n5. THE CONTROL THAT MATTERS MOST — a fresh pull request says nothing (the cadence is ${STALE_DAYS} days)`);
 {
   check('opened today, nothing', rows(mkLoop('today', { record: rec(1, { open: [pr(1, 0)] }) })).items.length === 0);
-  check('opened 2 days ago, nothing', rows(mkLoop('two-days', { record: rec(1, { open: [pr(1, 2)] }) })).items.length === 0);
-  // The boundary, both sides. A week is the threshold; six days must be quiet
-  // or "a week" is a word rather than a number.
+  // The boundary, both sides. Two days is the threshold; one day must be quiet
+  // or "two days" is a word rather than a number.
   check(`${STALE_DAYS - 1} days — still quiet`, rows(mkLoop('day6', { record: rec(1, { open: [pr(1, STALE_DAYS - 1)] }) })).items.length === 0);
   check(`${STALE_DAYS} days — raises`, rows(mkLoop('day7', { record: rec(1, { open: [pr(1, STALE_DAYS)] }) })).items.length === 1);
-  check('the threshold is the module\'s constant, not a literal here', STALE_DAYS === 7, String(STALE_DAYS));
+  check('the threshold is the module\'s constant, not a literal here', STALE_DAYS === 2, String(STALE_DAYS));
   // And the caller can move it without the module reading the clock itself.
   const st = readPrSweep(mkLoop('override', { record: rec(1, { open: [pr(1, 10)] }) }));
   check('a 30-day threshold would leave the same record quiet', prSweepItems({ state: st, now: NOW, staleDays: 30 }).items.length === 0);
@@ -195,8 +194,8 @@ console.log('\n6. STALENESS IS MEASURED FROM createdAt, NOT updatedAt — measur
   // MUTATION CONTROL, the other way: a pull request opened today but untouched
   // for a month is impossible, so the inverse case is the one that proves the
   // trigger is not secretly updatedAt.
-  const quiet = rows(mkLoop('quiet', { record: rec(1, { open: [pr(65, 2, { updatedAt: daysAgo(2) })] }) }));
-  check('open 2 days — quiet, whatever updatedAt says', quiet.items.length === 0, String(quiet.items.length));
+  const quiet = rows(mkLoop('quiet', { record: rec(1, { open: [pr(65, 1, { updatedAt: daysAgo(1) })] }) }));
+  check('open 1 day — quiet, whatever updatedAt says', quiet.items.length === 0, String(quiet.items.length));
 }
 
 console.log('\n7. A DRAFT RAISES NOTHING AND IS COUNTED — claude-skills #3 and #4 forbid their own merge in their titles');
@@ -281,7 +280,7 @@ console.log(`\n10. the cadence row — the record itself going stale (${CADENCE_
   check(`${CADENCE_HOURS} hours — raises`, due.items.length === 1, String(due.items.length));
   check('…the due row, at rank 8', one(due).key === 'pr-sweep-due' && one(due).rank === 8);
   check('…and the title carries the HOURS, not just the word', new RegExp(`last ran ${CADENCE_HOURS} hours ago`).test(one(due).title), one(due).title);
-  check('the cadence is the module\'s constant, not a literal here', CADENCE_HOURS === 48, String(CADENCE_HOURS));
+  check('the cadence is the module\'s constant, not a literal here', CADENCE_HOURS === 24, String(CADENCE_HOURS));
   // The relation the header argues for: the cadence must be INSIDE the stale
   // threshold, or a stall can be missed by longer than the gap.
   check('the cadence is inside the stale threshold, so a stall cannot be missed by more than it', CADENCE_HOURS / 24 < STALE_DAYS,

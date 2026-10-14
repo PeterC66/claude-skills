@@ -11,7 +11,7 @@
  * TWO THINGS CLEAR A ROW, and since buses-data OA-641 both are real: a `no-rebuild`
  * review written by this script, or a rebuild from the scan's own extract — the
  * map's newest S1 pulled after the report's dataset was built, and its newest S4
- * drawn from that pull (`rebuiltFrom` in worklist.mjs). Until OA-641 this header said
+ * drawn from that pull (`rebuiltFromScan` in upcoming_sections.mjs). Until OA-641 this header said
  * a rebuild cleared the row and nothing read one; three St Neots places rebuilt on
  * 2026-10-01 kept their rows for twelve days.
  *

@@ -99,7 +99,7 @@ import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_
 import { readScanState, bodsScanItems, readGtfsDirt, gtfsUncommittedItems } from './bods_scan.mjs';
 import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh, nothingOwed, placeGradeOpts } from './refresh_grades.mjs';
 import { compareRows } from './refresh_deadline.mjs';
-import { parseUpcoming, parseDatasets, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
+import { parseUpcoming, parseDatasets, rebuiltFromScan, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
@@ -779,19 +779,10 @@ const haveKey = (k) => items.some((i) => i.key === k);
 /*
  * HAS THIS MAP ALREADY BEEN ADJUDICATED AGAINST THIS SCAN? (buses-data OA-205)
  *
- * A refresh row is a JOIN against the newest scan report, and TWO things clear one:
- * a `no-rebuild` review of that scan in the map's own folder, or a rebuild from that
- * scan's extract (`rebuiltFrom`, below). On 2026-08-31 all 40 High Wycombe items
- * were worked to a conclusion and none of them needed a rebuild; the row came back
- * unchanged, with the same 40 on it. `refresh_review.mjs` writes
- * `<mapDir>/refresh-reviews.json` and this reads it.
- *
- * UNTIL OA-641 THIS COMMENT SAID A REBUILD CLEARED THE ROW, AND NOTHING DID. On
- * 2026-10-01 buses-data 10bc6040 rebuilt three St Neots place maps from the 1 Oct
- * extract and wrote reviews only for the town, so the place rows stood for twelve
- * days. The rebuild test reads facts the build already records — the report's
- * dataset build time and the map's own S1 and S4 run ids — rather than one more step
- * a rebuild can skip.
+ * A refresh row is a JOIN against the newest scan report; a `no-rebuild` review in
+ * the map's folder clears it, and so (OA-641, `rebuiltFromScan`) does a rebuild from
+ * that scan's extract. All 40 High Wycombe items of 2026-08-31 were concluded with no
+ * rebuild and the row came back. `refresh_review.mjs` writes the reviews.
  *
  * MATCHED ON THE SCAN DATE AND NOTHING ELSE, which is what makes the suppression
  * safe: reviewing 2026-08-31 cannot silence 2026-09-30, because the row is rebuilt
@@ -823,27 +814,7 @@ const reviewedAgainst = (mapDir, scanDate) => {
   const hit = (j.reviews || []).find((r) => r.scan === scanDate && r.verdict === 'no-rebuild');
   return hit || null;
 };
-/*
- * WAS THIS MAP REBUILT FROM THIS SCAN'S EXTRACT? (buses-data OA-641) Yes when its
- * newest S1 was pulled at or after the build of the dataset the section was mined
- * from, and its newest S4 was drawn from no earlier pull — a fresh S1 the sheet was
- * not redrawn from changes nothing anyone sees. Run ids and the report's `built`
- * stamp are both local time (stage.js, gtfs_build.py). FAIL SAFE: a section with no
- * region, a report with no dataset header or an unreadable manifest suppresses
- * nothing. A newer scan's dataset is built after the pull, so its row comes back.
- */
-const runStamp = (id) => { const x = /(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})$/.exec(id || ''); return x ? `${x[1]} ${x[2]}:${x[3]}` : null; };
-const rebuiltFrom = (mapDir, section) => {
-  const builtAt = mapDir && section.region && upcoming.built ? upcoming.built[section.region] : null;
-  if (!builtAt) return null;
-  let m = null;
-  try { m = JSON.parse(readFileSync(path.join(mapDir, 'manifest.json'), 'utf8')); } catch { return null; }
-  const st = (m && m.stages) || {};
-  const s1 = st.S1 && st.S1.latest, s4 = st.S4 && st.S4.latest;
-  const t1 = runStamp(s1), t4 = runStamp(s4);
-  if (!t1 || !t4 || t1 < builtAt || t4 < t1) return null;
-  return { by: 'rebuilt from this scan', note: `S1 ${s1} was pulled after the ${section.region} extract was built (${builtAt}); S4 ${s4} was drawn from it.` };
-};
+const rebuiltFrom = (dir, s) => { try { return rebuiltFromScan(JSON.parse(readFileSync(path.join(dir, 'manifest.json'), 'utf8')), s, upcoming.built); } catch { return null; } }; // OA-641
 /*
  * A PLACE HAS ITS OWN FILE, and this resolver is the reason that is true rather
  * than hoped for: a place's row is suppressed by a review in its OWN folder, never

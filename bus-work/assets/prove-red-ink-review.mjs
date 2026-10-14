@@ -24,7 +24,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import {
   commitRecord, reportCommit, neutralise, inkChange, runDate, pickRuns, collect, mergeAnswers, answer, deliverable, page, resolvePlaces, carriedNames, withCarried, sameInkAsAnswered, Refused, SCHEMA,
-  recordStaged, markStaged, newestRender,
+  recordStaged, markStaged, newestRender, waitingItems,
 } from './ink_review.mjs';
 
 let bad = 0, ran = 0;
@@ -325,6 +325,27 @@ console.log('\n8. A staging made by hand is recorded against the build the revie
   check('a map not in the review refuses', refuses(() => recordStaged(r, 'Ely', opts()), /not in the 2026-10-01 review/));
   const kept = mergeAnswers(rec, { schema: 1, scan: SCAN, maps: [{ ...r.maps[0] }] });
   check('re-collecting the same build keeps the hand staging and its proposal', kept.maps[0].staged && kept.maps[0].staged.proposal === 171 && deliverable(kept).staged.length === 1, JSON.stringify(kept.maps[0].staged));
+}
+
+console.log('\n9. A map waiting on an answer is a worklist row, and nothing else is (2026-10-14)');
+{
+  const m = (map, extra = {}) => ({ map, status: 'ink-moved', after: NEW, ...extra });
+  const ok = { verdict: 'accept', after: NEW, by: 'peter' };
+  const rv = (scan, maps) => ({ scan, review: { schema: SCHEMA, scan, maps }, page: true });
+  const oct = rv('2026-10-01', [m('March'), m('Ely', { answer: ok }), m('Ramsey', { status: 'no-ink' }), m('Huntingdon', { answer: { ...ok, verdict: 'hold' } }), m('Soham', { answer: { ...ok, after: OLD } })]);
+  const rows = waitingItems([oct], { busesDir: BUSES, assets: 'X:/assets', daysSince: () => 13 });
+  check('one row for the review, YOUR MOVE rank 5, keyed by scan', rows.length === 1 && rows[0].rank === 5 && rows[0].key === 'ink-waiting-2026-10-01', JSON.stringify(rows.map((r) => [r.key, r.rank])));
+  check('  naming the unanswered map and the one answered for an OLDER build, and no other', /^March, Soham — /.test(rows[0].why), rows[0].why);
+  check('  counting them in its title, and aged from the scan', /2 maps waiting/.test(rows[0].title) && rows[0].ageDays === 13, rows[0].title);
+  check('  pointing at the page on disk, then at --answer', /loop[\\/]ink-review[\\/]2026-10-01[\\/]index\.html/.test(rows[0].do[0].what) && /--answer/.test(rows[0].do[1].what), JSON.stringify(rows[0].do));
+  check('an accepted, held, no-ink or staged review raises nothing', !waitingItems([rv('2026-10-01', [m('Ely', { answer: ok }), m('Huntingdon', { answer: { ...ok, verdict: 'hold' } }), m('Ramsey', { status: 'no-ink' }), m('March', { staged: { after: NEW } })])]).length);
+  const nov = rv('2026-11-01', [m('March')]);
+  const both = waitingItems([oct, nov]);
+  check('a map a LATER review also holds is asked about there, not twice', both.length === 2 && !/March/.test(both[0].why) && /^Soham — /.test(both[0].why) && /^March — /.test(both[1].why), JSON.stringify(both.map((r) => r.why.split(' — ')[0])));
+  const noPage = waitingItems([{ ...oct, page: false }], { assets: 'X:/assets' });
+  check('no page on disk: the first step is the collect that rebuilds it, from the bus-work folder', noPage[0].do[0].kind === 'shell' && noPage[0].do[0].cmd === 'node ink_review.mjs --scan 2026-10-01' && noPage[0].do[0].cwd === 'X:/assets', JSON.stringify(noPage[0].do[0]));
+  const broken = waitingItems([{ scan: '2026-10-01', review: null, page: false }]);
+  check('a record that will not parse is rank 0, not silence', broken.length === 1 && broken[0].rank === 0 && broken[0].key === 'ink-review-unreadable-2026-10-01', JSON.stringify(broken));
 }
 
 console.log(`\n${ran - bad} of ${ran} passed`);

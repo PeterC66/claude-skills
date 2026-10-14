@@ -39,7 +39,7 @@ const has = (r, key, level) => r.findings.some((f) => f.key === key && (!level |
 async function suite(m, label, verbose) {
   let bad = 0;
   const check = (name, cond) => { if (cond) { if (verbose) console.log(`  ok  ${name}`); } else { bad++; if (verbose) console.error(`  ✗   ${name}`); } };
-  const { analyse, bucketActions, parseAction, frontMatter, localDate, gather, classifyBusWork, promptScripts, parseResources, parseBusWork, passedOver, render, renderCapacity, readInkReview } = m;
+  const { analyse, bucketActions, parseAction, frontMatter, localDate, gather, classifyBusWork, regradeEscalated, promptScripts, parseResources, parseBusWork, passedOver, render, renderCapacity, readInkReview } = m;
 
   // 1. the buckets, and the date edge that decides whether a row is free
   const b = bucketActions([
@@ -148,6 +148,19 @@ async function suite(m, label, verbose) {
   const parsedBw = parseBusWork(JSON.stringify({ items: [{ key: 'refresh-x', unattended: { cmd: 'x' } }, { key: 'refresh-y' }, { key: 'engine-rebuild-Z', towns: ['Z'] }, { key: 'corr-unsent-1' }] }), { grades: { Z: 'ESCALATE' }, fixtures: [] });
   check('parseBusWork keeps refresh and rebuild rows only, with the unattended flag', parsedBw.rows.length === 3 && parsedBw.rows[0].unattended === true && parsedBw.rows[1].unattended === false && parsedBw.rows[2].towns[0] === 'Z');
   check('parseBusWork on garbage is null, never a pass', parseBusWork('not json') === null);
+  // OA-571: a town the sidecar graded ESCALATE is graded again against today's files
+  const asked = [];
+  const regraded = regradeEscalated({
+    grades: { Wisbech: 'ESCALATE', Huntingdon: 'ESCALATE', Soham: 'ESCALATE', Ramsey: 'ESCALATE' }, fixtures: [], reviewed: ['Soham'],
+    rows: ['Wisbech', 'Huntingdon', 'Soham', 'Ramsey'].map((t) => ({ key: `engine-rebuild-${t}`, kind: 'rebuild', towns: [t] })),
+  }, (t) => { asked.push(t); return t === 'Wisbech' ? { grade: 'NOTHING', rows: [] } : t === 'Huntingdon' ? { grade: 'ESCALATE', rows: [{ tag: 'RE-EVAL', route: '400' }] } : null; });
+  const bwRe = classifyBusWork(regraded);
+  check('graded ESCALATE but confirmed since: the rebuild is finishable', bwRe.finishable.includes('engine-rebuild-Wisbech') && !bwRe.towns.includes('Wisbech'));
+  check('graded ESCALATE and still unconfirmed: the rebuild stays a person\'s, with its route', bwRe.escalate.includes('engine-rebuild-Huntingdon') && bwRe.routes.Huntingdon[0].route === '400');
+  check('a re-grade that could not run leaves the sidecar\'s ESCALATE standing', bwRe.escalate.includes('engine-rebuild-Ramsey'));
+  check('a town a no-rebuild review answers is not graded again', !asked.includes('Soham') && asked.length === 3);
+  const levRe = analyse(base({ busWork: regraded })).capacity.levers.find((v) => /ESCALATE/.test(v.text));
+  check('the ESCALATE lever names the town and route and what records the answer', !!levRe && /Huntingdon: RE-EVAL 400/.test(levRe.text) && /feedFingerprint/.test(levRe.move) && !/settle the grade/.test(levRe.move));
 
   // 7d. the prompt block, the conditions JSON and the run files' passed-over lines
   const readme = '# x\n\n```bash\nnode "C:/not/in/the/prompt.mjs"\n```\n\n## The task prompt\n\n```bash\nnode "C:/also/not.mjs"\n```\n\n```\nRun node "C:/a b/c.mjs" then node "Development Docs/open-actions/assemble.mjs" and --env-file="C:/p/.env", "C:/a b/c.mjs" again, never "C:/<x>/y.mjs".\n```\n';
@@ -348,7 +361,11 @@ const MUTANTS = [
   // can a tick do work
   ['an unattended refresh row is no longer finishable', '(r.unattended ? out.finishable : out.person).push(r.key)', '(r.unattended ? out.person : out.finishable).push(r.key)'],
   ['an ESCALATE rebuild is finishable', 'else if (esc.length) {', 'else if (false) {'],
-  ['a fixture rebuild is finishable', 'if (fixtures.has(name)) out.fixture.push(r.key);', 'if (false) out.fixture.push(r.key);'],
+  ['a re-grade is ignored (OA-571)', 'grades[t] = g.grade;', ''],
+  ['a re-grade that could not run is a pass', 'if (!g || !g.grade) continue;', "if (!g || !g.grade) { grades[t] = 'NOTHING'; continue; }"],
+  ['a reviewed town is graded again', "&& !reviewed.has(t)) towns.add(t);", ') towns.add(t);'],
+  ['the lever names no route', '`${r.tag} ${r.route}`', "''"],
+  ['a fixture rebuild is finishable','if (fixtures.has(name)) out.fixture.push(r.key);', 'if (false) out.fixture.push(r.key);'],
   ['the prompt block is found without its heading', "lastIndexOf('## The task prompt')", "lastIndexOf('## Nope')"],
   ['placeholders are read as scripts', '[^"<>]+?\\.(?:mjs|js|py|env))"', '[^"]+?\\.(?:mjs|js|py|env))"'],
   ['the oldest tick decides a row\'s gate', 'if (!seen.has(ref)) seen.set(ref,', 'seen.set(ref,'],

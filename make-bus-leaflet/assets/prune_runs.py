@@ -26,6 +26,11 @@ whenever something outside the Buses folder starts depending on a dated run -
 the portal's FIXTURE_DIR is exactly such a case, and it points two versions
 behind the newest St Ives render.
 
+Ink reviews pin their own runs, computed and never typed: every S4 run that a
+`_gtfs/ink-review_<scan>.json` names as a map's before, after or answered build,
+and the S5 render of it, is kept while that answer is null or the record is the
+newest scan's (load_review_pins, buses-data OA-639).
+
 IRREVERSIBILITY, and why this tool asks git rather than assuming. Pruning S1-S3
 is safe: git has them. Most of S4/S5 is not - it is git-ignored, so the only other
 copy is the SyncBack mirror, which is current-state-only and will drop it at its
@@ -167,6 +172,97 @@ def load_pins(root):
     return pins
 
 
+REVIEW_RE = re.compile(r"^ink-review_(\d{4}-\d{2}-\d{2})\.json$")
+
+
+def version_of(run_id):
+    """The build version a run folder names, or None - ink_review.mjs's versionOf."""
+    m = RUN_RE.match(run_id or "")
+    return m.group(1) if m else None
+
+
+def load_review_pins(root):
+    """{build dir: [(S4 run id, why)]} for every S4 run an ink review compares against.
+
+    THE RETENTION PIN THAT IS COMPUTED RATHER THAN KEPT (buses-data OA-639).
+    `ink_review.mjs` compares a map's newest S4 run on or after a scan with its
+    newest run dated BEFORE it, and this tool keeps only the newest two S4
+    versions - so a map rebuilt twice between a scan and its answered review lost
+    its baseline at the next prune and read `unreadable`. It happened: the prune
+    of 2026-10-02 deleted Ramsey's v3.13, the day after the 1 Oct scan and two
+    rebuilds later, and Ramsey read unreadable until 13 Oct, when the sheets were
+    put back by hand from ci-reference history.
+
+    A run is pinned while its map's answer is null, or while its record is the
+    newest scan's: the `before`, the `after`, and the answered build. A record
+    that will not parse STOPS the run, as a stale pin does, because what it
+    would have protected is exactly what nobody would then notice was gone.
+    """
+    folder = os.path.join(root, "_gtfs")
+    if not os.path.isdir(folder): return {}
+    records = sorted((m.group(1), name) for name in os.listdir(folder)
+                     for m in [REVIEW_RE.match(name)] if m)
+    if not records: return {}
+    newest = records[-1][0]
+    out = {}
+    for scan, name in records:
+        try:
+            with open(os.path.join(folder, name), encoding="utf-8") as fh:
+                maps = json.load(fh)["maps"]
+            if not isinstance(maps, list): raise TypeError("maps is not a list")
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            print("_gtfs/%s cannot be read (%s)." % (name, e), file=sys.stderr)
+            print("It names the runs an ink review compares against, and a prune that "
+                  "cannot see them may delete them.", file=sys.stderr)
+            print("Repair the record or re-collect it with ink_review.mjs, then prune.",
+                  file=sys.stderr)
+            raise SystemExit(1)
+        for m in maps:
+            if not isinstance(m, dict) or not m.get("dir"): continue
+            answer = m.get("answer")
+            if answer is not None and scan != newest: continue
+            state = "unanswered" if answer is None else "answered, newest scan"
+            ids = [(m.get("before"), "before"), (m.get("after"), "after")]
+            if isinstance(answer, dict): ids.append((answer.get("after"), "answered build"))
+            build = os.path.normpath(m["dir"])
+            for run_id, role in ids:
+                if run_id:
+                    out.setdefault(build, []).append(
+                        (run_id, "INK REVIEW %s - %s's %s (%s)" % (scan, m.get("map"), role, state)))
+    return out
+
+
+def s5_based_on(build):
+    """{S5 run id: the S4 run id it declares as basedOn}, from the build's manifest."""
+    try:
+        with open(os.path.join(build, "manifest.json"), encoding="utf-8") as fh:
+            runs = json.load(fh)["stages"]["S5"]["runs"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+    return {r["id"]: r["basedOn"]["S4"] for r in runs
+            if isinstance(r, dict) and r.get("id") and isinstance(r.get("basedOn"), dict)
+            and r["basedOn"].get("S4")}
+
+
+def review_reason(pinned, stage, name, based_on):
+    """Why an ink review needs this S4 or S5 run kept, or None.
+
+    S5 is joined to S4 the way ink_review.mjs's isRenderOf does: a render that
+    declares `basedOn.S4` is taken at its word, otherwise the build version,
+    which is never reused, is the join. S5 names its folder by its own start
+    minute, so the ids themselves never match.
+    """
+    for s4_id, why in pinned:
+        if stage == "S4-generate" and name == s4_id:
+            return why
+        if stage == "S5-render":
+            if name in based_on:
+                if based_on[name] == s4_id: return why
+            elif version_of(name) and version_of(name) == version_of(s4_id):
+                return why
+    return None
+
+
 def plan_stage(stage, runs, keep_inputs, keep_outputs):
     """runs: list of (name, version, stamp). Returns {name: (verdict, reason)}."""
     if stage in NEVER_PRUNE:
@@ -215,13 +311,17 @@ def main():
     if not os.path.isdir(root):
         sys.exit(f"no such folder: {root}")
     pins = load_pins(root)
+    review_pins = load_review_pins(root)
     tracked = tracked_paths(root)
 
     rows, freed, freed_tracked, pinned_hits, tracked_files = [], 0, 0, 0, 0
+    review_hits = 0
     for build in find_builds(root):
         rel_build = os.path.relpath(build, root)
         if a.area and a.area.lower() not in os.path.basename(build).lower():
             continue
+        reviewed = review_pins.get(os.path.normpath(rel_build), [])
+        based_on = s5_based_on(build) if reviewed else {}
         for stage in os.listdir(build):
             sp = os.path.join(build, stage)
             if not os.path.isdir(sp) or stage in UNTOUCHED or stage.startswith("_"):
@@ -242,6 +342,11 @@ def main():
                             os.path.join(root, "retention-pins.json"), encoding="utf-8"))["pins"]
                          if os.path.normpath(p["path"]) == rel), "see retention-pins.json")
                     pinned_hits += 1
+                elif verdict == "prune":
+                    why = review_reason(reviewed, stage, name, based_on)
+                    if why:
+                        verdict, reason = "keep", why
+                        review_hits += 1
                 size = t_files = 0
                 if verdict == "prune":
                     t_bytes, u_bytes, t_files = dir_split(
@@ -258,7 +363,8 @@ def main():
     print(f"Buses folder : {root}")
     print(f"Rules        : keep newest {a.keep_outputs} versions of S4/S5, "
           f"newest {a.keep_inputs} of S1/S2, all of S3, all of S6")
-    print(f"Pins honoured: {pinned_hits}\n")
+    print(f"Pins honoured: {pinned_hits}")
+    print(f"Kept for an ink review: {review_hits}\n")
 
     if not prune:
         print("Nothing to prune.")

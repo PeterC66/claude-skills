@@ -234,6 +234,29 @@ MUTATIONS = [
      "find": '                dirnames[:] = [d for d in dirnames if d == "Places"]',
      "to": "                dirnames[:] = []"},
 
+    # The ink review's computed pins (buses-data OA-639). The first is the
+    # 2026-10-02 fault re-enacted: Ramsey's pre-scan baseline went at a prune
+    # the day after the scan and the map read unreadable for eleven days.
+    {"suite": "test_prune_runs.py", "file": "prune_runs.py",
+     "what": "the ink review's pins are computed and then ignored, so an unanswered review's baseline is pruned with the other old versions",
+     "find": "                    why = review_reason(reviewed, stage, name, based_on)",
+     "to": "                    why = None"},
+
+    {"suite": "test_prune_runs.py", "file": "prune_runs.py",
+     "what": "an answered review on an older scan still pins its runs, so the records accumulate and the pruner stops freeing anything",
+     "find": "            if answer is not None and scan != newest: continue",
+     "to": "            if False: continue"},
+
+    {"suite": "test_prune_runs.py", "file": "prune_runs.py",
+     "what": "a render that declares basedOn is also joined by version, so it is kept for a build it is not the render of",
+     "find": "            elif version_of(name) and version_of(name) == version_of(s4_id):",
+     "to": "            if version_of(name) and version_of(name) == version_of(s4_id):"},
+
+    {"suite": "test_prune_runs.py", "file": "prune_runs.py",
+     "what": "an ink-review record that will not parse is skipped, so the prune deletes the runs it named and nobody is told",
+     "find": "            raise SystemExit(1)",
+     "to": "            continue"},
+
     # ------------------------------ gtfs_refresh_report.py, the tag grading
     # THESE THREE CAME FROM auto_refresh_month.py, WHICH WAS RETIRED ON 2026-09-18
     # (buses-data OA-091). That module was the monthly auto-applier -- a SAFE

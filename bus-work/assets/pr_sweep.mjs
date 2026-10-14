@@ -105,21 +105,30 @@ import { parseArgs, resolveBuses, resolvePortal } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/** How long a pull request may stay OPEN before the board says so. Days. */
-export const STALE_DAYS = 7;
+/**
+ * How long a pull request may stay OPEN before the board says so. Days.
+ *
+ * Two, not seven (Peter, 2026-10-14). Measured that day: of the last hundred
+ * closed pull requests in each public repository, not one had stayed open even
+ * 24 hours — claude-skills merges on `--auto` and the portal the same session —
+ * so a pull request two days old is already stuck, and a week only let it sit
+ * five days longer on no list. The lower threshold raised no row on that
+ * history, which is the evidence it adds no noise.
+ */
+export const STALE_DAYS = 2;
 
 /**
  * How old the RECORD may be before the board asks for another sweep. Hours.
  *
- * 48 rather than 24, and the relation to `STALE_DAYS` is the whole reasoning: a
- * stall cannot be missed by more than the cadence, so two days inside a
- * seven-day threshold means the worst case is a pull request raised on day nine
- * instead of day seven. A daily row at rank 8 on a board Peter reads every
- * morning is the muting risk again; two days is the cheapest cadence that keeps
- * the answer honest. Whoever wires the sweep into the scheduled loop makes this
- * row disappear altogether, which is the right end state.
+ * The relation to `STALE_DAYS` is the whole reasoning: a stall cannot be missed
+ * by more than the cadence, so 24 hours inside a two-day threshold means the
+ * worst case is a pull request raised on day three instead of day two. The
+ * scheduled loop runs the sweep itself when the record is 20 hours old
+ * (`loop/README.md`'s prompt, step 4A), a little inside this, so a tick at the
+ * same hour each day always refreshes it and this row should seldom show — a
+ * daily rank-8 row on a board Peter reads every morning is the muting risk.
  */
-export const CADENCE_HOURS = 48;
+export const CADENCE_HOURS = 24;
 
 const DAY = 86400000;
 

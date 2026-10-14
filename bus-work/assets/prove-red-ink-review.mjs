@@ -26,6 +26,7 @@ import {
   commitRecord, reportCommit, neutralise, inkChange, runDate, pickRuns, collect, mergeAnswers, answer, deliverable, page, resolvePlaces, carriedNames, withCarried, sameInkAsAnswered, Refused, SCHEMA,
   recordStaged, markStaged, newestRender, waitingItems,
 } from './ink_review.mjs';
+import { svgText, textChange, gatherEvidence, decide, registerFrom, selfAnswer, backfillEngine, recordable, sheetKind } from './ink_self_answer.mjs';
 
 let bad = 0, ran = 0;
 const check = (label, ok, detail) => { ran++; if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${label}${ok || detail == null ? '' : ' -- ' + detail}`); };
@@ -337,7 +338,9 @@ console.log('\n9. A map waiting on an answer is a worklist row, and nothing else
   check('one row for the review, YOUR MOVE rank 5, keyed by scan', rows.length === 1 && rows[0].rank === 5 && rows[0].key === 'ink-waiting-2026-10-01', JSON.stringify(rows.map((r) => [r.key, r.rank])));
   check('  naming the unanswered map and the one answered for an OLDER build, and no other', /^March, Soham — /.test(rows[0].why), rows[0].why);
   check('  counting them in its title, and aged from the scan', /2 maps waiting/.test(rows[0].title) && rows[0].ageDays === 13, rows[0].title);
-  check('  pointing at the page on disk, then at --answer', /loop[\\/]ink-review[\\/]2026-10-01[\\/]index\.html/.test(rows[0].do[0].what) && /--answer/.test(rows[0].do[1].what), JSON.stringify(rows[0].do));
+  /* Since 2026-10-14 the rule is offered first, for the maps no session has tried; Peter looks at what it refused. */
+  const at = (re) => rows[0].do.findIndex((st) => re.test(st.cmd || st.what || ''));
+  check('  offering the self-answer first, then the page on disk, then --answer', at(/--self-answer --by <session> --apply/) === 0 && at(/loop[\\/]ink-review[\\/]2026-10-01[\\/]index\.html/) === 1 && at(/--answer/) === 2, JSON.stringify(rows[0].do));
   check('an accepted, held, no-ink or staged review raises nothing', !waitingItems([rv('2026-10-01', [m('Ely', { answer: ok }), m('Huntingdon', { answer: { ...ok, verdict: 'hold' } }), m('Ramsey', { status: 'no-ink' }), m('March', { staged: { after: NEW } })])]).length);
   const nov = rv('2026-11-01', [m('March')]);
   const both = waitingItems([oct, nov]);
@@ -346,6 +349,92 @@ console.log('\n9. A map waiting on an answer is a worklist row, and nothing else
   check('no page on disk: the first step is the collect that rebuilds it, from the bus-work folder', noPage[0].do[0].kind === 'shell' && noPage[0].do[0].cmd === 'node ink_review.mjs --scan 2026-10-01' && noPage[0].do[0].cwd === 'X:/assets', JSON.stringify(noPage[0].do[0]));
   const broken = waitingItems([{ scan: '2026-10-01', review: null, page: false }]);
   check('a record that will not parse is rank 0, not silence', broken.length === 1 && broken[0].rank === 0 && broken[0].key === 'ink-review-unreadable-2026-10-01', JSON.stringify(broken));
+}
+
+console.log('\n10. A session answers by rule only when the words are the same and every engine commit was accepted elsewhere (2026-10-14)');
+{
+  const SHA_A = 'a'.repeat(40), SHA_B = 'b'.repeat(40), SHA_X = 'c'.repeat(40);
+  /* One map, two builds, each a set of sheets and a routes.json; `commits` is what the engine says lies between them, by kind. */
+  const svgOf = (x, words) => `<svg><g transform="translate(${x})">${words.map((w, i) => `<text x="${i}"><tspan>${w}</tspan></text>`).join('')}</g><text>${S('1.0', '1 Oct 2026')}</text></svg>`;
+  const WORDS = ['Services', '7 &amp; 8', 'to Ely', 'Market Place'];
+  const routes = (commit, extra = {}) => JSON.stringify({ engine: commit.slice(0, 10), engineCommit: commit, version: '1.0', design: { sheetVersion: S('1.0', '1 Oct 2026') }, ...extra });
+  const fixture = ({ before = { 'internal.svg': svgOf(1, WORDS) }, after = { 'internal.svg': svgOf(2, WORDS) }, rb = routes(SHA_X), ra = routes(SHA_A), commits = { 'area:internal': [{ sha: SHA_A, subject: 'place the arrow' }] }, kind = 'area' } = {}) => {
+    const entry = { map: 'March', kind, dir: 'Areas/March', status: 'ink-moved', before: OLD, after: NEW, sheets: [], answer: null };
+    const files = { [OLD]: before, [NEW]: after }, inputs = { [OLD]: rb == null ? {} : { 'routes.json': rb }, [NEW]: { 'routes.json': ra } };
+    const io = {
+      readManifest: () => ({ stages: { S4: { runs: [OLD, NEW].map((id) => ({ id, dir: `S4-generate/${id}`, outputs: Object.keys(files[id]) })) } } }),
+      readSheet: (f) => { const [id, name] = f.replace(/\\/g, '/').split('/').slice(-2); return files[id] ? files[id][name] ?? null : null; },
+      readInputs: (d) => inputs[d.replace(/\\/g, '/').split('/').pop()] || {},
+    };
+    const engine = { commitsIn: (from, to, k) => ({ status: 'ok', commits: commits[k] || [] }) };
+    return { entry, evidenceFor: (m, b, a) => gatherEvidence({ busesDir: BUSES, entry: m, before: b, after: a, io, engine }) };
+  };
+  /* Peter's accept of SHA_A on another map, for internal sheets: the first sighting. */
+  const seen = (over = {}) => ({ scan: '2026-09-01', review: { maps: [{ map: 'Ely', answer: { verdict: 'accept', by: 'peter', at: '2026-09-02T00:00:00Z', after: 'v1.0_2026-09-02_0000', engine: { from: SHA_X, to: SHA_A, commits: [{ sha: SHA_A, subject: 'place the arrow', kinds: ['area:internal'] }] }, ...over } }] } });
+  const verdict = (fx, reviews = [seen()]) => decide({ entry: fx.entry, evidence: fx.evidenceFor(fx.entry, OLD, NEW), register: registerFrom(reviews) });
+
+  check('svgText reads every string in order, decodes entities, strips tspans and neutralises the stamp', JSON.stringify(svgText(svgOf(0, WORDS))) === JSON.stringify(['Services', '7 & 8', 'to Ely', 'Market Place', 'build ·']));
+  check('textChange: identical strings are no change', textChange(['a', 'b'], ['a', 'b']) === null);
+  check('textChange: the same strings drawn in another order are not a change of words', textChange(['a', 'b'], ['b', 'a']).changed === false);
+  check('textChange: a re-wrapped line is not a change of words', textChange(['x', 'one two', 'three'], ['x', 'one', 'two three']).changed === false);
+  check('textChange: one word altered IS a change', textChange(['to Ely', 'b'], ['to Elyy', 'b']).changed === true);
+
+  const base = fixture();
+  const ok = verdict(base);
+  check('a moved sheet with the same words, the same inputs and a commit Peter accepted on Ely is accepted by rule', ok.verdict === 'accept' && /accepted on Ely by peter/.test(ok.note), JSON.stringify(ok));
+  const worded = verdict(fixture({ after: { 'internal.svg': svgOf(2, ['Services', '7 &amp; 8', 'to Elyy', 'Market Place']) } }));
+  check('A TEXT CHANGE REFUSES SELF-ACCEPTANCE, however well the ink is attributed', worded.verdict === 'waiting' && /text on internal\.svg changed: added "to Elyy"; removed "to Ely"/.test(worded.reason), JSON.stringify(worded));
+  const gone = verdict(fixture({ after: { 'internal.svg': svgOf(2, ['Services', '7 &amp; 8', 'to Ely']) } }));
+  check('  and so does a string dropped', gone.verdict === 'waiting' && /removed "Market Place"/.test(gone.reason), JSON.stringify(gone));
+  check('  while the same words in another draw order are accepted', verdict(fixture({ after: { 'internal.svg': svgOf(2, [...WORDS].reverse()) } })).verdict === 'accept');
+  check('a build whose provenance alone differs (engine, engineCommit, version, sheetVersion) has unchanged inputs', verdict(fixture({ ra: routes(SHA_A, { version: '9.9', design: { sheetVersion: S('9.9', '9 Oct 2026') } }) })).verdict === 'accept');
+  const knob = verdict(fixture({ ra: routes(SHA_A, { design: { sheetVersion: 'x', strandedOnInk: false } }) }));
+  check('a hand config change is not an engine commit, and waits', knob.verdict === 'waiting' && /inputs changed — routes\.json \(design\)/.test(knob.reason), JSON.stringify(knob));
+  const unseen = verdict(base, []);
+  check('a commit Peter has accepted nowhere waits, naming the commit', unseen.verdict === 'waiting' && /aaaaaaa "place the arrow" moves area:internal ink and Peter has not accepted it on another map/.test(unseen.reason), JSON.stringify(unseen));
+  const sameMap = seen(); sameMap.review.maps[0].map = 'March';
+  check('a sighting on THIS map is not a sighting on another', verdict(base, [sameMap]).verdict === 'waiting');
+  const otherKind = seen(); otherKind.review.maps[0].answer.engine.commits[0].kinds = ['area:external'];
+  check('a sighting on another kind of sheet does not vouch for this one', verdict(base, [otherKind]).verdict === 'waiting');
+  check('a self-answer is never a sighting, so the rule cannot stand on its own output', verdict(base, [seen({ self: true })]).verdict === 'waiting');
+  check('a superseded accept still counts: Peter saw what he accepted', verdict(base, [{ scan: '2026-09-01', review: { maps: [{ map: 'Ely', answer: null, superseded: [seen().review.maps[0].answer] }] } }]).verdict === 'accept');
+  const held = { scan: '2026-09-15', review: { maps: [{ map: 'Ramsey', answer: { ...seen().review.maps[0].answer, verdict: 'hold', by: 'peter', at: '2026-09-15T00:00:00Z' } }] } };
+  const h = verdict(base, [seen(), held]);
+  check('a commit Peter HELD on another map waits, though he accepted it elsewhere', h.verdict === 'waiting' && /was held on Ramsey/.test(h.reason), JSON.stringify(h));
+  const healed = { scan: '2026-09-20', review: { maps: [{ map: 'Ramsey', answer: { ...seen().review.maps[0].answer, at: '2026-09-20T00:00:00Z' } }] } };
+  check('  unless he later accepted it on that same map', verdict(base, [seen(), held, healed]).verdict === 'accept');
+  const blank = verdict(fixture({ commits: {} }));
+  check('a moved sheet with no engine commit touching its generator and no input change is unexplained, and waits', blank.verdict === 'waiting' && /nothing explains it/.test(blank.reason), JSON.stringify(blank));
+  const old = verdict(fixture({ rb: null }));
+  check('a before build that records no engineCommit waits', old.verdict === 'waiting' && /records no engineCommit/.test(old.reason), JSON.stringify(old));
+  check('a sheet added is not a rollout', /external\.svg is new/.test(verdict(fixture({ after: { 'internal.svg': svgOf(2, WORDS), 'external.svg': '<svg/>' } })).reason || ''));
+  check('a moved sheet no rule covers waits', /no rule covers/.test(verdict(fixture({ before: { 'poster.svg': svgOf(1, WORDS) }, after: { 'poster.svg': svgOf(2, WORDS) } })).reason || ''));
+  check('sheet kinds: a place internal is not an area internal', sheetKind('place', 'internal.svg') === 'place:internal' && sheetKind('area', 'internal-schematic.svg') === 'area:schematic' && sheetKind('area', 'boarding.svg') === null);
+
+  /* The pass, the record, the gate and the row. */
+  const answered = { map: 'Soham', kind: 'area', dir: 'Areas/Soham', status: 'ink-moved', before: OLD, after: NEW, sheets: [], answer: { verdict: 'hold', by: 'peter', at: 'x', after: NEW, note: null } };
+  const wordy = fixture({ after: { 'internal.svg': svgOf(2, ['Services', 'to Elyy']) } });
+  const rv10 = { schema: SCHEMA, scan: SCAN, maps: [base.entry, { ...base.entry, map: 'Wordy' }, answered] };
+  const pass = selfAnswer(rv10, { by: 'buses-99', at: '2026-10-14T00:00:00Z', register: registerFrom([seen()]), evidenceFor: (m, b, a) => (m.map === 'Wordy' ? wordy : base).evidenceFor(m, b, a) });
+  const got = Object.fromEntries(pass.review.maps.map((m) => [m.map, m]));
+  check('the pass accepts by rule with self: true, the session named and the sightings recorded', got.March.answer && got.March.answer.self === true && got.March.answer.by === 'buses-99' && got.March.answer.engine.commits[0].sha === SHA_A, JSON.stringify(got.March.answer));
+  check('  leaves a text change waiting with selfCheck and its one-line reason', !got.Wordy.answer && got.Wordy.selfCheck.after === NEW && /text on internal\.svg changed/.test(got.Wordy.selfCheck.reason), JSON.stringify(got.Wordy));
+  check('  and never touches a map Peter has already answered', got.Soham.answer.verdict === 'hold' && !got.Soham.selfCheck && pass.results.length === 2);
+  const gate = deliverable(pass.review);
+  check('the gate delivers the self-accepted map and keeps the refused one waiting', gate.deliver.includes('March') && gate.waiting.includes('Wordy') && gate.held.includes('Soham'), JSON.stringify(gate));
+  check('a self-answer never needs --by to be guessed', (() => { try { selfAnswer(rv10, { by: '', at: 'x', register: [], evidenceFor: () => null }); return false; } catch { return true; } })());
+  check('the page says why a map could not be answered by rule, and marks one that was', /Not answerable by rule: the text on internal\.svg changed/.test(page(pass.review)) && /by buses-99 \(by rule\)/.test(page(pass.review)));
+  const row = waitingItems([{ scan: SCAN, review: pass.review, page: true }], { assets: 'X:/assets' })[0];
+  check('the worklist row carries the reason, and offers no self-answer once every waiting map was tried', /Not answerable by rule — Wordy: the text on internal\.svg changed/.test(row.why) && !row.do.some((s) => /--self-answer/.test(s.cmd || '')), JSON.stringify(row));
+  const again = mergeAnswers(pass.review, { ...pass.review, maps: pass.review.maps.map((m) => ({ ...m, answer: null, selfCheck: undefined })) });
+  check('a re-collection of the same build keeps the self-answer\'s reason', again.maps.find((m) => m.map === 'Wordy').selfCheck?.reason === got.Wordy.selfCheck.reason);
+  const rebuilt = mergeAnswers(pass.review, { ...pass.review, maps: pass.review.maps.map((m) => ({ ...m, after: 'v9.9_2026-10-20_0000', answer: null, selfCheck: undefined })) });
+  check('  and drops it once the map is rebuilt', !rebuilt.maps.find((m) => m.map === 'Wordy').selfCheck);
+  const peter = answer(pass.review, 'Wordy', 'accept', { by: 'peter', at: 'y', engine: recordable(wordy.evidenceFor(wordy.entry, OLD, NEW)) });
+  const pw = peter.maps.find((m) => m.map === 'Wordy');
+  check('Peter\'s answer clears selfCheck and records his sightings', !pw.selfCheck && pw.answer.engine && pw.answer.engine.commits[0].kinds.join() === 'area:internal' && !pw.answer.self, JSON.stringify(pw));
+  const fill = backfillEngine({ ...rv10, maps: [{ ...base.entry, answer: { verdict: 'accept', by: 'peter', at: 'z', after: NEW } }, { ...base.entry, map: 'Selfie', answer: { verdict: 'accept', by: 's', at: 'z', after: NEW, self: true } }] }, { evidenceFor: base.evidenceFor });
+  check('backfill gives an older answer of Peter\'s its sightings, and never a self-answer', fill.filled === 1 && fill.review.maps[0].answer.engine.commits[0].sha === SHA_A && !fill.review.maps[1].answer.engine, JSON.stringify(fill.review.maps.map((m) => m.answer)));
 }
 
 console.log(`\n${ran - bad} of ${ran} passed`);

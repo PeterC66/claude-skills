@@ -98,6 +98,7 @@ function manifest(files) {
  * real one, so a case can never accidentally read the estate. */
 const VENDORED_FIXTURE_DIR = 'gate-fixtures';
 const FIXTURE_TOWN = 'Harness Town';
+const AREA_ORPHAN = 'No Such Harness Town';
 const FIXTURE_FILE = 'complexity.json';
 const FIXTURE_CURRENT = '{"labels": 2}\n';
 const FIXTURE_OLD = '{"labels": 1}\n';
@@ -152,7 +153,7 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
                       behindRef = null, behindAgeHours = 18,
                       squashedRef = null, squashedAgeHours = 48,
                       unvendor = null, unvendorAgeHours = 0, added = false,
-                      fixtureOnMain = null, fixtureOnBranch = null } = {}) {
+                      fixtureOnMain = null, fixtureOnBranch = null, areaOrphanOnMain = false } = {}) {
   const dir = scratchDir('prove-red-portal-drift-');
   const engine = path.join(dir, 'engine');
   fs.mkdirSync(path.join(engine, 'place'), { recursive: true });
@@ -250,6 +251,14 @@ function portalRepo({ mainStale = false, mainStaleAgeHours = 999, branch = null,
   }
   writeTree({ staleA: mainStale, unlisted: unlistedOnMain, withGone: !!unvendor });
   writeFixture(fixtureOnMain);
+  /* An AREA town the portal vendors that the engine's estate has no pack for
+   * (buses-data OA-635): Areas are sourced from test/fixtures/estate, by the town
+   * names the portal holds, so an unmatched one must be named and never skipped. */
+  if (areaOrphanOnMain) {
+    const orphan = path.join(dir, VENDORED_FIXTURE_DIR, 'Areas', '_portal-fixture', AREA_ORPHAN, 'routes.json');
+    fs.mkdirSync(path.dirname(orphan), { recursive: true });
+    fs.writeFileSync(orphan, '{}\n');
+  }
   git(dir, ['add', '-A']);
   if (mainStale) commitAged(dir, 'the state of origin/main', mainStaleAgeHours);
   else git(dir, ['commit', '--quiet', '-m', 'the state of origin/main']);
@@ -358,13 +367,14 @@ function emptyBuses() {
   return scratchDir('prove-red-portal-drift-buses-');
 }
 
-/* A Buses tree holding ONE fixture file and no maps, for the OA-419 cases. It is
- * not `Areas/<town>/` — `_portal-fixture` is the folder the portal vendors and
- * findTowns() skips names beginning with an underscore, so this adds a fixture to
- * compare and still no map that could colour the board. */
-function busesWithFixture(body) {
-  const dir = scratchDir('prove-red-portal-drift-buses-fixture-');
-  const f = path.join(dir, 'Areas', '_portal-fixture', FIXTURE_TOWN, FIXTURE_FILE);
+/* An ENGINE ESTATE holding ONE area pack with ONE file, for the OA-419 cases,
+ * handed to status.js as --fixture-estate. Since buses-data OA-635 the portal's
+ * AREA fixture is vendored from claude-skills' test/fixtures/estate, one
+ * `Areas/<Town>/ci-reference` pack per town the portal vendors, so this is the
+ * source side of those cases; buses-data stays empty and colours nothing. */
+function estateWithFixture(body) {
+  const dir = scratchDir('prove-red-portal-drift-estate-');
+  const f = path.join(dir, 'Areas', FIXTURE_TOWN, 'ci-reference', FIXTURE_FILE);
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f, body);
   return dir;
@@ -749,7 +759,7 @@ const CASES = [
   {
     label: 'control: the portal has vendored the current fixture',
     make: { fixtureOnMain: FIXTURE_CURRENT },
-    buses: () => busesWithFixture(FIXTURE_CURRENT),
+    estate: () => estateWithFixture(FIXTURE_CURRENT),
     expect: 0,
     also: (json) => {
       const v = json.portalFixtureVendoring;
@@ -760,9 +770,9 @@ const CASES = [
     what: 'a fixture in step must read green, or the BEHIND below proves nothing',
   },
   {
-    label: 'THE ROW: buses-data recut the fixture and nobody re-vendored',
+    label: 'THE ROW: the source recut the fixture and nobody re-vendored',
     make: { fixtureOnMain: FIXTURE_OLD },
-    buses: () => busesWithFixture(FIXTURE_CURRENT),
+    estate: () => estateWithFixture(FIXTURE_CURRENT),
     /* GREEN ON PURPOSE. This is a CHORE under OA-396: the artwork is right and
      * only the next push is blocked, so the board must SAY it and must not go
      * red. A case expecting exit 1 here would be asking for the thing that rule
@@ -789,7 +799,7 @@ const CASES = [
      * red*. It is also the case the self-falsification below requires to fail. */
     label: 'the re-vendor is on a BRANCH and origin/main is still behind',
     make: { fixtureOnMain: FIXTURE_OLD, branch: 'vendor/area-fixture', fixtureOnBranch: FIXTURE_CURRENT },
-    buses: () => busesWithFixture(FIXTURE_CURRENT),
+    estate: () => estateWithFixture(FIXTURE_CURRENT),
     expect: 0,
     also: (json) => {
       const v = json.portalFixtureVendoring;
@@ -800,6 +810,25 @@ const CASES = [
       return null;
     },
     what: 'a fix on a branch is not an answer to whether the push goes red',
+  },
+  {
+    /* THE AREAS HALF (buses-data OA-635). Areas come from the engine's own estate,
+     * one pack per town the portal vendors. A town with no pack must read BEHIND
+     * and name itself `orphan`; silently skipping it would read `in step` about a
+     * fixture nothing can refresh. Green, because it is a chore like the rest. */
+    label: 'the portal vendors an area town the engine estate has no pack for',
+    make: { fixtureOnMain: FIXTURE_CURRENT, areaOrphanOnMain: true },
+    estate: () => estateWithFixture(FIXTURE_CURRENT),
+    expect: 0,
+    also: (json) => {
+      const v = json.portalFixtureVendoring;
+      if (!v) return 'the board did not report on the vendored fixtures at all';
+      if (v.status !== 'BEHIND') return 'an area town with no estate pack read ' + v.status;
+      const hit = (v.behind || []).find((b) => b.state === 'orphan' && String(b.file).includes(AREA_ORPHAN));
+      if (!hit) return 'BEHIND, but no orphan row named the town: ' + JSON.stringify(v.behind);
+      return null;
+    },
+    what: 'a vendored area town nothing can refresh, read as in step',
   },
 ];
 
@@ -813,12 +842,14 @@ function runCase(c, statusPath = STATUS) {
   const portal = portalRepo(c.make);
   const buses = c.buses ? c.buses() : emptyBuses();
   const skills = c.skills ? skillsRepo(c.skills) : null;   // OA-480
-  kept.push(portal, buses, ...(skills ? [skills] : []));
-  const { code, json } = board(buses, portal, statusPath, c.args || [], skills ? { ...process.env, SKILLS_REPO: skills } : process.env);
+  const estate = c.estate ? c.estate() : null;              // OA-635
+  kept.push(portal, buses, ...(skills ? [skills] : []), ...(estate ? [estate] : []));
+  const args = [...(c.args || []), ...(estate ? ['--fixture-estate', estate] : [])];
+  const { code, json } = board(buses, portal, statusPath, args, skills ? { ...process.env, SKILLS_REPO: skills } : process.env);
   const wantRed = c.expect !== 0;
   const colourOk = (code !== 0) === wantRed;
   const alsoWhy = json ? c.also(json, portal) : 'the board printed no parseable JSON';
-  if (!KEEP) for (const d of [portal, buses, skills].filter(Boolean)) fs.rmSync(d, { recursive: true, force: true });
+  if (!KEEP) for (const d of [portal, buses, skills, estate].filter(Boolean)) fs.rmSync(d, { recursive: true, force: true });
   return {
     ok: colourOk && !alsoWhy,
     verdict: !colourOk ? (wantRed ? 'SURVIVED' : 'CONTROL RED') : alsoWhy ? 'VACUOUS' : wantRed ? 'caught' : 'green',

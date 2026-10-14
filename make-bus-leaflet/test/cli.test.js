@@ -223,7 +223,7 @@ test('the migrated python scripts resolve through cli.py', () => {
  *
  * THE PATTERNS ARE THE IDIOM, NOT ONE SPELLING OF IT. `argv.indexOf(` with any
  * argument -- the flag is routinely a parameter, which is exactly how
- * gen_boarding.js and refresh_area_fixture.js escaped -- and a locally DEFINED
+ * gen_boarding.js and refresh_area_fixture.js (deleted in buses-data OA-635) escaped -- and a locally DEFINED
  * parseArgs, which is how render_sweep.js did. Destructuring the shared one
  * (`const { parseArgs } = require('./cli')`) is not a definition and does not
  * match; that is asserted below rather than assumed.
@@ -246,8 +246,6 @@ const OPEN_CODED = {
   'cli.js': 'IS the shared parser. Its own definition of parseArgs is the thing every other file is asked to require.',
   'gen_boarding.js':
     'In the PLACE engine-hash closure (engine_version.js, BOARDING_ENGINE_FILES). Its two-line `val()` reader at :57 is four lines of code, and replacing it with a require would move the place hash and re-stamp every place map for a change that moves no ink. Migrate it inside a change that is already moving that hash.',
-  'refresh_area_fixture.js':
-    'Not named by the 2026-09-14 review, which measured only that the OLD regex matched nothing and did not enumerate what a correct one would catch. Found by this fix. Outside the hash closure, so it is a free migration whenever somebody wants it — it is here to keep this gate green on the day it landed, not because it deserves an exemption.',
   'render_sweep.js':
     'Keeps its own parser deliberately: it WHITELISTS its flags in an if/else chain, so an unknown flag is refused rather than silently collected. cli.js accepts any flag by design. Refusing a typo on a sweep that renders the estate is a property worth having.',
 };

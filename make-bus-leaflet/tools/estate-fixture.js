@@ -35,11 +35,16 @@
  * ordering trap turned into a normal step.
  *
  * WHAT IS LOST, SAID PLAINLY. This job no longer gates twenty-one maps on every
- * engine push. It gates five, twelve sheets between them. The full estate gate
+ * engine push. It gates the maps in this estate, which `--check` counts. The full estate gate
  * runs in buses-data's own `gates.yml`, on the rebuild that follows an engine
  * change, where it is a statement about two commits somebody chose rather than
  * two that happened to be on `main` together. Narrower and truthful, against
  * wider and floating.
+ *
+ * AND IT IS THE PORTAL'S AREA FIXTURE (buses-data OA-635, 2026-10-14). The portal's
+ * `npm run fixtures:vendor` copies `Areas/St Ives/ci-reference` from here, so an
+ * engine pull request that moves St Ives's ink re-cuts the portal's fixture in the
+ * same change, and the portal's next re-vendor picks it up.
  *
  * WHAT IS IN IT, AND WHY EACH ONE IS THERE. Every map here earns its place by
  * being the only one that lets some check ask its question — this is not a
@@ -50,6 +55,14 @@
  *   .../Places/Beaconsfield Waitrose       that place
  *   Areas/March                            a plain town: a fault that needs two
  *                                          independent maps has somewhere to show
+ *   Areas/St Ives                          the PORTAL'S AREA FIXTURE (buses-data OA-635):
+ *                                          the portal vendors this pack's ci-reference
+ *                                          into its gate-fixtures/, and it alone
+ *                                          exercises every design/labels escape hatch
+ *                                          the portal's verify:defaults asks about.
+ *                                          Re-stamped here, it is current by
+ *                                          construction; the real St Ives in
+ *                                          buses-data is an ordinary town.
  *   Places/_standalone/High Wycombe Aldi    the only pack carrying an
  *                                          `overrides.json` beside a schematic,
  *                                          which is what `prove-red-gates`' own

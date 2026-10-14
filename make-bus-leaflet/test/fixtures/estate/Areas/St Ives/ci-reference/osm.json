@@ -1,0 +1,2702 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-06-03T05:39:26Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "node",
+  "id": 288836129,
+  "lat": 52.3324680,
+  "lon": -0.0726772,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "public_transport": "platform"
+  }
+},
+{
+  "type": "node",
+  "id": 288853761,
+  "lat": 52.3435615,
+  "lon": -0.0760926,
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:country": "GB",
+    "addr:postcode": "PE27 3ER",
+    "brand": "The Co-operative Food",
+    "brand:wikidata": "Q107617274",
+    "check_date": "2024-07-15",
+    "check_date:opening_hours": "2024-07-15",
+    "name": "The Co-operative Food",
+    "not:brand:wikidata": "Q3277439",
+    "opening_hours": "Mo-Fr 07:00-22:00; Sa 07:00-20:00; Su 10:00-16:00",
+    "operator": "Central England Co-operative",
+    "operator:wikidata": "Q16986583",
+    "shop": "supermarket",
+    "website": "https://stores.centralengland.coop/cambridgeshire/st-ives/constable-road"
+  }
+},
+{
+  "type": "node",
+  "id": 288853764,
+  "lat": 52.3431656,
+  "lon": -0.0751034,
+  "tags": {
+    "bench": "no",
+    "bin": "no",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "lit": "no",
+    "name": "Constable Road",
+    "naptan:AtcoCode": "0500HSTIV041",
+    "naptan:Bearing": "NE",
+    "naptan:CommonName": "Constable Road",
+    "naptan:Indicator": "NE-bound",
+    "naptan:NaptanCode": "CMBDTAMD",
+    "naptan:Street": "Constable Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 288853768,
+  "lat": 52.3433141,
+  "lon": -0.0754923,
+  "tags": {
+    "amenity": "pharmacy",
+    "brand": "Well Pharmacy",
+    "brand:wikidata": "Q7726524",
+    "dispensing": "yes",
+    "healthcare": "pharmacy",
+    "name": "Well Pharmacy",
+    "website": "https://finder.well.co.uk/store/st-ives-constable-road"
+  }
+},
+{
+  "type": "node",
+  "id": 292562202,
+  "lat": 52.3421055,
+  "lon": -0.0740876,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "public_transport": "platform"
+  }
+},
+{
+  "type": "node",
+  "id": 299263436,
+  "lat": 52.3357588,
+  "lon": -0.0805878,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "public_transport": "platform"
+  }
+},
+{
+  "type": "node",
+  "id": 313724728,
+  "lat": 52.3145559,
+  "lon": -0.0829078,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Greenfields",
+    "naptan:AtcoCode": "0500HHEMG002",
+    "naptan:Bearing": "NE",
+    "naptan:CommonName": "Greenfields",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Greenfields",
+    "naptan:NaptanCode": "cmbdpdtd",
+    "naptan:ShortCommonName": "Greenfields",
+    "naptan:Street": "London Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533793823,
+  "lat": 52.3148171,
+  "lon": -0.0823830,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Greenfields",
+    "naptan:AtcoCode": "0500HFENS005",
+    "naptan:Bearing": "SW",
+    "naptan:CommonName": "Greenfields",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Greenfields",
+    "naptan:NaptanCode": "cmbdpagj",
+    "naptan:ShortCommonName": "Greenfields",
+    "naptan:Street": "London Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533793935,
+  "lat": 52.3195486,
+  "lon": -0.0870390,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Pembroke Close",
+    "naptan:AtcoCode": "0500HHEMG001",
+    "naptan:Bearing": "W",
+    "naptan:CommonName": "Pembroke Close",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Pembroke Close",
+    "naptan:NaptanCode": "cmbdpdta",
+    "naptan:ShortCommonName": "Pembroke Close",
+    "naptan:Street": "Hemingford Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533793937,
+  "lat": 52.3180017,
+  "lon": -0.0813649,
+  "tags": {
+    "bench": "no",
+    "bin": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Filbert's Walk",
+    "naptan:AtcoCode": "0500HHEMG003",
+    "naptan:Bearing": "NW",
+    "naptan:CommonName": "Filbert's Walk",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Filbert's Walk",
+    "naptan:NaptanCode": "cmbdpdtg",
+    "naptan:ShortCommonName": "Filbert's Walk",
+    "naptan:Street": "Hemingford Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 533793938,
+  "lat": 52.3196640,
+  "lon": -0.0868395,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Pembroke Close",
+    "naptan:AtcoCode": "0500HHEMG004",
+    "naptan:Bearing": "E",
+    "naptan:CommonName": "Pembroke Close",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Pembroke Close",
+    "naptan:NaptanCode": "cmbdpdtj",
+    "naptan:ShortCommonName": "Pembroke Close",
+    "naptan:Street": "Hemingford Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533793945,
+  "lat": 52.3175335,
+  "lon": -0.0996819,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Pound Road",
+    "naptan:AtcoCode": "0500HHEMG006",
+    "naptan:Bearing": "SE",
+    "naptan:CommonName": "Pound Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Pound Road",
+    "naptan:NaptanCode": "cmbdpdtp",
+    "naptan:ShortCommonName": "Pound Road",
+    "naptan:Street": "High Street",
+    "naptan:verified": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533793946,
+  "lat": 52.3181386,
+  "lon": -0.0814911,
+  "tags": {
+    "bench": "yes",
+    "bin": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "lit": "yes",
+    "name": "Filbert's Walk",
+    "naptan:AtcoCode": "0500HHEMG007",
+    "naptan:Bearing": "SE",
+    "naptan:CommonName": "Filbert's Walk",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Filbert's Walk",
+    "naptan:NaptanCode": "cmbdpdtw",
+    "naptan:ShortCommonName": "Filbert's Walk",
+    "naptan:Street": "Hemingford Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 533793948,
+  "lat": 52.3190682,
+  "lon": -0.0955957,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Old Pound Close",
+    "naptan:AtcoCode": "0500HHEMG009",
+    "naptan:Bearing": "NE",
+    "naptan:BusStopType": "CUS",
+    "naptan:CommonName": "Old Pound Close",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Old Pound Close",
+    "naptan:NaptanCode": "cmbdpdwd",
+    "naptan:ShortCommonName": "Old Pound Close",
+    "naptan:Street": "St Ives Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533793951,
+  "lat": 52.3189784,
+  "lon": -0.0955996,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Old Pound Close",
+    "naptan:AtcoCode": "0500HHEMG011",
+    "naptan:Bearing": "SW",
+    "naptan:CommonName": "Old Pound Close",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Old Pound Close",
+    "naptan:NaptanCode": "cmbdpdwj",
+    "naptan:ShortCommonName": "Old Pound Close",
+    "naptan:Street": "St Ives Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533793952,
+  "lat": 52.3174820,
+  "lon": -0.0998308,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Pound Road",
+    "naptan:AtcoCode": "0500HHEMG012",
+    "naptan:Bearing": "NW",
+    "naptan:CommonName": "Pound Road",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Pound Road",
+    "naptan:NaptanCode": "cmbdpdwm",
+    "naptan:ShortCommonName": "Pound Road",
+    "naptan:Street": "High Street",
+    "naptan:verified": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533793971,
+  "lat": 52.3335265,
+  "lon": -0.0994806,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Sawtry Way",
+    "naptan:AtcoCode": "0500HHOUG003",
+    "naptan:Bearing": "SE",
+    "naptan:BusStopType": "CUS",
+    "naptan:CommonName": "Sawtry Way",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Sawtry Way",
+    "naptan:NaptanCode": "cmbdpgdt",
+    "naptan:ShortCommonName": "Houghton Hill",
+    "naptan:Street": "Houghton Road",
+    "naptan:verified": "no",
+    "shelter": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533793975,
+  "lat": 52.3334587,
+  "lon": -0.0995635,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Sawtry Way",
+    "naptan:AtcoCode": "0500HHOUG006",
+    "naptan:Bearing": "NW",
+    "naptan:CommonName": "Sawtry Way",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Sawtry Way",
+    "naptan:NaptanCode": "cmbdpgjd",
+    "naptan:ShortCommonName": "Houghton Hill",
+    "naptan:Street": "Houghton Road",
+    "naptan:verified": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794414,
+  "lat": 52.3402764,
+  "lon": -0.0815017,
+  "tags": {
+    "bench": "no",
+    "bin": "no",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "lit": "yes",
+    "name": "Albemarle Road",
+    "naptan:AtcoCode": "0500HSTIV001",
+    "naptan:Bearing": "SE",
+    "naptan:CommonName": "Albemarle Road",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Albemarle Road",
+    "naptan:NaptanCode": "cmbdpwmj",
+    "naptan:ShortCommonName": "Albemarle Road",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 533794415,
+  "lat": 52.3230382,
+  "lon": -0.0709483,
+  "tags": {
+    "bus": "yes",
+    "covered": "yes",
+    "highway": "bus_stop",
+    "local_ref": "2",
+    "name": "Bus Station 2",
+    "naptan:AtcoCode": "0500HSTIV002",
+    "naptan:CommonName": "Bus Station",
+    "naptan:Indicator": "Bay 2",
+    "naptan:Landmark": "Bus Station",
+    "naptan:NaptanCode": "cmbdpwmp",
+    "naptan:ShortCommonName": "Bus Station",
+    "naptan:Street": "Market Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794416,
+  "lat": 52.3315308,
+  "lon": -0.0640767,
+  "tags": {
+    "bench": "yes",
+    "bin": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Russet Close",
+    "naptan:AtcoCode": "0500HSTIV003",
+    "naptan:Bearing": "E",
+    "naptan:CommonName": "Russet Close",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Russet Close",
+    "naptan:NaptanCode": "cmbdpwmt",
+    "naptan:ShortCommonName": "Russet Close",
+    "naptan:Street": "Needingworth Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "yes",
+    "source": "naptan_import",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 533794421,
+  "lat": 52.3403689,
+  "lon": -0.0659920,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Burrel Road",
+    "naptan:AtcoCode": "0500HSTIV005",
+    "naptan:Bearing": "W",
+    "naptan:CommonName": "Burrel Road",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Burrel Road",
+    "naptan:NaptanCode": "cmbdpwpa",
+    "naptan:ShortCommonName": "Marley Road",
+    "naptan:Street": "Marley Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794423,
+  "lat": 52.3405433,
+  "lon": -0.0691881,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Post Box",
+    "naptan:AtcoCode": "0500HSTIV006",
+    "naptan:Bearing": "W",
+    "naptan:CommonName": "Post Box",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Post Box",
+    "naptan:NaptanCode": "cmbdpwpd",
+    "naptan:ShortCommonName": "Post Box",
+    "naptan:Street": "Marley Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794425,
+  "lat": 52.3415581,
+  "lon": -0.0712172,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Waveney Road",
+    "naptan:AtcoCode": "0500HSTIV007",
+    "naptan:Bearing": "NW",
+    "naptan:CommonName": "Waveney Road",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Waveney Road",
+    "naptan:NaptanCode": "cmbdpwpg",
+    "naptan:ShortCommonName": "Waveney Road",
+    "naptan:Street": "Marley Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794427,
+  "lat": 52.3404252,
+  "lon": -0.0879104,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Car Park",
+    "naptan:AtcoCode": "0500HSTIV008",
+    "naptan:Bearing": "SW",
+    "naptan:CommonName": "Car Park",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Hill Rise",
+    "naptan:NaptanCode": "cmbdpwpj",
+    "naptan:ShortCommonName": "Car Park",
+    "naptan:Street": "Hill Rise",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794428,
+  "lat": 52.3282516,
+  "lon": -0.0658930,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Little Farthing Close",
+    "naptan:AtcoCode": "0500HSTIV009",
+    "naptan:Bearing": "N",
+    "naptan:CommonName": "Little Farthing Close",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Little Farthing Close",
+    "naptan:NaptanCode": "cmbdpwpm",
+    "naptan:ShortCommonName": "Needingworth Road",
+    "naptan:Street": "Needingworth Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794432,
+  "lat": 52.3376772,
+  "lon": -0.0798086,
+  "tags": {
+    "bench": "no",
+    "bin": "no",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Elm Drive",
+    "naptan:AtcoCode": "0500HSTIV010",
+    "naptan:Bearing": "NW",
+    "naptan:CommonName": "Elm Drive",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Elm Drive",
+    "naptan:NaptanCode": "cmbdpwpt",
+    "naptan:ShortCommonName": "Elm Drive",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794434,
+  "lat": 52.3245228,
+  "lon": -0.0715587,
+  "tags": {
+    "bench": "no",
+    "bin": "no",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "East Street",
+    "naptan:AtcoCode": "0500HSTIV011",
+    "naptan:Bearing": "N",
+    "naptan:CommonName": "East Street",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "East Street",
+    "naptan:NaptanCode": "cmbdpwpw",
+    "naptan:ShortCommonName": "The Quadrant",
+    "naptan:Street": "The Quadrant",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 533794438,
+  "lat": 52.3380026,
+  "lon": -0.0799120,
+  "tags": {
+    "bench": "yes",
+    "bin": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Elm Drive",
+    "naptan:AtcoCode": "0500HSTIV012",
+    "naptan:Bearing": "SE",
+    "naptan:CommonName": "Elm Drive",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Elm Drive",
+    "naptan:NaptanCode": "cmbdpwta",
+    "naptan:ShortCommonName": "Elm Drive",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "yes",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794442,
+  "lat": 52.3229913,
+  "lon": -0.0708329,
+  "tags": {
+    "bus": "yes",
+    "covered": "yes",
+    "highway": "bus_stop",
+    "local_ref": "3",
+    "name": "Bus Station 3",
+    "naptan:AtcoCode": "0500HSTIV013",
+    "naptan:CommonName": "Bus Station",
+    "naptan:Indicator": "Bay 3",
+    "naptan:Landmark": "Bus Station",
+    "naptan:NaptanCode": "cmbdpwtd",
+    "naptan:ShortCommonName": "Bus Station",
+    "naptan:Street": "Market Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794451,
+  "lat": 52.3229358,
+  "lon": -0.0707326,
+  "tags": {
+    "bus": "yes",
+    "covered": "yes",
+    "highway": "bus_stop",
+    "local_ref": "4",
+    "name": "Bus Station 4",
+    "naptan:AtcoCode": "0500HSTIV014",
+    "naptan:CommonName": "Bus Station",
+    "naptan:Indicator": "Bay 4",
+    "naptan:Landmark": "Bus Station",
+    "naptan:NaptanCode": "cmbdpwtg",
+    "naptan:ShortCommonName": "Bus Station",
+    "naptan:Street": "Market Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794456,
+  "lat": 52.3357824,
+  "lon": -0.0877144,
+  "tags": {
+    "bench": "no",
+    "bin": "no",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Ansley Way",
+    "naptan:AtcoCode": "0500HSTIV015",
+    "naptan:Bearing": "NW",
+    "naptan:CommonName": "Ansley Way",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Ansley Way",
+    "naptan:NaptanCode": "cmbdpwtj",
+    "naptan:ShortCommonName": "Ansley Way",
+    "naptan:Street": "Hill Rise",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794460,
+  "lat": 52.3305803,
+  "lon": -0.0759126,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Copperbeech Close",
+    "naptan:AtcoCode": "0500HSTIV016",
+    "naptan:Bearing": "S",
+    "naptan:CommonName": "Copperbeech Close",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "St Audrey Lane",
+    "naptan:NaptanCode": "cmbdpwtm",
+    "naptan:ShortCommonName": "Copperbeech Close",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 533794468,
+  "lat": 52.3311280,
+  "lon": -0.0762910,
+  "tags": {
+    "bench": "no",
+    "bin": "no",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Copperbeech Close",
+    "naptan:AtcoCode": "0500HSTIV017",
+    "naptan:Bearing": "N",
+    "naptan:CommonName": "Copperbeech Close",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Copperbeech Close",
+    "naptan:NaptanCode": "cmbdpwtp",
+    "naptan:ShortCommonName": "Copperbeech Close",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 533794474,
+  "lat": 52.3331448,
+  "lon": -0.0764530,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "The Pound",
+    "naptan:AtcoCode": "0500HSTIV018",
+    "naptan:Bearing": "N",
+    "naptan:CommonName": "The Pound",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "The Pound",
+    "naptan:NaptanCode": "cmbdpwtw",
+    "naptan:ShortCommonName": "The Pound",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794478,
+  "lat": 52.3326080,
+  "lon": -0.0727628,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Laburnum Way",
+    "naptan:AtcoCode": "0500HSTIV019",
+    "naptan:Bearing": "N",
+    "naptan:CommonName": "Laburnum Way",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "St Audrey Lane",
+    "naptan:NaptanCode": "cmbdtada",
+    "naptan:ShortCommonName": "Laburnum Way",
+    "naptan:Street": "Burstellars",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794485,
+  "lat": 52.3280057,
+  "lon": -0.0656982,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Little Farthing Close",
+    "naptan:AtcoCode": "0500HSTIV020",
+    "naptan:Bearing": "S",
+    "naptan:CommonName": "Little Farthing Close",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Little Farthing Close",
+    "naptan:NaptanCode": "cmbdtadg",
+    "naptan:ShortCommonName": "Needingworth Road",
+    "naptan:Street": "Needingworth Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794489,
+  "lat": 52.3304276,
+  "lon": -0.0713899,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Warren Road",
+    "naptan:AtcoCode": "0500HSTIV021",
+    "naptan:Bearing": "S",
+    "naptan:CommonName": "Warren Road",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Warren Road",
+    "naptan:NaptanCode": "cmbdtadj",
+    "naptan:ShortCommonName": "Warren Road",
+    "naptan:Street": "Pig Lane",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794493,
+  "lat": 52.3372187,
+  "lon": -0.0892378,
+  "tags": {
+    "bench": "no",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "California Road",
+    "naptan:AtcoCode": "0500HSTIV022",
+    "naptan:Bearing": "N",
+    "naptan:CommonName": "California Road",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "California Road",
+    "naptan:NaptanCode": "cmbdtadm",
+    "naptan:ShortCommonName": "California Road",
+    "naptan:Street": "Hill Rise",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794497,
+  "lat": 52.3387950,
+  "lon": -0.0894047,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Pettis Road",
+    "naptan:AtcoCode": "0500HSTIV023",
+    "naptan:Bearing": "N",
+    "naptan:CommonName": "Pettis Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Pettis Road",
+    "naptan:NaptanCode": "cmbdtadp",
+    "naptan:ShortCommonName": "Pettis Road",
+    "naptan:Street": "Hill Rise",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794505,
+  "lat": 52.3353100,
+  "lon": -0.0768894,
+  "tags": {
+    "bench": "yes",
+    "bin": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Chestnut Road",
+    "naptan:AtcoCode": "0500HSTIV024",
+    "naptan:Bearing": "SE",
+    "naptan:CommonName": "Chestnut Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Kings Hedges",
+    "naptan:NaptanCode": "cmbdtadt",
+    "naptan:ShortCommonName": "Chestnut Road",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "yes",
+    "source": "naptan_import",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 533794509,
+  "lat": 52.3230758,
+  "lon": -0.0710493,
+  "tags": {
+    "bus": "yes",
+    "covered": "yes",
+    "highway": "bus_stop",
+    "local_ref": "1",
+    "name": "Bus Station 1",
+    "naptan:AtcoCode": "0500HSTIV025",
+    "naptan:CommonName": "Bus Station",
+    "naptan:Indicator": "Bay 1",
+    "naptan:Landmark": "Bus Station",
+    "naptan:NaptanCode": "cmbdtadw",
+    "naptan:ShortCommonName": "Bus Station",
+    "naptan:Street": "Market Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794514,
+  "lat": 52.3351177,
+  "lon": -0.0711712,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Laburnum Way",
+    "naptan:AtcoCode": "0500HSTIV026",
+    "naptan:Bearing": "SE",
+    "naptan:CommonName": "Laburnum Way",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Hawthorn Way",
+    "naptan:NaptanCode": "cmbdtaga",
+    "naptan:ShortCommonName": "Laburnum Way",
+    "naptan:Street": "Burstellars",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794522,
+  "lat": 52.3420539,
+  "lon": -0.0741430,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Constable Road",
+    "naptan:AtcoCode": "0500HSTIV027",
+    "naptan:Bearing": "SW",
+    "naptan:CommonName": "Constable Road",
+    "naptan:Indicator": "SW-bound",
+    "naptan:Landmark": "Fraser Drive",
+    "naptan:NaptanCode": "cmbdtagd",
+    "naptan:ShortCommonName": "Constable Road",
+    "naptan:Street": "Constable Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794525,
+  "lat": 52.3356575,
+  "lon": -0.0803870,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Cedar Road",
+    "naptan:AtcoCode": "0500HSTIV028",
+    "naptan:Bearing": "W",
+    "naptan:CommonName": "Cedar Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Cedar Road",
+    "naptan:NaptanCode": "cmbdtagj",
+    "naptan:ShortCommonName": "Cedar Road",
+    "naptan:Street": "Chestnut Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794529,
+  "lat": 52.3358163,
+  "lon": -0.0776849,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Chestnut Road",
+    "naptan:AtcoCode": "0500HSTIV029",
+    "naptan:Bearing": "NW",
+    "naptan:CommonName": "Chestnut Road",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Kings Hedges",
+    "naptan:NaptanCode": "cmbdtagm",
+    "naptan:ShortCommonName": "Chestnut Road",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794537,
+  "lat": 52.3306005,
+  "lon": -0.0715145,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Warren Road",
+    "naptan:AtcoCode": "0500HSTIV030",
+    "naptan:Bearing": "N",
+    "naptan:CommonName": "Warren Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Warren Road",
+    "naptan:NaptanCode": "cmbdtagp",
+    "naptan:ShortCommonName": "Warren Road",
+    "naptan:Street": "Pig Lane",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794542,
+  "lat": 52.3360269,
+  "lon": -0.0878213,
+  "tags": {
+    "bench": "no",
+    "bin": "no",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "lit": "yes",
+    "name": "Ansley Way",
+    "naptan:AtcoCode": "0500HSTIV031",
+    "naptan:Bearing": "SE",
+    "naptan:CommonName": "Ansley Way",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Ansley Way",
+    "naptan:NaptanCode": "cmbdtagt",
+    "naptan:ShortCommonName": "Ansley Way",
+    "naptan:Street": "Hill Rise",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 533794549,
+  "lat": 52.3287168,
+  "lon": -0.0771604,
+  "tags": {
+    "alt_name": "St Ivo",
+    "bench": "yes",
+    "bin": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Langley Close",
+    "naptan:AltCommonName": "St Ivo",
+    "naptan:AtcoCode": "0500HSTIV033",
+    "naptan:Bearing": "S",
+    "naptan:CommonName": "Langley Close",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Langley Close",
+    "naptan:NaptanCode": "cmbdtaja",
+    "naptan:ShortCommonName": "Langley Close",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "yes",
+    "source": "naptan_import",
+    "tactile_paving": "no",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 533794550,
+  "lat": 52.3379196,
+  "lon": -0.0893018,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Pettis Road",
+    "naptan:AtcoCode": "0500HSTIV034",
+    "naptan:Bearing": "S",
+    "naptan:CommonName": "Pettis Road",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Pettis Road",
+    "naptan:NaptanCode": "cmbdtajd",
+    "naptan:ShortCommonName": "Pettis Road",
+    "naptan:Street": "Hill Rise",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "yes",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794551,
+  "lat": 52.3360254,
+  "lon": -0.0849590,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Shakespeare Road",
+    "naptan:AtcoCode": "0500HSTIV035",
+    "naptan:Bearing": "W",
+    "naptan:CommonName": "Shakespeare Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Shakespeare Road",
+    "naptan:NaptanCode": "cmbdtajg",
+    "naptan:ShortCommonName": "Shakespeare Road",
+    "naptan:Street": "Acacia Avenue",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794552,
+  "lat": 52.3429240,
+  "lon": -0.0834130,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Ramsey Road",
+    "naptan:AtcoCode": "0500HSTIV036",
+    "naptan:Bearing": "NW",
+    "naptan:CommonName": "Ramsey Road",
+    "naptan:Indicator": "o/s No 193",
+    "naptan:Landmark": "Ramsey Road",
+    "naptan:NaptanCode": "cmbdtajm",
+    "naptan:ShortCommonName": "Ramsey Road",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "yes",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794553,
+  "lat": 52.3430299,
+  "lon": -0.0832910,
+  "tags": {
+    "bench": "yes",
+    "bin": "yes",
+    "highway": "bus_stop",
+    "name": "Ramsey Road",
+    "naptan:AtcoCode": "0500HSTIV037",
+    "naptan:Bearing": "SE",
+    "naptan:CommonName": "Ramsey Road",
+    "naptan:Indicator": "opp No 193",
+    "naptan:Landmark": "Ramsey Road",
+    "naptan:NaptanCode": "cmbdtajp",
+    "naptan:ShortCommonName": "Ramsey Road",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "yes",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794554,
+  "lat": 52.3367386,
+  "lon": -0.0746236,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Kings Hedges",
+    "naptan:AtcoCode": "0500HSTIV038",
+    "naptan:Bearing": "SE",
+    "naptan:CommonName": "Kings Hedges",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Kings Hedges",
+    "naptan:NaptanCode": "cmbdtajt",
+    "naptan:ShortCommonName": "Kings Hedges",
+    "naptan:Street": "Burstellars",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794555,
+  "lat": 52.3330610,
+  "lon": -0.0762805,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "The Pound",
+    "naptan:AtcoCode": "0500HSTIV039",
+    "naptan:Bearing": "S",
+    "naptan:CommonName": "The Pound",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "The Pound",
+    "naptan:NaptanCode": "cmbdtajw",
+    "naptan:ShortCommonName": "The Pound",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794560,
+  "lat": 52.3400535,
+  "lon": -0.0805131,
+  "tags": {
+    "bench": "no",
+    "bin": "no",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Lysander Close",
+    "naptan:AtcoCode": "0500HSTIV040",
+    "naptan:Bearing": "NE",
+    "naptan:CommonName": "Lysander Close",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Lysander Close",
+    "naptan:NaptanCode": "cmbdtama",
+    "naptan:ShortCommonName": "Lysander Close",
+    "naptan:Street": "Albemarle Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794568,
+  "lat": 52.3281299,
+  "lon": -0.0777126,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Langley Close",
+    "naptan:AtcoCode": "0500HSTIV042",
+    "naptan:Bearing": "N",
+    "naptan:CommonName": "Langley Close",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Westwood Road",
+    "naptan:NaptanCode": "cmbdtamg",
+    "naptan:ShortCommonName": "Langley Close",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 533794571,
+  "lat": 52.3446159,
+  "lon": -0.0741051,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Rainbow Centre",
+    "naptan:AtcoCode": "0500HSTIV043",
+    "naptan:Bearing": "NW",
+    "naptan:CommonName": "Rainbow Centre",
+    "naptan:Indicator": "o/s",
+    "naptan:Landmark": "Constable Road",
+    "naptan:NaptanCode": "cmbdtamj",
+    "naptan:ShortCommonName": "Rainbow Centre",
+    "naptan:Street": "Marley Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794579,
+  "lat": 52.3407116,
+  "lon": -0.0878247,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Car Park",
+    "naptan:AtcoCode": "0500HSTIV044",
+    "naptan:Bearing": "NE",
+    "naptan:CommonName": "Car Park",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Hill Rise",
+    "naptan:NaptanCode": "cmbdtamp",
+    "naptan:ShortCommonName": "Car Park",
+    "naptan:Street": "Hill Rise",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794581,
+  "lat": 52.3273801,
+  "lon": -0.0736358,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Norris Road",
+    "naptan:AtcoCode": "0500HSTIV045",
+    "naptan:Bearing": "N",
+    "naptan:BusStopType": "CUS",
+    "naptan:CommonName": "Norris Road",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Norris Road",
+    "naptan:NaptanCode": "cmbdtamt",
+    "naptan:ShortCommonName": "Norris Road",
+    "naptan:Street": "Broad Leas",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794582,
+  "lat": 52.3398883,
+  "lon": -0.0814157,
+  "tags": {
+    "bench": "no",
+    "bin": "no",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "lit": "yes",
+    "name": "Albemarle Road",
+    "naptan:AtcoCode": "0500HSTIV046",
+    "naptan:Bearing": "NW",
+    "naptan:CommonName": "Albemarle Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Albemarle Road",
+    "naptan:NaptanCode": "cmbdtamw",
+    "naptan:ShortCommonName": "Albemarle Road",
+    "naptan:Street": "Ramsey Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 533794584,
+  "lat": 52.3273512,
+  "lon": -0.0735197,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Norris Road",
+    "naptan:AtcoCode": "0500HSTIV047",
+    "naptan:Bearing": "S",
+    "naptan:CommonName": "Norris Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Norris Road",
+    "naptan:NaptanCode": "cmbdtapa",
+    "naptan:ShortCommonName": "Norris Road",
+    "naptan:Street": "Broad Leas",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794585,
+  "lat": 52.3399995,
+  "lon": -0.0782987,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Victor Close",
+    "naptan:AtcoCode": "0500HSTIV048",
+    "naptan:Bearing": "SE",
+    "naptan:CommonName": "Victor Close",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Victor Close",
+    "naptan:NaptanCode": "cmbdtapd",
+    "naptan:ShortCommonName": "Victor Close",
+    "naptan:Street": "Stirling Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794586,
+  "lat": 52.3428183,
+  "lon": -0.0857665,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "The Mallards",
+    "naptan:AtcoCode": "0500HSTIV049",
+    "naptan:Bearing": "NE",
+    "naptan:CommonName": "The Mallards",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "The Mallards",
+    "naptan:NaptanCode": "cmbdtapg",
+    "naptan:ShortCommonName": "The Mallards",
+    "naptan:Street": "Hill Rise",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794587,
+  "lat": 52.3425766,
+  "lon": -0.0858357,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "The Mallards",
+    "naptan:AtcoCode": "0500HSTIV050",
+    "naptan:Bearing": "SW",
+    "naptan:CommonName": "The Mallards",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "The Mallards",
+    "naptan:NaptanCode": "cmbdtapj",
+    "naptan:ShortCommonName": "The Mallards",
+    "naptan:Street": "Hill Rise",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794588,
+  "lat": 52.3430382,
+  "lon": -0.0854634,
+  "tags": {
+    "highway": "bus_stop",
+    "name": "Hill Rise",
+    "naptan:AtcoCode": "0500HSTIV051",
+    "naptan:Bearing": "NE",
+    "naptan:CommonName": "Hill Rise",
+    "naptan:Indicator": "opp No 122",
+    "naptan:Landmark": "Hill Rise",
+    "naptan:NaptanCode": "cmbdtapm",
+    "naptan:ShortCommonName": "Hill Rise",
+    "naptan:Street": "Hill Rise",
+    "naptan:verified": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794590,
+  "lat": 52.3253264,
+  "lon": -0.0745175,
+  "tags": {
+    "bench": "no",
+    "bin": "no",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "St John's Road",
+    "naptan:AtcoCode": "0500HSTIV053",
+    "naptan:Bearing": "E",
+    "naptan:CommonName": "St John's Road",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "St John's Road",
+    "naptan:NaptanCode": "cmbdtapt",
+    "naptan:ShortCommonName": "East Street",
+    "naptan:Street": "East Street",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "no",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794591,
+  "lat": 52.3252590,
+  "lon": -0.0747993,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "St John's Road",
+    "naptan:AtcoCode": "0500HSTIV054",
+    "naptan:Bearing": "W",
+    "naptan:CommonName": "St John's Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "St John's Road",
+    "naptan:NaptanCode": "cmbdtapw",
+    "naptan:ShortCommonName": "East Street",
+    "naptan:Street": "East Street",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794593,
+  "lat": 52.3406234,
+  "lon": -0.0691405,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Post Box",
+    "naptan:AtcoCode": "0500HSTIV059",
+    "naptan:Bearing": "E",
+    "naptan:BusStopType": "CUS",
+    "naptan:CommonName": "Post Box",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Post Box",
+    "naptan:NaptanCode": "cmbgjdad",
+    "naptan:ShortCommonName": "Post Box",
+    "naptan:Street": "Marley Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794596,
+  "lat": 52.3404827,
+  "lon": -0.0660344,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Burrel Road",
+    "naptan:AtcoCode": "0500HSTIV062",
+    "naptan:Bearing": "E",
+    "naptan:BusStopType": "CUS",
+    "naptan:CommonName": "Burrel Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Burrel Road",
+    "naptan:NaptanCode": "cmbgjtgm",
+    "naptan:ShortCommonName": "Burrel Road",
+    "naptan:Street": "Marley Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794597,
+  "lat": 52.3415165,
+  "lon": -0.0709660,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Waveney Road",
+    "naptan:AtcoCode": "0500HSTIV063",
+    "naptan:Bearing": "SE",
+    "naptan:BusStopType": "CUS",
+    "naptan:CommonName": "Waveney Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Waveney Road",
+    "naptan:NaptanCode": "cmbgjtgp",
+    "naptan:ShortCommonName": "Waveney Road",
+    "naptan:Street": "Marley Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794598,
+  "lat": 52.3447050,
+  "lon": -0.0740572,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Rainbow Centre",
+    "naptan:AtcoCode": "0500HSTIV064",
+    "naptan:Bearing": "SE",
+    "naptan:BusStopType": "CUS",
+    "naptan:CommonName": "Rainbow Centre",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Constable Road",
+    "naptan:NaptanCode": "cmbgjtgt",
+    "naptan:ShortCommonName": "Rainbow Centre",
+    "naptan:Street": "Marley Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794599,
+  "lat": 52.3395182,
+  "lon": -0.0642415,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "local_ref": "OS",
+    "name": "Royce Court",
+    "naptan:AtcoCode": "0500HSTIV065",
+    "naptan:Bearing": "N",
+    "naptan:CommonName": "Royce Court",
+    "naptan:Indicator": "os",
+    "naptan:Landmark": "Royce Court",
+    "naptan:NaptanCode": "cmbgjtjg",
+    "naptan:ShortCommonName": "Royce Court",
+    "naptan:Street": "Burrel Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794600,
+  "lat": 52.3394625,
+  "lon": -0.0640317,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Royce Court",
+    "naptan:AtcoCode": "0500HSTIV066",
+    "naptan:Bearing": "S",
+    "naptan:BusStopType": "CUS",
+    "naptan:CommonName": "Royce Court",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Royce Court",
+    "naptan:NaptanCode": "cmbgjtjd",
+    "naptan:ShortCommonName": "Royce Court",
+    "naptan:Street": "Burrel Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794602,
+  "lat": 52.3381856,
+  "lon": -0.0646814,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Stephenson Road",
+    "naptan:AtcoCode": "0500HSTIV067",
+    "naptan:Bearing": "N",
+    "naptan:CommonName": "Stephenson Road",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "ESG Pool Ventilation",
+    "naptan:NaptanCode": "cmbgjtjm",
+    "naptan:ShortCommonName": "Stephenson Road",
+    "naptan:Street": "Burrel Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794603,
+  "lat": 52.3381466,
+  "lon": -0.0644923,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Stephenson Road",
+    "naptan:AtcoCode": "0500HSTIV068",
+    "naptan:Bearing": "S",
+    "naptan:BusStopType": "CUS",
+    "naptan:CommonName": "Stephenson Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "ESG Pool Ventilation",
+    "naptan:NaptanCode": "cmbgjtjp",
+    "naptan:ShortCommonName": "Stephenson Road",
+    "naptan:Street": "Burrel Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794605,
+  "lat": 52.3370334,
+  "lon": -0.0629556,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Edison Road",
+    "naptan:AtcoCode": "0500HSTIV069",
+    "naptan:Bearing": "E",
+    "naptan:CommonName": "Edison Road",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Edison Road",
+    "naptan:NaptanCode": "cmbgjtjt",
+    "naptan:ShortCommonName": "Edison Road",
+    "naptan:Street": "Nuffield Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794606,
+  "lat": 52.3370635,
+  "lon": -0.0626019,
+  "tags": {
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Edison Road",
+    "naptan:AtcoCode": "0500HSTIV070",
+    "naptan:Bearing": "W",
+    "naptan:BusStopType": "CUS",
+    "naptan:CommonName": "Edison Road",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Edison Road",
+    "naptan:NaptanCode": "cmbgjtjw",
+    "naptan:ShortCommonName": "Edison Road",
+    "naptan:Street": "Nuffield Road",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "source": "naptan_import"
+  }
+},
+{
+  "type": "node",
+  "id": 533794607,
+  "lat": 52.3202898,
+  "lon": -0.0656254,
+  "tags": {
+    "bench": "yes",
+    "bin": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "The Busway St Ives Park-and-Ride",
+    "naptan:AtcoCode": "0500HSTIV071",
+    "naptan:Bearing": "SE",
+    "naptan:CommonName": "The Busway St Ives Park-and-Ride",
+    "naptan:Crossing": "Park-and-Ride",
+    "naptan:Indicator": "S-bound",
+    "naptan:Landmark": "Park-and-Ride",
+    "naptan:NaptanCode": "cmbgjwjd",
+    "naptan:ShortCommonName": "Busway St Ives P&R",
+    "naptan:Street": "Guided Busway",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "yes",
+    "source": "naptan_import",
+    "tactile_paving": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 533794609,
+  "lat": 52.3200850,
+  "lon": -0.0659772,
+  "tags": {
+    "bench": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "The Busway St Ives Park-and-Ride",
+    "naptan:AtcoCode": "0500HSTIV072",
+    "naptan:Bearing": "NW",
+    "naptan:CommonName": "The Busway St Ives Park-and-Ride",
+    "naptan:Crossing": "Car Park",
+    "naptan:Indicator": "N-bound",
+    "naptan:Landmark": "Car Park",
+    "naptan:NaptanCode": "cmbgjwjm",
+    "naptan:ShortCommonName": "Busway St Ives P&R",
+    "naptan:Street": "Guided Busway",
+    "naptan:verified": "no",
+    "public_transport": "platform",
+    "shelter": "yes",
+    "source": "naptan_import",
+    "tactile_paving": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 558637884,
+  "lat": 52.3232264,
+  "lon": -0.0721108,
+  "tags": {
+    "amenity": "pharmacy",
+    "brand": "Boots",
+    "brand:wikidata": "Q6123139",
+    "brand:wikipedia": "en:Boots UK",
+    "dispensing": "yes",
+    "healthcare": "pharmacy",
+    "name": "Boots",
+    "website": "https://www.boots.com/stores/167-st-ives-sheep-market-pe27-5ah"
+  }
+},
+{
+  "type": "node",
+  "id": 590886964,
+  "lat": 52.3277375,
+  "lon": -0.0731324,
+  "tags": {
+    "amenity": "doctors",
+    "healthcare": "doctor",
+    "name": "Northcote House Surgery"
+  }
+},
+{
+  "type": "node",
+  "id": 1580159977,
+  "lat": 52.3239912,
+  "lon": -0.0740932,
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:housenumber": "19",
+    "addr:postcode": "PE27 5EB",
+    "addr:street": "Crown Street",
+    "amenity": "pharmacy",
+    "brand": "Superdrug",
+    "brand:wikidata": "Q7643261",
+    "brand:wikipedia": "en:Superdrug",
+    "dispensing": "yes",
+    "healthcare": "pharmacy",
+    "name": "Superdrug",
+    "website": "https://www.superdrug.com/store/st-ives"
+  }
+},
+{
+  "type": "node",
+  "id": 2786117284,
+  "lat": 52.3227307,
+  "lon": -0.0712985,
+  "tags": {
+    "bench": "yes",
+    "bin": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "The Busway Station Road",
+    "naptan:AtcoCode": "0500HSTIV074",
+    "naptan:Bearing": "SE",
+    "naptan:CommonName": "The Busway Station Road",
+    "naptan:Indicator": "S-bound",
+    "naptan:Landmark": "Market Road",
+    "naptan:NaptanCode": "CMBGMDTG",
+    "naptan:ShortCommonName": "Busway Station Road",
+    "naptan:Street": "Station Road",
+    "public_transport": "platform",
+    "shelter": "yes",
+    "source": "naptan;make_stop.py",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 5462502104,
+  "lat": 52.3333304,
+  "lon": -0.0940676,
+  "tags": {
+    "bench": "yes",
+    "bin": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "lit": "yes",
+    "name": "Garner Drive",
+    "naptan:AtcoCode": "0500HSTIV073",
+    "naptan:Bearing": "E",
+    "naptan:CommonName": "Garner Drive",
+    "naptan:Indicator": "near",
+    "naptan:Landmark": "Garner Drive",
+    "naptan:NaptanCode": "CMBGMDPA",
+    "naptan:ShortCommonName": "Garner Drive",
+    "naptan:StopType": "CUS",
+    "naptan:Street": "Houghton Road",
+    "public_transport": "platform",
+    "shelter": "yes",
+    "source": "naptan;make_stop.py",
+    "tactile_paving": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 5462502105,
+  "lat": 52.3331254,
+  "lon": -0.0954529,
+  "tags": {
+    "bench": "yes",
+    "bin": "yes",
+    "bus": "yes",
+    "highway": "bus_stop",
+    "name": "Garner Drive",
+    "naptan:AtcoCode": "0500HHOUG022",
+    "naptan:Bearing": "W",
+    "naptan:CommonName": "Garner Drive",
+    "naptan:Indicator": "opp",
+    "naptan:Landmark": "Garner Drive",
+    "naptan:NaptanCode": "CMBGMDMW",
+    "naptan:ShortCommonName": "Garner Drive",
+    "naptan:StopType": "CUS",
+    "naptan:Street": "Houghton Road",
+    "public_transport": "platform",
+    "shelter": "yes",
+    "source": "naptan;make_stop.py"
+  }
+},
+{
+  "type": "node",
+  "id": 5680431999,
+  "lat": 52.3432773,
+  "lon": -0.0751045,
+  "tags": {
+    "addr:city": "St. Ives",
+    "addr:street": "Constable Road",
+    "amenity": "community_centre",
+    "name": "Burleigh Hill Community Centre"
+  }
+},
+{
+  "type": "node",
+  "id": 7324236400,
+  "lat": 52.3235048,
+  "lon": -0.0739276,
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:housenumber": "2",
+    "addr:postcode": "PE27 5FW",
+    "addr:street": "Foundry Walk",
+    "brand": "Costcutter",
+    "brand:wikidata": "Q5175072",
+    "brand:wikipedia": "en:Costcutter",
+    "contact:website": "https://store-locator.costcutter.co.uk/costcutter-e8858f573a6f",
+    "name": "Costcutter",
+    "opening_hours": "Tu-Su 07:00-21:00; Mo 07:00-22:30",
+    "shop": "supermarket"
+  }
+},
+{
+  "type": "node",
+  "id": 10793214907,
+  "lat": 52.3305044,
+  "lon": -0.0580324,
+  "tags": {
+    "brand": "PureGym",
+    "brand:wikidata": "Q18345898",
+    "leisure": "fitness_centre",
+    "name": "PureGym"
+  }
+},
+{
+  "type": "way",
+  "id": 22974336,
+  "center": {
+    "lat": 52.3275119,
+    "lon": -0.0704339
+  },
+  "tags": {
+    "leisure": "park",
+    "name": "Warners Park"
+  }
+},
+{
+  "type": "way",
+  "id": 26675848,
+  "center": {
+    "lat": 52.3380466,
+    "lon": -0.0738412
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:postcode": "PE27 3WF",
+    "addr:street": "Nene Way",
+    "amenity": "school",
+    "capacity": "420",
+    "check_date": "2026-01-05",
+    "education": "school",
+    "isced:level": "0;1",
+    "max_age": "11",
+    "min_age": "4",
+    "name": "Wheatfields Primary School",
+    "phone": "+44 1480 466919",
+    "ref:GB:uprn": "10000158218",
+    "ref:edubase": "131197",
+    "school": "primary",
+    "school:type": "foundation",
+    "website": "https://wheatfields.eschools.co.uk/",
+    "wikidata": "Q67149301"
+  }
+},
+{
+  "type": "way",
+  "id": 26675850,
+  "center": {
+    "lat": 52.3411162,
+    "lon": -0.0772652
+  },
+  "tags": {
+    "leisure": "park",
+    "operator": "St Ives Town Council",
+    "operator:type": "public",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 26680524,
+  "center": {
+    "lat": 52.3391558,
+    "lon": -0.0701788
+  },
+  "tags": {
+    "leisure": "park",
+    "name": "Waveney Road Playing Field"
+  }
+},
+{
+  "type": "way",
+  "id": 27264966,
+  "center": {
+    "lat": 52.3353218,
+    "lon": -0.0804816
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 28558293,
+  "center": {
+    "lat": 52.3195312,
+    "lon": -0.0959222
+  },
+  "tags": {
+    "addr:city": "Huntingdon",
+    "addr:postcode": "PE28 9DU",
+    "addr:street": "St Ives Road",
+    "amenity": "school",
+    "capacity": "315",
+    "check_date": "2026-04-16",
+    "education": "school",
+    "isced:level": "0;1",
+    "max_age": "11",
+    "min_age": "4",
+    "name": "Hemingford Grey Primary School",
+    "operator": "Cambridgeshire County Council",
+    "operator:type": "government",
+    "operator:wikidata": "Q5025648",
+    "phone": "+44 1480 375040",
+    "ref:GB:uprn": "10000151148",
+    "ref:edubase": "110679",
+    "school": "primary",
+    "school:type": "community",
+    "website": "https://www.hemingfordgrey.cambs.sch.uk",
+    "wikidata": "Q66223547"
+  }
+},
+{
+  "type": "way",
+  "id": 33118316,
+  "center": {
+    "lat": 52.3381092,
+    "lon": -0.0857313
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 33118317,
+  "center": {
+    "lat": 52.3371645,
+    "lon": -0.0872264
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:postcode": "PE27 6SE",
+    "addr:street": "Hill Rise",
+    "amenity": "school",
+    "capacity": "630",
+    "check_date": "2025-08-30",
+    "isced:level": "0;1",
+    "max_age": "11",
+    "min_age": "4",
+    "name": "Thorndown Primary School",
+    "operator": "Cambridgeshire County Council",
+    "operator:type": "government",
+    "operator:wikidata": "Q5025648",
+    "phone": "+44 1480 375103",
+    "ref:GB:uprn": "10000158218",
+    "ref:edubase": "136814",
+    "school": "primary",
+    "school:type": "community",
+    "website": "https://www.thorndownprimaryschool.co.uk/",
+    "wikidata": "Q66229216"
+  }
+},
+{
+  "type": "way",
+  "id": 33130760,
+  "center": {
+    "lat": 52.3372726,
+    "lon": -0.0927926
+  },
+  "tags": {
+    "layer": "-1",
+    "leisure": "sports_centre",
+    "name": "St. Ivo Outdoor Complex"
+  }
+},
+{
+  "type": "way",
+  "id": 43591130,
+  "center": {
+    "lat": 52.3223337,
+    "lon": -0.0689897
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:postcode": "PE27 5BW",
+    "addr:street": "Station Road",
+    "brand": "Waitrose",
+    "brand:wikidata": "Q771734",
+    "brand:wikipedia": "en:Waitrose & Partners",
+    "building": "yes",
+    "name": "Waitrose",
+    "official_name": "Waitrose & Partners",
+    "operator": "Waitrose & Partners",
+    "phone": "+44 1480 492949",
+    "shop": "supermarket",
+    "website": "https://www.waitrose.com/find-a-store/st-ives"
+  }
+},
+{
+  "type": "way",
+  "id": 136168725,
+  "center": {
+    "lat": 52.3301228,
+    "lon": -0.0843167
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:country": "GB",
+    "addr:housename": "One Leisure St Ives Indoor",
+    "addr:postcode": "PE27 6WU",
+    "addr:street": "Westwood Rd",
+    "building": "yes",
+    "contact:phone": "+44 1480 388111",
+    "contact:website": "https://www.oneleisure.net",
+    "leisure": "sports_centre",
+    "name": "One Leisure St Ives Indoor",
+    "sport": "swimming;fitness;cardio",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 146798093,
+  "center": {
+    "lat": 52.3308927,
+    "lon": -0.0844999
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:country": "GB",
+    "addr:postcode": "PE27 6RR",
+    "amenity": "school",
+    "capacity": "1840",
+    "check_date": "2025-09-09",
+    "email": "office@astreastivo.org",
+    "isced:level": "2;3",
+    "max_age": "18",
+    "min_age": "11",
+    "name": "St Ivo Academy",
+    "operator": "Astrea Academy Trust",
+    "operator:type": "private",
+    "operator:wikidata": "Q121704455",
+    "phone": "+44 1480 375400",
+    "ref:GB:uprn": "100091519387",
+    "ref:edubase": "137305",
+    "ref:edubase:group": "16104",
+    "ref:isil": "GB-UkIvSIS",
+    "school": "secondary",
+    "school:group:type": "multi_academy_trust",
+    "school:type": "academy",
+    "website": "https://www.astreastivo.org/",
+    "wikidata": "Q7593417"
+  }
+},
+{
+  "type": "way",
+  "id": 165041759,
+  "center": {
+    "lat": 52.3280104,
+    "lon": -0.0832143
+  },
+  "tags": {
+    "amenity": "community_centre",
+    "building": "yes",
+    "name": "Copley Centre (Cromwell Scouts) - building"
+  }
+},
+{
+  "type": "way",
+  "id": 273800828,
+  "center": {
+    "lat": 52.3225198,
+    "lon": -0.0688831
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:housename": "Library Row",
+    "addr:housenumber": "4",
+    "addr:postcode": "PE27 5BW",
+    "addr:street": "Station Road",
+    "addr:unit": "4",
+    "air_conditioning": "yes",
+    "amenity": "library",
+    "building": "yes",
+    "internet_access": "yes;wlan;terminal;wired;service",
+    "internet_access:fee": "no",
+    "internet_access:ssid": "CambWifi",
+    "name": "St Ives Library and Learning Centre",
+    "opening_hours": "Mo-We 09:30-17:00; Th 09:30-13:00,13:30-18:00; Fr 09:30-19:00; Sa 09:30-16:00; Su 12:00-16:00; Dec 25 off; Dec 31 off; Jan 01 off",
+    "website": "https://www.cambridgeshire.gov.uk/st-ives-library/",
+    "wikidata": "Q55163457"
+  }
+},
+{
+  "type": "way",
+  "id": 275004097,
+  "center": {
+    "lat": 52.3304183,
+    "lon": -0.0849572
+  },
+  "tags": {
+    "building": "school",
+    "leisure": "sports_centre",
+    "name": "One Leisure St Ives",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "way",
+  "id": 276517612,
+  "center": {
+    "lat": 52.3230784,
+    "lon": -0.0730153
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:country": "GB",
+    "addr:housename": "Town Hall",
+    "addr:locality": "The Old Riverport",
+    "addr:postcode": "PE27 5AL",
+    "amenity": "townhall",
+    "building": "yes",
+    "name": "St Ives Town Hall",
+    "wikidata": "Q26615622"
+  }
+},
+{
+  "type": "way",
+  "id": 282059840,
+  "center": {
+    "lat": 52.3365424,
+    "lon": -0.0929472
+  },
+  "tags": {
+    "building": "yes",
+    "layer": "1",
+    "leisure": "sports_centre",
+    "name": "St. Ivo outdoor centre",
+    "sport": "soccer;tennis;athletics;cricket"
+  }
+},
+{
+  "type": "way",
+  "id": 331682616,
+  "center": {
+    "lat": 52.3242099,
+    "lon": -0.0702388
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:country": "GB",
+    "addr:postcode": "PE27 5JD",
+    "amenity": "doctors",
+    "building": "yes",
+    "healthcare": "doctor",
+    "name": "Grove Medical Practice"
+  }
+},
+{
+  "type": "way",
+  "id": 342703815,
+  "center": {
+    "lat": 52.3436938,
+    "lon": -0.0748636
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:country": "GB",
+    "addr:postcode": "PE27 3ER",
+    "addr:street": "Constable Road",
+    "amenity": "doctors",
+    "building": "yes",
+    "healthcare": "doctor",
+    "name": "The Orchard Surgery"
+  }
+},
+{
+  "type": "way",
+  "id": 402670023,
+  "center": {
+    "lat": 52.3294150,
+    "lon": -0.0748023
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:country": "GB",
+    "addr:postcode": "PE27 5RG",
+    "amenity": "school",
+    "capacity": "240",
+    "check_date": "2026-04-24",
+    "education": "school",
+    "fixme": "Check on division of site. Are some of the fields shared?",
+    "isced:level": "1",
+    "max_age": "11",
+    "min_age": "7",
+    "name": "Westfield Junior School",
+    "operator": "Cambridgeshire County Council",
+    "operator:type": "government",
+    "operator:wikidata": "Q5025648",
+    "phone": "+44 1480 375005",
+    "ref:GB:uprn": "200001061233",
+    "ref:edubase": "110698",
+    "school": "primary",
+    "school:type": "community",
+    "source:addr:postcode": "get-information-schools.service.gov.uk",
+    "website": "https://westfieldjuniorschool.j2webby.com",
+    "wikidata": "Q26693747"
+  }
+},
+{
+  "type": "way",
+  "id": 402670168,
+  "center": {
+    "lat": 52.3291925,
+    "lon": -0.0725787
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:country": "GB",
+    "addr:postcode": "PE27 5QT",
+    "amenity": "school",
+    "capacity": "219",
+    "check_date": "2025-07-18",
+    "isced:level": "0;1",
+    "max_age": "7",
+    "min_age": "3",
+    "name": "Eastfield Infant and Nursery School",
+    "operator": "Cambridgeshire County Council",
+    "operator:type": "government",
+    "operator:wikidata": "Q5025648",
+    "phone": "+44 1480 463958",
+    "ref:GB:uprn": "100091519192",
+    "ref:edubase": "110707",
+    "school": "primary",
+    "school:type": "community",
+    "source:addr:postcode": "get-information-schools.service.gov.uk",
+    "website": "https://www.eastfieldinfants.org/",
+    "wikidata": "Q67148342"
+  }
+},
+{
+  "type": "way",
+  "id": 572205632,
+  "center": {
+    "lat": 52.3302296,
+    "lon": -0.0578116
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:housename": "Morrisons",
+    "addr:postcode": "PE27 4NB",
+    "addr:street": "Parsons Green",
+    "brand": "Morrisons",
+    "brand:wikidata": "Q922344",
+    "building": "commercial",
+    "name": "Morrisons",
+    "shop": "supermarket",
+    "website": "https://my.morrisons.com/storefinder/644/saint-ives"
+  }
+},
+{
+  "type": "way",
+  "id": 574874811,
+  "center": {
+    "lat": 52.3353130,
+    "lon": -0.0776856
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:country": "GB",
+    "addr:postcode": "PE27 3TP",
+    "amenity": "doctors",
+    "building": "yes",
+    "check_date": "2021-03-20",
+    "healthcare": "doctor",
+    "name": "The Spinney Surgery"
+  }
+},
+{
+  "type": "way",
+  "id": 606519784,
+  "center": {
+    "lat": 52.3319172,
+    "lon": -0.0904736
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 691486184,
+  "center": {
+    "lat": 52.3297932,
+    "lon": -0.0815347
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 792132458,
+  "center": {
+    "lat": 52.3324676,
+    "lon": -0.0872063
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 792132464,
+  "center": {
+    "lat": 52.3311777,
+    "lon": -0.0900063
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 825485350,
+  "center": {
+    "lat": 52.3322332,
+    "lon": -0.0592859
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:country": "GB",
+    "addr:housename": "Compass Point Business Park",
+    "addr:postcode": "PE27 5JL",
+    "addr:street": "Stocks Bridge Way",
+    "addr:unit": "Unit 6",
+    "brand": "Aldi",
+    "brand:wikidata": "Q41171672",
+    "building": "yes",
+    "check_date": "2023-12-26",
+    "name": "Aldi",
+    "shop": "supermarket",
+    "website": "https://www.aldi.co.uk/store-finder/l/st-ives/6-compass-point-business-park/c592"
+  }
+},
+{
+  "type": "way",
+  "id": 836479939,
+  "center": {
+    "lat": 52.3318985,
+    "lon": -0.0917144
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 836479940,
+  "center": {
+    "lat": 52.3304321,
+    "lon": -0.0884767
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 836479941,
+  "center": {
+    "lat": 52.3306719,
+    "lon": -0.0890522
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 836479962,
+  "center": {
+    "lat": 52.3329171,
+    "lon": -0.0868957
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 1021439102,
+  "center": {
+    "lat": 52.3334830,
+    "lon": -0.0849918
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 1021439104,
+  "center": {
+    "lat": 52.3333870,
+    "lon": -0.0871013
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 1021439105,
+  "center": {
+    "lat": 52.3332776,
+    "lon": -0.0896636
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 1021439106,
+  "center": {
+    "lat": 52.3329514,
+    "lon": -0.0910836
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 1059354037,
+  "center": {
+    "lat": 52.3261808,
+    "lon": -0.0782849
+  },
+  "tags": {
+    "leisure": "park"
+  }
+},
+{
+  "type": "way",
+  "id": 1089704613,
+  "center": {
+    "lat": 52.3303794,
+    "lon": -0.0869833
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:postcode": "PE27 6AL",
+    "addr:street": "Westwood Road",
+    "amenity": "school",
+    "capacity": "49",
+    "check_date": "2025-10-13",
+    "description": "Aurora Fairway School is a specialist day school located in St Ives, Cambridge, offering academic and therapeutic provision for students aged 11-16 with a range of complex learning needs including social, emotional and mental health needs, speech, languag",
+    "isced:level": "2;3",
+    "max_age": "16",
+    "min_age": "11",
+    "name": "Aurora Fairway School",
+    "operator": "Aurora Care & Education Opco Ltd",
+    "operator:type": "private_for_profit",
+    "phone": "+44 1480 772930",
+    "ref:GB:uprn": "10000159676",
+    "ref:edubase": "149186",
+    "school:type": "independent;special",
+    "website": "https://www.theauroragroup.co.uk/sen-special-needs-schools/aurora-fairway-school/about-fairway-school/"
+  }
+},
+{
+  "type": "way",
+  "id": 1262308116,
+  "center": {
+    "lat": 52.3416906,
+    "lon": -0.0911638
+  },
+  "tags": {
+    "fee:conditional": "no; except see website",
+    "leisure": "park",
+    "official_name": "Hill Rise Park",
+    "operator": "Hundingdonsire District Council",
+    "operator:type": "public",
+    "website": "https://www.huntingdonshire.gov.uk/leisure/parks-nature-reserves-and-green-spaces/hill-rise-park-st-ives/"
+  }
+},
+{
+  "type": "way",
+  "id": 1369190276,
+  "center": {
+    "lat": 52.3361345,
+    "lon": -0.0768820
+  },
+  "tags": {
+    "addr:city": "St Ives",
+    "addr:housenumber": "9-11",
+    "addr:postcode": "PE27 3XS",
+    "addr:street": "Kings Hedges",
+    "amenity": "pharmacy",
+    "building": "retail",
+    "check_date": "2025-02-13",
+    "dispensing": "yes",
+    "drive_through": "no",
+    "healthcare": "pharmacy",
+    "name": "Kings Hedges Pharmacy",
+    "old_name": "Lloyds Pharmacy",
+    "opening_hours": "Mo-Fr 09:00-18:00; Sa 09:00-13:00",
+    "shop": "chemist"
+  }
+},
+{
+  "type": "way",
+  "id": 1498841069,
+  "center": {
+    "lat": 52.3276450,
+    "lon": -0.0826459
+  },
+  "tags": {
+    "leisure": "park",
+    "name": "Copley Scout Park",
+    "operator": "Cromwell District Scouts",
+    "operator:type": "charity"
+  }
+}
+
+  ]
+}

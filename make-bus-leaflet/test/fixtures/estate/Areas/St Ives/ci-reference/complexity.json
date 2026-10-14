@@ -1,0 +1,77 @@
+{
+  "scoredAt": "2026-07-28 09:32",
+  "dir": "C:\\u3a St Ives\\Using AI\\Buses\\St Ives\\S2-geometry\\2026-07-04_0133",
+  "geometrySource": "routes_paths.json (road-matched)",
+  "geometryApproximate": false,
+  "metrics": {
+    "R": 8,
+    "S": 69,
+    "K5": 0.04,
+    "D5": 0.11,
+    "maxRoutesPerCell": 8,
+    "congestedClusters": 2,
+    "largestClusterCells": 2,
+    "routeKm": 73.6,
+    "extentKm": [
+      6.55,
+      10.33
+    ],
+    "inkDensity": 1.09,
+    "medianBuriedFraction": 0.105,
+    "routesOverHalfBuried": 0
+  },
+  "bands": {
+    "amber": {
+      "R": 12,
+      "S": 120,
+      "K5": 0.5,
+      "D5": 1.6
+    },
+    "red": {
+      "R": 18,
+      "S": 200,
+      "K5": 0.8,
+      "D5": 3.5
+    }
+  },
+  "applied": {
+    "internalCorridors": null,
+    "corridorPalette": null,
+    "coreBox": null,
+    "stopThinning": null
+  },
+  "band": "GREEN",
+  "failedThresholds": [],
+  "colours": {
+    "routes": 8,
+    "distinct": 8,
+    "ambiguity": 1
+  },
+  "congestionShape": "compact knot (a fisheye lens is the right tool)",
+  "ladder": [
+    {
+      "rung": 2,
+      "action": "suppress the core: draw a \"town centre\" box of radius 600 m",
+      "detail": "routes terminate at the box edge instead of crossing the knot",
+      "data": null,
+      "after": {
+        "R": 8,
+        "S": 59,
+        "K5": 0,
+        "D5": 0
+      },
+      "band": "GREEN",
+      "stillFailing": []
+    }
+  ],
+  "perRouteBuried": {
+    "9": 0.12605042016806722,
+    "69": 0.10695187165775401,
+    "300": 0.10457516339869281,
+    "301": 0.0391304347826087,
+    "302": 0.08163265306122448,
+    "A": 0.15283842794759825,
+    "B": 0.09971509971509972,
+    "5A": 0.09389671361502347
+  }
+}

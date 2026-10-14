@@ -86,14 +86,11 @@ function readShadow(buses) {
  * live     the template hash of the checkout asking
  * pin      readPin()'s `engine` or `placeEngine` for this kind, or null
  * shadow   readShadow(), or null
- * strict   true for the one map that must equal the pin exactly (the portal's area-fixture town,
- *          fixture_donor.js, OA-532): no `ahead`, no `stamp-only`
  */
-function standing({ kind, name, mapEngine, builtAt, live, pin, shadow, strict = false }) {
+function standing({ kind, name, mapEngine, builtAt, live, pin, shadow }) {
   if (!mapEngine || mapEngine === '(none)') return 'unstamped';
   const clock = pin || live;
   if (mapEngine === clock) return 'current';
-  if (strict) return 'behind';
   if (live && mapEngine === live) return 'ahead';
   const half = evidence({ kind, builtAt, live, clock, shadow });
   if (half && NOTHING_OWED.has(half.status.get(name))) return 'stamp-only';

@@ -1,0 +1,28 @@
+{
+  "viaPrefixes": {
+    "9": [
+      "0500HSTIV",
+      "0500HHOLY",
+      "0500HHEMG",
+      "0500HHEMA"
+    ]
+  },
+  "viaExclude": {
+    "9": [
+      "0500HSTIV025",
+      "0500HHEMG003",
+      "0500HHEMG001",
+      "0500HHEMG011",
+      "0500HHEMG012",
+      "0500HHEMG005",
+      "0500HHEMG008"
+    ]
+  },
+  "reachExtend": {
+    "302": { "start": 2 },
+    "B":   { "end": 2 },
+    "9":   { "end": 2 },
+    "5A":  { "end": 2 },
+    "69":  { "start": 2 }
+  }
+}

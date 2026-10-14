@@ -24,8 +24,8 @@
  * engine said so as a WARN, which does not block, and the sheet would have shipped over
  * the POI had the log not been read by hand in the same session that wrote it. The
  * throwaway driver that read it was deliberately not kept — a recipe somebody has to
- * remember is the category of guarantee `refresh_area_fixture.js` replaced with a
- * script — and this file is what replaces it.
+ * remember is the category of guarantee a script replaces (`estate-fixture.js` is the
+ * area fixture's) — and this file is what replaces it.
  *
  * WHAT IT IS. `sheet_registry.js` is the one list of sheets this engine can DRAW; this
  * is the one statement of HOW each of them is drawn, at each level. The rollouts call

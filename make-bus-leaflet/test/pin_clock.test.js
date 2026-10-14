@@ -92,12 +92,6 @@ test('a place is asked of the places half of the report, not the towns half', ()
   assert.strictEqual(ask({ kind: 'town', shadow: shadowFor({ place: true }) }), 'behind');
 });
 
-test('strict (the area-fixture town) must EQUAL the pin: no ahead, no stamp-only', () => {
-  assert.strictEqual(ask({ strict: true, mapEngine: PIN }), 'current');
-  assert.strictEqual(ask({ strict: true, mapEngine: LIVE }), 'behind');
-  assert.strictEqual(ask({ strict: true, shadow: shadowFor() }), 'behind');
-});
-
 test('no pin falls back to the live template, as an estate with no lock always was judged', () => {
   assert.strictEqual(ask({ pin: null, mapEngine: LIVE }), 'current');
   assert.strictEqual(ask({ pin: null, mapEngine: OLD }), 'behind');

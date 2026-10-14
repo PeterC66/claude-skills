@@ -41,8 +41,7 @@
  * names exists), does each resource a unit needs read safe (the conditions check,
  * a tick's own live lock being a run in progress and not a bar), and what is there
  * to take — bus-work rows (--deep)
- * judged by step 4D's rules (an `unattended` recipe; no unreviewed ESCALATE grade; not under
- * `_portal-fixture/`). The result is one word (CAN WORK, NOTHING TO DO, BARRED) and
+ * judged by step 4D's rules (an `unattended` recipe; no unreviewed ESCALATE grade). The result is one word (CAN WORK, NOTHING TO DO, BARRED) and
  * a list of the things a person can do, most rows released first.
  *
  * THE BACKLOG IS NOT A FEED (buses-data OA-576, Peter, 2026-10-07). The loop does
@@ -170,17 +169,15 @@ export function bucketActions(actions, today) {
  * The prompt's own rules for the bus-work feed (step 4D), applied to the rows the
  * worklist printed: a `refresh` row is finishable only with an `unattended` block; an
  * `engine-rebuild` row is finishable unless a town in it is graded ESCALATE with no
- * `no-rebuild` review for that grades file's scan date (`bw.reviewed`), or the map
- * sits under `_portal-fixture/`. The scan's grade is written once a month; a person's
+ * `no-rebuild` review for that grades file's scan date (`bw.reviewed`). The scan's grade is written once a month; a person's
  * `no-rebuild` verdict in `refresh-reviews.json` answers it (buses-data OA-563), and
  * so does a decision confirmed since, which `regradeEscalated()` finds by grading the
- * town again before this runs (OA-571). Judged from the grade, the review and the folder
+ * town again before this runs (OA-571). Judged from the grade and the review
  * only, so a row listed as finishable may still stop at its own dry run (LOST or REGRESSED).
  */
 export function classifyBusWork(bw) {
-  const out = { finishable: [], escalate: [], fixture: [], person: [], towns: [], refresh: [], routes: bw.escalateRoutes || {} };
+  const out = { finishable: [], escalate: [], person: [], towns: [], refresh: [], routes: bw.escalateRoutes || {} };
   const grades = bw.grades || {};
-  const fixtures = new Set(bw.fixtures || []);
   const reviewed = new Set(bw.reviewed || []);
   for (const r of bw.rows || []) {
     if (r.kind === 'refresh') {
@@ -191,8 +188,7 @@ export function classifyBusWork(bw) {
     else {
       const name = r.key.replace(/^engine-rebuild-/, '');
       const esc = (r.towns || []).filter((t) => grades[t] === 'ESCALATE' && !reviewed.has(t));
-      if (fixtures.has(name)) out.fixture.push(r.key);
-      else if (esc.length) { out.escalate.push(r.key); for (const t of esc) if (!out.towns.includes(t)) out.towns.push(t); }
+      if (esc.length) { out.escalate.push(r.key); for (const t of esc) if (!out.towns.includes(t)) out.towns.push(t); }
       else out.finishable.push(r.key);
     }
   }
@@ -331,7 +327,6 @@ export function assessCapacity(f, ctx) {
     });
     lever(n, cap.busWork.escalate, `${n} row${n === 1 ? ' is' : 's are'} stopped by an ESCALATE grade${named.length ? ` (${named.join('; ')})` : ''}, which only a person reviews.`, 'For each route named: re-confirm a RE-EVAL decision and record its `feedFingerprint` in the town\'s file, or rule `no-rebuild` for the scan in `Areas/<Town>/refresh-reviews.json`; anything else is decided in a refresh by hand. The rebuild then goes back to the loop.');
   }
-  if (cap.busWork && cap.busWork.fixture.length) lever(cap.busWork.fixture.length, cap.busWork.fixture, `${cap.busWork.fixture.length} map${cap.busWork.fixture.length === 1 ? ' sits' : 's sit'} under \`_portal-fixture/\`, which moves only with a pin bump and so never in a tick.`, 'Rebuild it in a session with the pin bump, or accept that it stays behind.');
   if (f.holds && f.holds.length) lever(f.holds.length, f.holds.map((h) => h.ref), `${f.holds.length} hold${f.holds.length === 1 ? '' : 's'} in \`loop/your-move/\` wait on you.`, 'Answer or retire each; `/triage` checks them against real state.');
   cap.levers.sort((a, b) => (a.nothing - b.nothing) || (b.rows - a.rows));
   return cap;
@@ -354,7 +349,7 @@ export function assessCapacity(f, ctx) {
  * @param {Array} f.actions          parseAction() results
  * @param {object|null} [f.prereq]   {drift, scripts:[{path,exists}]}: the stored prompt against loop/README.md, and the files the prompt names
  * @param {object|null} [f.resources] the conditions check's per-resource verdicts
- * @param {{rows:Array, grades:object, fixtures:string[], review?:object|null}|null} [f.busWork] only with --deep; `review` is the scan's ink review
+ * @param {{rows:Array, grades:object, review?:object|null}|null} [f.busWork] only with --deep; `review` is the scan's ink review
  * @param {number|null} [f.perDay]   ticks a day read from loop/README.md; null falls back to DEFAULT_TICKS_PER_DAY
  * @param {{minute, hours}|null} [f.schedule]  the same cron line's fire times; null measures lateness by the median gap (OA-608)
  * @param {Array<{id:string, what:string, by:string}>} f.commitments
@@ -500,7 +495,7 @@ export function renderCapacity(c) {
   }
   if (c.busWork) {
     const b = c.busWork;
-    L.push(`  Bus-work    at most ${b.finishable.length} row${b.finishable.length === 1 ? '' : 's'} a tick can finish by the prompt's rules (an upper bound: rollout.js is not run, and can still answer STALE-INPUTS for a rebuild); ${b.escalate.length} stopped by an ESCALATE grade, ${b.fixture.length} under _portal-fixture, ${b.person.length} refresh row${b.person.length === 1 ? '' : 's'} with no unattended recipe.`);
+    L.push(`  Bus-work    at most ${b.finishable.length} row${b.finishable.length === 1 ? '' : 's'} a tick can finish by the prompt's rules (an upper bound: rollout.js is not run, and can still answer STALE-INPUTS for a rebuild); ${b.escalate.length} stopped by an ESCALATE grade, ${b.person.length} refresh row${b.person.length === 1 ? '' : 's'} with no unattended recipe.`);
   } else L.push('  Bus-work    not measured (add --deep: it reads the live portal and takes about a minute).');
   if (c.deadline) {
     const d = c.deadline;
@@ -608,7 +603,7 @@ export function parseResources(text) {
  * the live portal, so a plain run opens no socket). `null` when the worklist cannot be read.
  * `scan` is the upcoming report the refresh rows join to, which names the ink review to read.
  */
-export function parseBusWork(text, { grades = {}, fixtures = [], reviewed = [] } = {}) {
+export function parseBusWork(text, { grades = {}, reviewed = [] } = {}) {
   try {
     const j = JSON.parse(text);
     const items = j.items || [];
@@ -617,7 +612,7 @@ export function parseBusWork(text, { grades = {}, fixtures = [], reviewed = [] }
       if (/^refresh-/.test(r.key)) rows.push({ key: r.key, kind: 'refresh', towns: [], unattended: !!r.unattended, effectiveDate: r.effectiveDate || null, map: r.map || null, local: /^refresh-local-/.test(r.key) });
       else if (/^engine-rebuild-/.test(r.key)) rows.push({ key: r.key, kind: 'rebuild', towns: r.towns || [] });
     }
-    return { rows, grades, fixtures, reviewed, scan: (j.meta && j.meta.upcomingReport && j.meta.upcomingReport.date) || null };
+    return { rows, grades, reviewed, scan: (j.meta && j.meta.upcomingReport && j.meta.upcomingReport.date) || null };
   } catch { return null; }
 }
 
@@ -635,11 +630,12 @@ export function newestRun(runsDir) {
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * The refresh grades by town, the towns a person has answered with a `no-rebuild`
- * review for the grades file's own scan date, and the maps under _portal-fixture/,
- * for classifying bus-work rows. Town maps only: a place carries its own review file.
+ * The refresh grades by town, and the towns a person has answered with a `no-rebuild`
+ * review for the grades file's own scan date, for classifying bus-work rows. Town maps
+ * only: a place carries its own review file. No map is set aside as a fixture's source
+ * since buses-data OA-635: the portal's area fixture is the engine's own estate pack.
  */
-function gradesAndFixtures(busesDir) {
+function gradesAndReviews(busesDir) {
   const grades = {}, reviewed = [];
   try {
     const f = readdirSync(path.join(busesDir, '_gtfs')).filter((n) => /^refresh-grades_\d{4}-\d{2}-\d{2}\.json$/.test(n)).sort().pop();
@@ -651,12 +647,8 @@ function gradesAndFixtures(busesDir) {
         if ((j.reviews || []).some((r) => r.scan === scan && r.verdict === 'no-rebuild')) reviewed.push(t);
       } catch { /* no review file for this town: its grade stands */ }
     }
-  } catch { /* no grades file: nothing reads as ESCALATE, which the caller cannot tell from a clean grade, so the rows say "judged from grade and folder" */ }
-  const fixtures = [];
-  for (const root of ['Areas', 'Places']) {
-    try { for (const e of readdirSync(path.join(busesDir, root, '_portal-fixture'), { withFileTypes: true })) if (e.isDirectory()) fixtures.push(e.name); } catch { /* none */ }
-  }
-  return { grades, fixtures, reviewed };
+  } catch { /* no grades file: nothing reads as ESCALATE, which the caller cannot tell from a clean grade, so the rows say "judged from the grade" */ }
+  return { grades, reviewed };
 }
 
 /** The ink review for one scan (`_gtfs/ink-review_<scan>.json`), or null when there is none: then every finishable refresh row owes its full rebuild and staging. */
@@ -711,7 +703,7 @@ function probeFacts(busesDir, deep, which) {
   }
   if (deep) {
     const wl = probe([path.join(HERE, 'worklist.mjs'), '--json', '--buses', busesDir], { cwd: HERE, timeout: 300000 });
-    facts.busWork = wl ? parseBusWork(wl.out, gradesAndFixtures(busesDir)) : null;
+    facts.busWork = wl ? parseBusWork(wl.out, gradesAndReviews(busesDir)) : null;
     if (facts.busWork) facts.busWork = regradeEscalated(facts.busWork, (t) => regradeTown(busesDir, t));
     if (facts.busWork) facts.busWork.review = readInkReview(busesDir, facts.busWork.scan);
   }

@@ -2979,11 +2979,6 @@ const MUTATIONS = [
     find: "  const half = evidence({ kind, builtAt, live, clock: pin || live, shadow });\n  return",
     to: "  const half = shadow && shadow[kind];\n  return" },
 
-  { suite: 'pin_clock.test.js', file: 'pin_clock.js',
-    what: 'the area-fixture town is judged like any other map, so a fixture donor drifts off the pin unnoticed',
-    find: "  if (strict) return 'behind';\n",
-    to: "" },
-
   // place_pointer.js - the red arrow at a place map's marker (buses-data OA-509).
   { suite: 'place_pointer.test.js', file: 'place_pointer.js',
     what: 'every town grows an arrow at its interchange, because absent the key means on everywhere',

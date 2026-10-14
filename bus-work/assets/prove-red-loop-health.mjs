@@ -127,7 +127,7 @@ async function suite(m, label, verbose) {
 
   // 7c. the bus-work feed by the prompt's own rules
   const bw = classifyBusWork({
-    grades: { Beaconsfield: 'ESCALATE', March: 'NOTHING' }, fixtures: ['St Ives'],
+    grades: { Beaconsfield: 'ESCALATE', March: 'NOTHING' },
     rows: [
       { key: 'refresh-a', kind: 'refresh', towns: [], unattended: true }, { key: 'refresh-b', kind: 'refresh', towns: [], unattended: false },
       { key: 'engine-rebuild-Beaconsfield', kind: 'rebuild', towns: ['Beaconsfield'] }, { key: 'engine-rebuild-March', kind: 'rebuild', towns: ['March'] },
@@ -137,10 +137,11 @@ async function suite(m, label, verbose) {
   check('a refresh row with an unattended recipe is finishable, one without is a person\'s', bw.finishable.includes('refresh-a') && bw.person.join() === 'refresh-b');
   check('a rebuild of an ESCALATE town is a person\'s and names the town', bw.escalate.join() === 'engine-rebuild-Beaconsfield' && bw.towns.join() === 'Beaconsfield');
   check('a rebuild of an un-escalated town is finishable', bw.finishable.includes('engine-rebuild-March'));
-  check('a rebuild of a fixture map is never a tick\'s', bw.fixture.join() === 'engine-rebuild-St Ives' && !bw.finishable.includes('engine-rebuild-St Ives'));
+  // OA-635: St Ives was the area fixture's source and was set aside; it is an ordinary town now.
+  check('a rebuild of St Ives is finishable like any other town', bw.finishable.includes('engine-rebuild-St Ives'));
   // OA-563: a no-rebuild review for the grades' scan answers the grade for that town only
   const bwRev = classifyBusWork({
-    grades: { Soham: 'ESCALATE', Huntingdon: 'ESCALATE' }, fixtures: [], reviewed: ['Soham'],
+    grades: { Soham: 'ESCALATE', Huntingdon: 'ESCALATE' }, reviewed: ['Soham'],
     rows: [{ key: 'engine-rebuild-Soham', kind: 'rebuild', towns: ['Soham'] }, { key: 'engine-rebuild-Huntingdon', kind: 'rebuild', towns: ['Huntingdon'] }],
   });
   check('a rebuild of an ESCALATE town with a no-rebuild review is finishable', bwRev.finishable.join() === 'engine-rebuild-Soham');
@@ -151,7 +152,7 @@ async function suite(m, label, verbose) {
   // OA-571: a town the sidecar graded ESCALATE is graded again against today's files
   const asked = [];
   const regraded = regradeEscalated({
-    grades: { Wisbech: 'ESCALATE', Huntingdon: 'ESCALATE', Soham: 'ESCALATE', Ramsey: 'ESCALATE' }, fixtures: [], reviewed: ['Soham'],
+    grades: { Wisbech: 'ESCALATE', Huntingdon: 'ESCALATE', Soham: 'ESCALATE', Ramsey: 'ESCALATE' }, reviewed: ['Soham'],
     rows: ['Wisbech', 'Huntingdon', 'Soham', 'Ramsey'].map((t) => ({ key: `engine-rebuild-${t}`, kind: 'rebuild', towns: [t] })),
   }, (t) => { asked.push(t); return t === 'Wisbech' ? { grade: 'NOTHING', rows: [] } : t === 'Huntingdon' ? { grade: 'ESCALATE', rows: [{ tag: 'RE-EVAL', route: '400' }] } : null; });
   const bwRe = classifyBusWork(regraded);
@@ -188,7 +189,7 @@ async function suite(m, label, verbose) {
   check('passedOver: no folder is no rows, never a throw', passedOver(path.join(tmp, 'nowhere')).rows.length === 0);
 
   // 7e. can a tick work: the verdict, from facts the caller gathered
-  const noRows = { grades: {}, fixtures: [], rows: [] };
+  const noRows = { grades: {}, rows: [] };
   const nothing = analyse(base({ busWork: noRows }));
   check('nothing to take is NOTHING TO DO, a note and never a fault', nothing.capacity.work === 'NOTHING TO DO' && has(nothing, 'no-work', 'NOTE') && !nothing.findings.some((x) => x.key === 'no-work' && x.level !== 'NOTE'));
   check('the OA feed is not measured at all', !('oa' in nothing.capacity));
@@ -196,9 +197,9 @@ async function suite(m, label, verbose) {
   const adhocOnly = analyse(base({ busWork: noRows, adhoc: { ready: ['a.md', 'b.md'], notDue: [] } }));
   check('an ad-hoc file is not a tick\'s work: the bus loop has no ad-hoc feed', adhocOnly.capacity.work === 'NOTHING TO DO' && !('adhoc' in adhocOnly.capacity));
   check('the nothing-to-do note says where ad-hoc work went', nothing.findings.some((x) => x.key === 'no-work' && /adhoc\/ready\//.test(x.text) && !/loop\/adhoc/.test(x.text)));
-  const deepWork = analyse(base({ busWork: { grades: {}, fixtures: [], rows: [{ key: 'engine-rebuild-March', kind: 'rebuild', towns: ['March'] }] } }));
+  const deepWork = analyse(base({ busWork: { grades: {}, rows: [{ key: 'engine-rebuild-March', kind: 'rebuild', towns: ['March'] }] } }));
   check('a finishable bus-work row is work', deepWork.capacity.work === 'CAN WORK');
-  check('a bus-work feed with nothing finishable is nothing to do', analyse(base({ busWork: { grades: {}, fixtures: [], rows: [] } })).capacity.work === 'NOTHING TO DO');
+  check('a bus-work feed with nothing finishable is nothing to do', analyse(base({ busWork: { grades: {}, rows: [] } })).capacity.work === 'NOTHING TO DO');
   const barred = analyse(base({ stopFile: true }));
   check('a BLOCKING finding makes work BARRED even without --deep', barred.capacity.work === 'BARRED');
   const barredDeep = analyse(base({ stopFile: true, busWork: noRows }));
@@ -224,7 +225,7 @@ async function suite(m, label, verbose) {
   // 7f. what you can do: the levers, most rows first
   const lev = analyse(base({
     holds: [{ ref: 'h1', ageDays: 1 }, { ref: 'h2', ageDays: 2 }],
-    busWork: { grades: { Beaconsfield: 'ESCALATE' }, fixtures: [], rows: [{ key: 'engine-rebuild-Beaconsfield', kind: 'rebuild', towns: ['Beaconsfield'] }] },
+    busWork: { grades: { Beaconsfield: 'ESCALATE' }, rows: [{ key: 'engine-rebuild-Beaconsfield', kind: 'rebuild', towns: ['Beaconsfield'] }] },
   })).capacity.levers;
   check('the biggest lever is first: two holds outrank one ESCALATE row', lev[0].rows === 2 && /hold/.test(lev[0].text) && /ESCALATE/.test(lev[1].text));
   check('no lever is about the ad-hoc queue, which is another loop\'s since OA-610', !lev.some((v) => /ad-hoc|adhoc/i.test(`${v.text} ${v.move}`)));
@@ -237,7 +238,7 @@ async function suite(m, label, verbose) {
   // 7g. can the ticks clear the finishable refreshes before their changes take effect?
   // NOW is 3 Oct, so a date of 4 Oct leaves one day: three ticks at the default cadence.
   const ref = (key, effectiveDate, o = {}) => ({ key, kind: 'refresh', towns: [], unattended: true, effectiveDate, map: key.replace(/^refresh-/, ''), local: false, ...o });
-  const feed = (rows, o = {}) => ({ grades: {}, fixtures: [], reviewed: [], rows, ...o });
+  const feed = (rows, o = {}) => ({ grades: {}, reviewed: [], rows, ...o });
   const three = [ref('refresh-march', '2026-10-04'), ref('refresh-wisbech', '2026-10-04'), ref('refresh-ely', '2026-10-04')];
   const short = analyse(base({ busWork: feed(three) }));
   const dl = short.findings.find((x) => x.key === 'refresh-deadline');
@@ -360,12 +361,11 @@ const MUTANTS = [
   ['an untracked file counts as a dirty tree', "'--porcelain', '--untracked-files=no'", "'--porcelain'"],
   // can a tick do work
   ['an unattended refresh row is no longer finishable', '(r.unattended ? out.finishable : out.person).push(r.key)', '(r.unattended ? out.person : out.finishable).push(r.key)'],
-  ['an ESCALATE rebuild is finishable', 'else if (esc.length) {', 'else if (false) {'],
+  ['an ESCALATE rebuild is finishable', 'if (esc.length) { out.escalate', 'if (false) { out.escalate'],
   ['a re-grade is ignored (OA-571)', 'grades[t] = g.grade;', ''],
   ['a re-grade that could not run is a pass', 'if (!g || !g.grade) continue;', "if (!g || !g.grade) { grades[t] = 'NOTHING'; continue; }"],
   ['a reviewed town is graded again', "&& !reviewed.has(t)) towns.add(t);", ') towns.add(t);'],
   ['the lever names no route', '`${r.tag} ${r.route}`', "''"],
-  ['a fixture rebuild is finishable','if (fixtures.has(name)) out.fixture.push(r.key);', 'if (false) out.fixture.push(r.key);'],
   ['the prompt block is found without its heading', "lastIndexOf('## The task prompt')", "lastIndexOf('## Nope')"],
   ['placeholders are read as scripts', '[^"<>]+?\\.(?:mjs|js|py|env))"', '[^"]+?\\.(?:mjs|js|py|env))"'],
   ['the oldest tick decides a row\'s gate', 'if (!seen.has(ref)) seen.set(ref,', 'seen.set(ref,'],

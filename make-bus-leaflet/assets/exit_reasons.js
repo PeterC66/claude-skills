@@ -45,9 +45,6 @@ function faultsOf(c) {
   for (const r of c.driftRows || []) {
     if (r.same !== true && !r.inFlight && !r.pinBehind) f.push({ section: 'Portal vendoring drift', what: nm(r) + (r.same === null ? ' MISSING' : ' DRIFTED') });
   }
-  for (const r of c.freshnessRows || []) {
-    if (r.stale && r.stale.length) f.push({ section: 'Committed portal fixtures vs the newest render', what: nm(r) + ' STALE: ' + r.stale.join(', ') });
-  }
   if (c.qualityError) f.push({ section: 'Quality ratchet', what: 'NOT MEASURED, the gate threw: ' + c.qualityError });
   for (const r of c.qualityRows || []) if (r.status === 'REGRESSED') f.push({ section: 'Quality ratchet', what: nm(r) + ' REGRESSED' });
   const s6 = c.s6Claims;

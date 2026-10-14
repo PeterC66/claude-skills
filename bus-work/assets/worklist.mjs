@@ -355,7 +355,7 @@ function fromMapTree() {
   const { findTowns, findPlaces, readJson, latestRunDir } = require(path.join(SK, 'gate_lib.js'));
   const { computeEngineVersion, computePlaceEngineVersion } = require(path.join(SK, 'engine_version.js'));
   const current = computeEngineVersion();
-  const currentPlace = computePlaceEngineVersion(), { fixtureDonor } = require(path.join(SK, 'fixture_donor.js')); const pinClock = require(path.join(SK, 'pin_clock.js')), PIN = pinClock.readPin(BUSES), SHADOW = pinClock.readShadow(BUSES); // OA-532 (fixture_donor.js); OA-574: the PIN is the clock (pin_clock.js)
+  const currentPlace = computePlaceEngineVersion(); const pinClock = require(path.join(SK, 'pin_clock.js')), PIN = pinClock.readPin(BUSES), SHADOW = pinClock.readShadow(BUSES); // OA-574: the PIN is the clock (pin_clock.js)
 
   const towns = findTowns(BUSES).map((t) => {
     const m = readJson(path.join(t.dir, 'manifest.json'));
@@ -365,7 +365,7 @@ function fromMapTree() {
       let routes = {};
       try { routes = readJson(path.join(s4.dir, 'routes.json')); } catch { /* older build */ }
       row.engine = routes.engine || null;
-      row.pinnedDonor = fixtureDonor(BUSES, t.name).pin; row.engineStale = pinClock.owes(row.engineStanding = pinClock.standing({ kind: 'town', name: t.name, mapEngine: routes.engine, builtAt: s4.rec.at, live: current, pin: PIN && PIN.engine, shadow: SHADOW, strict: !!row.pinnedDonor })); // the area fixture's town is asked strictly (OA-532)
+      row.engineStale = pinClock.owes(row.engineStanding = pinClock.standing({ kind: 'town', name: t.name, mapEngine: routes.engine, builtAt: s4.rec.at, live: current, pin: PIN && PIN.engine, shadow: SHADOW }));
       row.shadowRegressed = row.engineStale && pinClock.regressed({ kind: 'town', name: t.name, builtAt: s4.rec.at, live: current, pin: PIN && PIN.engine, shadow: SHADOW }); // OA-574: folds into a hold that names it
     }
     const s6 = latestRunDir(m, t.dir, 'S6');
@@ -1120,7 +1120,7 @@ for (const { row: mapRow, place } of engineStale) {
     key: `engine-rebuild-${mapRow.name}`, rank: 8, type: 'housekeeping',
     title: `${mapRow.name} was drawn by an older engine`,
     why: `v${mapRow.version} was drawn by ${mapRow.engine || 'an unstamped engine'}; the estate's pinned ${place ? 'PLACE ' : ''}engine is ${clock}${clock !== live ? ` (the live template, ${live}, is ahead of the pin and is not the clock)` : ''}. Its sheets are gated against the engine that drew them, so this is a chore and not a fault: the rebuild is mechanical and bumps one minor version.`
-      + (freshPull.owed.has(mapRow.name) ? ` Its landmark pull is also old: take fresh-pull-${mapRow.name} first, or this rebuild draws only the landmarks the stored pull holds.` : '') + (!place && mapRow.pinnedDonor ? ` It is the area fixture's town, so it is judged against engine.lock.json's pin ${mapRow.pinnedDonor} rather than the live template ${tree.currentEngine}, and rollout.js refuses it until the live template is the pin (OA-532).` : ''),
+      + (freshPull.owed.has(mapRow.name) ? ` Its landmark pull is also old: take fresh-pull-${mapRow.name} first, or this rebuild draws only the landmarks the stored pull holds.` : ''),
     who: '—', runbook: 'engine', towns: [place ? (mapRow.town || mapRow.name) : mapRow.name],
     ...(mapRow.shadowRegressed ? { foldIntoHold: `the weekly shadow rebuild on ${live} found its rebuild regressed, which is the dry run the hold already quotes` } : {}), // OA-574: a hold naming this row takes it (foldHeldRows)
     do: [ // OA-574: no third step. A STAMP-STALE verdict is nothing owed, and the --rebuild-stale flag that wrote it is gone

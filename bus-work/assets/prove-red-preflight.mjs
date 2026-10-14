@@ -309,7 +309,7 @@ function runWith(fixture, opts = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'preflight-fx-'));
   const portal = path.join(root, 'portal');
   const origin = path.join(root, 'portal.git');
-  const rel = path.join('gate-fixtures', 'Areas', '_portal-fixture', 'Town', 'internal.svg');
+  const rel = path.join('gate-fixtures', 'Places', '_portal-fixture', 'Town', 'internal.svg');
   execFileSync('git', ['init', '--bare', '-b', 'main', origin], { stdio: 'ignore' });
   mkdirSync(path.dirname(path.join(portal, rel)), { recursive: true });
   git(portal, 'init', '-b', 'main');
@@ -322,7 +322,7 @@ function runWith(fixture, opts = {}) {
   git(portal, 'remote', 'add', 'origin', origin);
   git(portal, 'push', '-u', 'origin', 'main');
   const buses = path.join(root, 'buses');
-  const busesFile = path.join(buses, 'Areas', '_portal-fixture', 'Town', 'internal.svg');
+  const busesFile = path.join(buses, 'Places', '_portal-fixture', 'Town', 'internal.svg');
   mkdirSync(path.dirname(busesFile), { recursive: true });
   const arm = (b) => ({ id: 'portal-fixtures', label: 'fixtures', cmd: NODE, args: [SCRIPT, '--buses', b, '--portal', portal], cannotTell: [2] });
   const fx = makeRepo({ manifest: { name: 'fixture', docsOnly: ['^docs/'], checks: [arm(buses), arm(path.join(root, 'no-such-buses'))] } });

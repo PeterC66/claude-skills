@@ -405,7 +405,7 @@ function builtIn(repo) {
          * Cheap tier, because gates.yml runs its twin on EVERY push. It compares
          * this repository with the portal's origin/main and reads no generator,
          * so which engine tree runs it does not change its answer. */
-        ENGINE && { id: 'portal-fixtures', label: 'the portal\'s vendored fixtures are in step with this repository, on its origin/main', cmd: 'node', args: [`${ENGINE}/portal_fixtures.js`, '--buses', repo, '--portal', resolvePortal()], cannotTell: [2] },
+        ENGINE && { id: 'portal-fixtures', label: 'the portal\'s vendored fixtures are in step with this repository, on its origin/main', cmd: 'node', args: [`${ENGINE}/portal_fixtures.js`, '--buses', repo, '--portal', resolvePortal(), '--only', 'Places'], cannotTell: [2] },
         /* `atPin`, because gates.yml runs status.js from claude-skills checked out
          * at engine.lock.json's commit (buses-data OA-540). Run from this checkout,
          * a local main that lagged origin/main measured the portal's vendoring
@@ -416,7 +416,6 @@ function builtIn(repo) {
          * board reads the portal's refs and its disk exactly as prove-red-status
          * does, and that arm is asked only when the push moves an estate input. */
         ENGINE && { id: 'board', label: 'the board, unsuppressed — byte gates, vendoring, the quality ratchet, S6 staleness, deployment drift — under the pinned engine', tier: 'full', atPin: 'make-bus-leaflet', cwd: path.resolve(ENGINE, '..'), prunePortal: resolvePortal(), cmd: 'node', args: ['assets/status.js', '--buses', repo, '--portal', resolvePortal()], note: 'no --no-live: the deployment row is the one that flag hides' },
-        ENGINE && { id: 'area-fixture', label: 'the committed area fixture reproduces', tier: 'full', cmd: 'node', args: [`${ENGINE}/refresh_area_fixture.js`, '--check'] },
         /* The two falsification steps a pin bump fails on (buses-data OA-462).
          * On 2026-09-24 a push moving engine.lock.json passed this preflight with
          * the board green and failed gates.yml at *Prove the byte gates can go
@@ -437,13 +436,13 @@ function builtIn(repo) {
         ENGINE && { id: 'prove-red-status', label: 'the status board separates a fault from a chore, under the pinned engine', tier: 'full', when: ESTATE_INPUTS, atPin: 'make-bus-leaflet', cwd: path.resolve(ENGINE, '..'), prunePortal: resolvePortal(), cmd: 'node', args: ['tools/prove-red-status.js', '--buses', repo, '--portal', resolvePortal()] },
       ].filter(Boolean),
       unanswered: [
-        'Whether the PORTAL suite is green — its `verify:area` gates a fixture that lives in this repository, and nothing on this side runs another repository\'s gates.',
+        'Whether the PORTAL suite is green — its `verify:area` gates a fixture vendored from the engine\'s own estate pack (OA-635), and nothing on this side runs another repository\'s gates.',
         'Anything that needs the network: whether a pull request is open, what origin holds that this checkout has not fetched, whether the live host answers. The one exception is a `git remote prune origin` of the portal before prove-red-status (OA-479), which only deletes refs to branches origin no longer has, and the fast-forward that follows it of a clean portal `main` that lags its already-fetched origin/main (OA-539) — no fetch is made.',
         'The estate harnesses gates.yml runs beyond prove-red-gates and prove-red-status — held-back, rollout-stamp, unrendered, sweep, prove-s6, attribution, the _latest mirrors. Only the two a pin bump has been seen to fail are asked, and only when the push moves engine.lock.json or a ci-reference/.',
         /* A missing engine tree is a REFUSAL and is said out loud. It used to be
          * a path literal that simply was not there, which reads as a check that
          * failed rather than as one that could not be run (OA-345). */
-        ...(ENGINE ? [] : ['Every check that needs the engine or the shared checkers — the board, the portal\'s vendored fixtures, the area fixture, tables, links, hygiene, acronyms, exclusion fields and S6 claims. NO skills tree was found: set BUS_SKILL_ASSETS, or run this beside one. That is a refusal, not a pass.']),
+        ...(ENGINE ? [] : ['Every check that needs the engine or the shared checkers — the board, the portal\'s vendored fixtures, tables, links, hygiene, acronyms, exclusion fields and S6 claims. NO skills tree was found: set BUS_SKILL_ASSETS, or run this beside one. That is a refusal, not a pass.']),
         ...(STAMP ? [] : ['The docstamp check — `stamp-docs/scripts/check_committed_stamps.py` is neither in the skills tree nor under the user profile. That is a refusal, not a pass.']),
       ],
     };
@@ -797,7 +796,7 @@ export function report(result, quiet) {
     L.push(`  (The arms marked at-pin ran from claude-skills ${result.pin.commit.slice(0, 7)}, by ${result.pin.via === 'worktree' ? 'a detached worktree, since removed' : 'this checkout, which is already there'}.)`);
   }
   if (result.engine && result.engine.known && !result.engine.transfers) {
-    L.push(`  Whether the OTHER engine-reading verdicts TRANSFER. CI gates this repository against claude-skills at ${result.engine.against}; the checkout here is at ${result.engine.head} (${result.engine.branch}), with ${result.engine.dirtyFiles} uncommitted file(s) under a hashed assets folder. The area-fixture arm was measured against an engine CI will not use; the board and the at-pin arms were not.`);
+    L.push(`  Whether the OTHER engine-reading verdicts TRANSFER. CI gates this repository against claude-skills at ${result.engine.against}; the checkout here is at ${result.engine.head} (${result.engine.branch}), with ${result.engine.dirtyFiles} uncommitted file(s) under a hashed assets folder. Any arm not marked at-pin was measured against an engine CI will not use; the board and the at-pin arms were not.`);
   } else if (result.engine && result.engine.known) {
     L.push(`  The engine checkout is clean under assets/ and at ${result.engine.against}, so a byte-gate verdict here is about the same engine CI will check out.`);
   } else if (result.engine) {

@@ -23,6 +23,9 @@
  *                                          both CI outputs (see JSON_OUT below)
  *   ...[--live <base url>] [--no-live]     (deployment drift; see deploymentRow below)
  *   ...[--no-fetch]                        (never refresh origin/main to date an unknown live sha)
+ *   ...[--fixture-estate <dir>]            the engine estate the portal's AREA fixture is vendored
+ *                                          from; default this repository's test/fixtures/estate
+ *                                          (buses-data OA-635). prove-red-portal-drift passes a scratch one.
  *
  * Defaults (Peter's machine): --buses "C:\Buses\buses-data"
  *                              --portal "C:\Buses\community-bus-maps"
@@ -657,83 +660,6 @@ function gatePlace(p) {
   return row;
 }
 
-/* ---- IS THE COMMITTED FIXTURE THE CURRENT SHEET? (2026-08-30, OA-182) ------
- *
- * A byte gate against a FROZEN fixture is self-consistent by construction: the
- * old engine reproduces the old sheet perfectly and the gate reports PASS about
- * code that has not shipped. `Areas/_portal-fixture/README.md` says so in as
- * many words and the trap has been walked into three times in three days — the
- * radial round forgot the area fixture, the placer round forgot it again and was
- * caught only by the portal PR's own verify job going red, and the place-index
- * round found the PLACE fixture a version behind as well.
- *
- * The reason it keeps happening is that the two fixtures are refreshed by two
- * different mechanisms and nothing pairs them: the place one has
- * `scripts/refresh-place-fixture.mjs` in the portal, and the area one has a
- * shell recipe in a README. This does not pair them either. What it does is put
- * the fact in front of whoever is about to re-vendor, on the board they already
- * run — which is the cheapest of the three fixes OA-182 listed.
- *
- * `Areas/_portal-fixture` is the only one it looks at; see the note on the
- * function below for why the place one is neither comparable nor uncovered.
- *
- * AND IT IS A LAPTOP CHECK, NOT A CI ONE, WHICH IS STATED HERE BECAUSE THE
- * OPPOSITE IS EASY TO ASSUME. It compares the committed fixture against the
- * newest S5 render, and `S5-render/` is gitignored — so in a fresh
- * `actions/checkout` there is no render to compare with, `latestRunDir` points
- * at a folder that does not exist, and this returns no rows and gates nothing.
- * That is not a bug to fix by tracking the renders (they are 88% of the repo's
- * bulk and rebuildable); it is the honest shape of the question, which is *does
- * this laptop hold a newer render than the fixture describes*. CI answers a
- * different and equally necessary question — the portal PR's `verify` job
- * regenerates from the committed fixture with the PR's own engine — and it is
- * what caught the placer round. The two are complements, and this one exists
- * because CI's version only speaks after the PR is open.
-
- *
- * It compares the fixture's committed sheets with the newest S5 render of the
- * map they were cut from, BYTE FOR BYTE, rather than comparing version strings.
- * A version number says which build wrote a file and not whether the bytes
- * differ, and the fixture deliberately omits the JPGs, the svc_*.html evidence
- * pages and build-warnings.txt — so a filename comparison would be permanently
- * red and a gate that is red on day one gets muted in its first week.
- */
-/* WHY ONLY THE AREA FIXTURE. `Places/_portal-fixture/<place>` is a DIFFERENT
- * pack from that place's own S5 render — it carries base-overrides.json, the
- * portal's name for a customer's edits, and its sheets are rendered with them —
- * so comparing the two is wrong in principle. It is also already covered: the
- * *Portal fixtures* table below runs the PORTAL's own vendored engine against
- * that fixture and diffs it against the committed SVG, which is the stronger
- * question. `Areas/_portal-fixture` is the one nothing asks about, and it is the
- * one that has been forgotten twice. */
-function fixtureFreshness() {
-  const rows = [];
-  const fixDir = path.join(BUSES, 'Areas', '_portal-fixture', 'St Ives');
-  const townDir = path.join(BUSES, 'Areas', 'St Ives');
-  if (!exists(fixDir) || !exists(townDir)) return rows;
-  /* ASK THE MANIFEST WHICH RUN IS LATEST, never the directory listing sorted as
-   * strings. `v1.9_2026-08-18` sorts AFTER `v1.23_2026-08-30` one character in,
-   * and the first cut of this check duly compared a fresh fixture against a
-   * render from twelve days earlier and called it stale. latestRunDir() is how
-   * every other gate in this file asks the same question. */
-  const manifest = readJson(path.join(townDir, 'manifest.json'));
-  // latestRunDir returns {dir, rec}, not a path. Taking it for a string made this
-  // function return silently empty -- a check that prints nothing and gates on
-  // nothing, which is the one failure mode a freshness check must not have.
-  const latest = manifest && latestRunDir(manifest, townDir, 'S5');
-  const newest = latest && latest.dir;
-  if (!newest || !exists(newest)) return rows;
-  const stale = [];
-  for (const f of fs.readdirSync(fixDir)) {
-    if (!f.endsWith('.svg')) continue;
-    const src = path.join(newest, f);
-    if (!exists(src)) { stale.push(f + ' (no longer rendered)'); continue; }
-    if (!sameIgnoringLineEndings(path.join(fixDir, f), src)) stale.push(f);
-  }
-  rows.push({ label: 'Areas/_portal-fixture/St Ives', run: path.basename(newest), stale });
-  return rows;
-}
-
 // ---- portal fixture reproduction (uses the PORTAL's own vendored engine) --
 function gatePortalFixture() {
   const fixDir = path.join(BUSES, 'Places', '_portal-fixture');
@@ -1227,11 +1153,11 @@ const places = findPlaces(towns, BUSES);
 const townRows = towns.map(gateTown);
 const placeRows = places.map(gatePlace);
 const portalFixtureRows = gatePortalFixture();
-const freshnessRows = fixtureFreshness();
 const drift = portalDrift();
 const driftRows = drift.rows;
 // The OTHER half of the same join, in ./portal_fixtures.js — and NOT in `bad` below, because a fixture the portal has not re-vendored is a chore (OA-419).
-const fixtureVendoring = portalFixtures.fixtureVendoring({ portal: PORTAL, buses: BUSES, source: portalSource(), gitIn, gitShow });
+const fixtureVendoring = portalFixtures.fixtureVendoring({ portal: PORTAL, buses: BUSES, source: portalSource(), gitIn, gitShow,
+  estate: typeof args['fixture-estate'] === 'string' ? path.resolve(args['fixture-estate']) : undefined });
 
 // The quality ratchet (Phase 8 item 1). Measured off the ci-reference copies —
 // what actually shipped — so a green byte gate and a green quality row are
@@ -1397,13 +1323,6 @@ const bad = townRows.some(r => ['DIFF', 'FAIL', 'NO-BUILD', 'MISSING'].includes(
   || placeRows.some(r => r.keys && r.keys.state === 'short')
   || qualityRows.some(r => r.status === 'REGRESSED')
   || qualityError !== null
-  // OA-182, GATED from the day it landed. The rule this project holds to is that
-  // a check which is red on its first run gets muted inside a week -- so the two
-  // committed fixtures were recut in the same change that added this, and the
-  // board is green on it now. What turns it red from here is exactly the thing
-  // that has slipped through three times in three days: an engine round that
-  // re-vendors and leaves a fixture describing the previous engine.
-  || freshnessRows.some(r => r.stale.length)
   // ENGINE STALENESS LEFT THIS EXPRESSION ON 2026-09-17 (buses-data OA-396), and
   // it is not decoration now either. OA-151 folded `engineStaleRows` in on
   // 2026-08-28 because the column had been computed, printed and dropped, and a
@@ -1475,7 +1394,7 @@ async function main() {
   const commit = commitmentRows();
   const procSize = require('./process_size').processSize({ buses: BUSES, skills: SKILLS_ROOT, portal: PORTAL }), portalDeps = require('./portal_deps').read(PORTAL), shadow = require('./shadow_count').read(BUSES, CURRENT_ENGINE), docChores = require('./doc_chores').ask({ buses: BUSES, skills: SKILLS_ROOT }), engineLag = (() => { try { return require('./engine_lag').measureTree(BUSES, { skillsRoot: SKILLS_ROOT, listing }); } catch (e) { return { error: e.message }; } })();   // chores, never in `bad` (OA-488, OA-485, OA-597, OA-567)
   if (AS_JSON || JSON_OUT) {
-    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, fixtureFreshness: freshnessRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine, engineCommit: r.engineCommit || null })), placeEngineStale: placeEngineStaleRows.map(r => ({ place: r.name, town: r.town, engine: r.engine, engineCommit: r.engineCommit || null })), ownEngineUncheckable: uncheckableRows.map(r => ({ map: r.name, engine: r.engine, why: r.ownEngineUncheckable })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error, s6ClaimsOverdue: require('./s6_claims.js').owedOverdue(s6Claims.verdict, s6Claims.today).map(o => ({ id: o.id, map: o.map, route: o.route, decidedOn: o.decidedOn, due: o.due })), s6Limit, processSize: procSize, portalDeps, shadowRebuild: shadow, docChores: docChores }, null, 2);
+    const payload = JSON.stringify({ towns: townRows, places: placeRows, portalFixtures: portalFixtureRows, portalDrift: driftRows, portalDriftSource: drift.source, portalFixtureVendoring: fixtureVendoring, quality: qualityRows, qualityTargets, qualityError, engineStale: engineStaleRows.map(r => ({ town: r.name, engine: r.engine, engineCommit: r.engineCommit || null })), placeEngineStale: placeEngineStaleRows.map(r => ({ place: r.name, town: r.town, engine: r.engine, engineCommit: r.engineCommit || null })), ownEngineUncheckable: uncheckableRows.map(r => ({ map: r.name, engine: r.engine, why: r.ownEngineUncheckable })), engineStaleAllowed: ENGINE_STALE_ALLOWED, deployment: deploy, commitments: commit, s6Claims: s6Claims.verdict, s6ClaimsError: s6Claims.error, s6ClaimsOverdue: require('./s6_claims.js').owedOverdue(s6Claims.verdict, s6Claims.today).map(o => ({ id: o.id, map: o.map, route: o.route, decidedOn: o.decidedOn, due: o.due })), s6Limit, processSize: procSize, portalDeps, shadowRebuild: shadow, docChores: docChores }, null, 2);
     // `--json-out` writes the payload and FALLS THROUGH to the board below, so
     // one walk feeds both the artifact and the step summary. `--json` prints and
     // stops, which is what it has always done and what every other caller passes.
@@ -1627,21 +1546,6 @@ async function main() {
     }
   }
 
-  if (freshnessRows.length) {
-    console.log('\n=== Committed portal fixtures vs the newest render (OA-182) ===');
-    for (const r of freshnessRows) {
-      if (!r.stale.length) { console.log('  current  ' + r.label + '  (' + r.run + ')'); continue; }
-      console.log('  STALE    ' + r.label + '  \u2014 ' + r.stale.join(', ')
-        + ' differ from ' + r.run);
-    }
-    if (freshnessRows.some(r => r.stale.length)) {
-      console.log('    A gate against a frozen fixture is self-consistent by construction: the old');
-      console.log('    engine reproduces the old sheet and PASS says nothing about what shipped.');
-      console.log('    Refresh: the place ones with the portal\'s scripts/refresh-place-fixture.mjs,');
-      console.log('    the area one with the recipe in Areas/_portal-fixture/README.md.');
-    }
-  }
-
   if (driftRows.length) {
     console.log('\n=== Portal vendoring drift (skill -> portal, CRLF-safe) ===');
     const srcLine = driftSourceLine(drift.source);
@@ -1712,7 +1616,7 @@ async function main() {
 
   printDeployment(deploy, LIVE_URL);
 
-  return require('./exit_reasons').report(bad || deployBad(deploy) || commitBad(commit) || require('./s6_stale_limit.js').isRed(s6Limit), { townRows, placeRows, portalFixtureRows, driftRows, freshnessRows, qualityRows, qualityError, s6Claims, deploy, commit, s6Limit });   // the last line says WHY
+  return require('./exit_reasons').report(bad || deployBad(deploy) || commitBad(commit) || require('./s6_stale_limit.js').isRed(s6Limit), { townRows, placeRows, portalFixtureRows, driftRows, qualityRows, qualityError, s6Claims, deploy, commit, s6Limit });   // the last line says WHY
 }
 
 // Exit non-zero if anything needs attention, so this can gate CI. `bad` is

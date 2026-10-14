@@ -342,33 +342,37 @@ node scripts/check-vendored.mjs --update
 
 **There are two, and since 2026-09-01 both are a script.** Re-vendoring makes the portal run the new code; the fixtures are what its byte gates compare against, and a fixture frozen alongside the change passes its own gate **by construction** — the old engine reproduces the old sheet perfectly and `verify` reports PASS about code that has not shipped. The area one was forgotten twice in three days: once caught by somebody reading an unrelated backlog row, once by a portal PR's `verify` job going red.
 
-Run these two, in either order, and run BOTH. Neither takes a placeholder. The first is run from the portal root (`C:\Buses\community-bus-maps`); the second can be run from anywhere, because every path it needs is derived — and it asks the town's MANIFEST which S5 run is latest rather than a directory listing, which the recipe it replaces did not: a string sort puts `v1.9_2026-08-18` after `v1.23_2026-08-30` one character in, and that is the bug `status.js`'s own freshness check shipped with. Add `--check` to either to see what would change without writing; the area one exits 1 when the fixture is behind, the same verdict the board gives.
+**The AREA fixture is St Ives's pack in this repository's own estate, since buses-data OA-635 (2026-10-14).** It is `make-bus-leaflet/test/fixtures/estate/Areas/St Ives`, beside Beaconsfield and March, so the step that already re-stamps and redraws the estate re-cuts it in the same pull request as the engine edit — there is no second script to remember. From `make-bus-leaflet`, with no placeholders, `--apply` writing and its absence only reporting:
+
+```bash
+npm run fixture:estate -- --apply
+```
+
+Until OA-635 it was `Areas/_portal-fixture/St Ives` in buses-data, a copy of the real town's newest render cut by `refresh_area_fixture.js`. That made the real St Ives a special case — it could be rebuilt only together with a pin bump (`fixture_donor.js`, OA-532) — and the copy described whatever the town last rendered, not the current engine. Both are gone: the real St Ives is an ordinary town, and the portal's area fixture is current by construction.
+
+**The PLACE fixture still lives in buses-data**, because it is a different pack from any place's own render (it carries `base-overrides.json`). From the portal root (`C:\Buses\community-bus-maps`), with no placeholders; add `--check` to see what would change without writing:
 
 ```bash
 node scripts/refresh-place-fixture.mjs "C:/Buses/buses-data/Places/_portal-fixture/High Wycombe Aldi" --apply
 ```
 
-**`refresh_area_fixture.js` replaced a shell recipe in a README (OA-182).** A recipe is a thing you have to remember to run, which is a different category of guarantee from a thing you can run — and it was forgotten three times in three days, once caught only by portal PR #162's own `verify` job going red. The script was measured against the artefact rather than against "it ran": pointed at a scratch copy of the tree it reproduces the committed fixture **byte-for-byte**, it names a changed file, it removes a file the run no longer writes, and it excludes the same three things the README always did — the JPGs (rasterisation is platform-dependent by design, which is what `render-parity.yml` is for), `svc_*.html` and `build-warnings.txt`.
-
-```bash
-node "C:/Buses/claude-skills/make-bus-leaflet/assets/refresh_area_fixture.js" --apply
-```
-
-Then verify both with `FIXTURE_DIR` deliberately unset, so you are gating the committed fixtures and not whatever your `.env` points at:
-
-```bash
-BUSES_DIR="C:/Buses/buses-data" FIXTURE_DIR= npm run verify:area
-```
-
-**`status.js` also tells you when the area one has gone stale** and exits non-zero on it, so the board you already run before re-vendoring is the reminder. It and `refresh_area_fixture.js` ask the same two questions the same way — `latestRunDir()` for which run, `sameIgnoringLineEndings()` for whether it matches — so the tool that WRITES the fixture and the check that JUDGES it cannot disagree about what current means. It is a laptop check by construction — `S5-render/` is gitignored, so a fresh CI checkout has no render to compare with — and CI answers the complementary question once the PR is open.
-
-**THE PORTAL VENDORS ITS FIXTURES TOO, SINCE 2026-09-18** (`buses-data` OA-398, R5 of the process review of 2026-09-17), and that is a third step rather than a change to the two above. Both scripts still write into `buses-data`, beside the render each pack comes from; the portal's byte gates now read a COPY of those packs, under `gate-fixtures/` in the portal itself, because `verify.yml` no longer clones the private repository at all. So re-cutting a fixture changes nothing the portal's gates see until the copy is refreshed. From the portal root (`C:\Buses\community-bus-maps`), with no placeholders:
+**THE PORTAL VENDORS BOTH FIXTURES, SINCE 2026-09-18** (`buses-data` OA-398, R5 of the process review of 2026-09-17), and that is a further step rather than a change to the two above. The portal's byte gates read a COPY under `gate-fixtures/` in the portal itself, because `verify.yml` clones neither of the other repositories. So re-cutting a fixture changes nothing the portal's gates see until the copy is refreshed. `fixtures:vendor` takes `Areas/` from this repository's estate (`--skills`, default the sibling `claude-skills` checkout) and `Places/` from buses-data (`--buses`, default the sibling `buses-data` checkout). From the portal root (`C:\Buses\community-bus-maps`), with no placeholders:
 
 ```bash
 npm run fixtures:vendor -- --apply
 ```
 
-**The old instruction here was *push `buses-data` BEFORE opening the portal pull request*, and it is retired.** The fixtures lived in that repository and `verify.yml` checked it out with no `ref:`, so a pull request's engine was gated against whatever was on its `main` at that moment — a truthful red when this side was ahead, and a false GREEN whenever that side was, which is the direction that matters. Nothing in the portal reads that repository at run time now, so the ordering does not matter; what matters instead is that `gate-fixtures/` carries the bytes you mean. Whether the copy has fallen behind is asked by `npm run fixtures:vendor` with no `--apply`, from the laptop and daily from `buses-data`'s own gates workflow.
+Then confirm the gates pass against the vendored copy, with `FIXTURE_DIR` deliberately unset so you are gating the committed copy and not whatever an `.env` points at. From the portal root, with no placeholders, one command each:
+
+```bash
+FIXTURE_DIR= npm run verify:area
+```
+
+```bash
+FIXTURE_DIR= npm run verify:defaults
+```
+
+**The old instruction here was *push `buses-data` BEFORE opening the portal pull request*, and it is retired.** The fixtures lived in that repository and `verify.yml` checked it out with no `ref:`, so a pull request's engine was gated against whatever was on its `main` at that moment — a truthful red when this side was ahead, and a false GREEN whenever that side was, which is the direction that matters. Nothing in the portal reads that repository at run time now, so the ordering does not matter; what matters instead is that `gate-fixtures/` carries the bytes you mean. Whether the copy has fallen behind is asked by `npm run fixtures:vendor` with no `--apply`, from the laptop; buses-data's own gates workflow asks the Places half (`--only Places`), and this repository's board reports the Areas half as a chore.
 
 ### AND RE-DRAW THIS REPOSITORY'S OWN FIXTURE ESTATE, IN THE SAME COMMIT AS THE ENGINE EDIT (OA-398)
 

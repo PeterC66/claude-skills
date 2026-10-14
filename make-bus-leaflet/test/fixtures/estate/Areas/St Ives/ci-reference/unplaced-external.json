@@ -1,0 +1,29 @@
+[
+  {
+    "id": "stop:Central Cambridge@A#6",
+    "text": "Central Cambridge",
+    "at": [
+      173.2192895810685,
+      163.65930471520235
+    ],
+    "reason": "no candidate clear"
+  },
+  {
+    "id": "stop:Addenbrooke's@A#8",
+    "text": "Addenbrooke's",
+    "at": [
+      177.65499717478485,
+      173.62206708897548
+    ],
+    "reason": "no candidate clear"
+  },
+  {
+    "id": "stop:Bury@301#2#7",
+    "text": "Bury",
+    "at": [
+      145.48747292539184,
+      41.5614749140795
+    ],
+    "reason": "no candidate clear"
+  }
+]

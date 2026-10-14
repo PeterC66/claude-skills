@@ -1,0 +1,544 @@
+{
+  "town": "St Ives",
+  "validFrom": "3 August 2026",
+  "version": "6.6",
+  "externalHubLabel": "St Ives Bus Station/\nPark and Ride",
+  "palette": {
+    "9": "#009988",
+    "69": "#EE7733",
+    "300": "#228833",
+    "301": "#EE6677",
+    "302": "#CCBB44",
+    "A": "#AA3377",
+    "B": "#4477AA",
+    "VL14": "#E69F00",
+    "5A": "#1A3A8F"
+  },
+  "textOn": {
+    "9": "#fff",
+    "69": "#111",
+    "300": "#fff",
+    "301": "#fff",
+    "302": "#111",
+    "A": "#fff",
+    "B": "#fff",
+    "VL14": "#111",
+    "5A": "#fff"
+  },
+  "operators": [
+    {
+      "name": "Stagecoach East",
+      "routes": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "name": "Dews Coaches",
+      "routes": [
+        "9",
+        "300",
+        "301",
+        "302"
+      ]
+    },
+    {
+      "name": "Stephensons of Essex",
+      "routes": [
+        "5A",
+        "69"
+      ]
+    },
+    {
+      "name": "Villager Minibus",
+      "routes": [
+        "VL14"
+      ]
+    }
+  ],
+  "external": [
+    {
+      "route": "B",
+      "id": "Bcam",
+      "label": "Cambridge",
+      "minutesToDestination": 60,
+      "days": "daily",
+      "bearing": 100,
+      "stops": [
+        "Fen Drayton Lakes",
+        "Swavesey",
+        "Longstanton P&R",
+        "Oakington",
+        "Histon & Impington",
+        "Cambridge North",
+        "Cambridge (Drummer St)"
+      ],
+      "side": "left"
+    },
+    {
+      "route": "5A",
+      "id": "5A",
+      "label": "Bar Hill",
+      "minutesToDestination": 65,
+      "days": "Mon–Sat",
+      "bearing": 128,
+      "stops": [
+        "Fenstanton",
+        "Fen Drayton",
+        "Swavesey",
+        "Over",
+        "Willingham",
+        "Longstanton P&R",
+        "Bar Hill"
+      ],
+      "side": "right"
+    },
+    {
+      "route": "A",
+      "id": "A",
+      "label": "Trumpington P&R",
+      "minutesToDestination": 85,
+      "days": "daily",
+      "bearing": 156,
+      "stops": [
+        "Fen Drayton Lakes",
+        "Swavesey",
+        "Longstanton P&R",
+        "Oakington",
+        "Histon & Impington",
+        "Orchard Park",
+        "Central Cambridge",
+        "Cambridge Rail Stn",
+        "Addenbrooke's",
+        "Trumpington P&R"
+      ],
+      "side": "left"
+    },
+    {
+      "route": "69",
+      "id": "69",
+      "label": "Boxworth",
+      "minutesToDestination": 34,
+      "days": "Mon–Fri",
+      "bearing": 188,
+      "stops": [
+        "Fenstanton",
+        "Hilton",
+        "Elsworth",
+        "Boxworth"
+      ],
+      "side": "right"
+    },
+    {
+      "route": "9",
+      "id": "9v",
+      "label": "Hilton & Elsworth",
+      "minutesToDestination": 37,
+      "days": "Mon & Fri",
+      "limited": true,
+      "bearing": 214,
+      "stops": [
+        "Fenstanton",
+        "Conington",
+        "Boxworth",
+        "Knapwell",
+        "Elsworth",
+        "Hilton"
+      ],
+      "side": "left"
+    },
+    {
+      "route": "VL14",
+      "id": "VL14",
+      "label": "Felmersham",
+      "days": "limited days",
+      "limited": true,
+      "bearing": 249,
+      "stops": [
+        "Huntingdon",
+        "Brampton",
+        "Kimbolton",
+        "Sharnbrook",
+        "Felmersham"
+      ]
+    },
+    {
+      "route": "9",
+      "id": "9",
+      "label": "Huntingdon",
+      "minutesToDestination": 40,
+      "days": "Mon & Fri",
+      "bearing": 273,
+      "stops": [
+        "Hemingford Grey",
+        "Hemingford Abbots",
+        "Godmanchester",
+        "Huntingdon"
+      ],
+      "side": "left"
+    },
+    {
+      "route": "B",
+      "id": "B",
+      "label": "Hinchingbrooke",
+      "minutesToDestination": 36,
+      "days": "daily",
+      "bearing": 280,
+      "stops": [
+        "Wyton",
+        "Hartford",
+        "Huntingdon",
+        "Hinchingbrooke Hospital"
+      ],
+      "side": "right"
+    },
+    {
+      "route": "301",
+      "id": "301o",
+      "label": "Ramsey (via Old Hurst)",
+      "minutesToDestination": 67,
+      "days": "301V Mon–Fri / 301S Sat",
+      "limited": true,
+      "bearing": 342,
+      "stops": [
+        "Needingworth",
+        "Bluntisham",
+        "Earith",
+        "Colne",
+        "Somersham",
+        "Woodhurst",
+        "Old Hurst",
+        "Pidley",
+        "Warboys",
+        "Bury",
+        "Ramsey"
+      ],
+      "side": "left"
+    },
+    {
+      "route": "301",
+      "id": "301",
+      "label": "Ramsey",
+      "minutesToDestination": 49,
+      "days": "Mon–Sat",
+      "bearing": 355,
+      "stops": [
+        "Needingworth",
+        "Bluntisham",
+        "Earith",
+        "Colne",
+        "Somersham",
+        "Pidley",
+        "Warboys",
+        "Bury",
+        "Ramsey"
+      ],
+      "side": "right"
+    },
+    {
+      "route": "302",
+      "id": "302",
+      "label": "March",
+      "minutesToDestination": 60,
+      "days": "Mon–Sat",
+      "bearing": 23,
+      "stops": [
+        "Warboys",
+        "Chatteris",
+        "Doddington",
+        "Wimblington",
+        "March"
+      ]
+    }
+  ],
+  "internalRoads": {
+    "stroke": 1.7,
+    "gap": 2.8,
+    "rotationDeg": -66,
+    "focus": {
+      "coreKm": 0.55,
+      "comp": 0.34
+    },
+    "roadLabelMax": 18,
+    "roadLabelInclude": [
+      "Saint Audrey Lane"
+    ],
+    "roadRename": [
+      [
+        "Saint Audrey Lane",
+        "St Audrey's Lane"
+      ]
+    ],
+    "keyRoads": [
+      "Houghton Road",
+      "Saint Audrey Lane",
+      "Needingworth Road",
+      "Somersham Road"
+    ],
+    "badgeEvery": 70,
+    "termini": {
+      "9": {
+        "end": "Hemingfords & Huntingdon"
+      },
+      "69": {
+        "start": "Boxworth",
+        "end": false
+      },
+      "301": {
+        "start": "Ramsey"
+      },
+      "302": {
+        "start": "March"
+      },
+      "A": {
+        "start": "Cambridge"
+      },
+      "B": {
+        "start": "Cambridge",
+        "end": "Huntingdon & Hinchingbrooke"
+      },
+      "5A": {
+        "end": "Bar Hill"
+      }
+    },
+    "roadLabelExclude": [
+      "High Street"
+    ]
+  },
+  "terminiLabels": {
+    "9": "Hemingfords & Huntingdon",
+    "69": "Boxworth",
+    "301": "Ramsey",
+    "302": "March",
+    "5A": "Bar Hill",
+    "A": "Cambridge",
+    "B": "Cambridge"
+  },
+  "mapNotes": [
+    {
+      "at": "0500HHOLY010",
+      "text": "300, 301 and 9 stop at Morrisons",
+      "dx": 8,
+      "dy": -4
+    },
+    {
+      "text": "Also serving St Ives, not on this map:",
+      "size": 2.6,
+      "color": "#333",
+      "then": [
+        {
+          "fact": "SF-011",
+          "text": "Dial-a-Ride (FACT), a pre-booked shopper bus: members only, join first, 01354 661234",
+          "size": 2.4,
+          "color": "#555"
+        }
+      ]
+    }
+  ],
+  "panelGroups": true,
+  "panelRow": 7.2,
+  "panelBadge": 3.2,
+  "features": [
+    {
+      "key": "river",
+      "type": "river",
+      "label": "River Great Ouse",
+      "labelPos": "auto",
+      "labelColor": "#7fb0d8",
+      "labelItalic": true,
+      "labelSize": 4,
+      "labelReserve": [
+        87,
+        186,
+        140,
+        196
+      ]
+    }
+  ],
+  "routeOrder": [
+    "B",
+    "A",
+    "9",
+    "302",
+    "301",
+    "VL14",
+    "5A",
+    "69",
+    "300"
+  ],
+  "panelOrder": [
+    "A",
+    "B",
+    "9",
+    "300",
+    "301",
+    "302",
+    "5A",
+    "69",
+    "VL14"
+  ],
+  "orientationRoute": "300",
+  "internalDesc": {
+    "9": [
+      "St Ives – Huntingdon",
+      "Mon & Fri, via Hemingfords & Godmanchester, gaps of over 2 hours"
+    ],
+    "69": [
+      "Boxworth – St Ives",
+      "Mon–Fri, early a.m. in & evening out"
+    ],
+    "300": [
+      "St Ives Town Circular",
+      "Mon–Fri, daytime only"
+    ],
+    "301": [
+      "St Ives – Ramsey",
+      "via Needingworth, Somersham & Warboys, morning & evening only"
+    ],
+    "302": [
+      "St Ives – March",
+      "via Warboys, Chatteris & Doddington"
+    ],
+    "A": [
+      "St Ives – Trumpington P&R",
+      "daily, via Busway, Cambridge & Addenbrooke’s"
+    ],
+    "B": [
+      "St Ives – Cambridge / Huntingdon",
+      "daily, via the Busway"
+    ],
+    "VL14": [
+      "St Ives – Huntingdon – Felmersham",
+      "limited community minibus"
+    ],
+    "5A": [
+      "St Ives – Bar Hill",
+      "Mon–Sat, via Swavesey & Longstanton P&R"
+    ]
+  },
+  "poi": {
+    "include": [
+      "allotments"
+    ],
+    "industrialKeep": [
+      "Somersham Road Industrial Estate",
+      "Needingworth Industrial Estate"
+    ],
+    "excludeName": [
+      "Hemingford"
+    ],
+    "tidy": [
+      [
+        " Primary School$",
+        " Primary"
+      ],
+      [
+        " Junior School$",
+        " Junior"
+      ],
+      [
+        " Infant and Nursery School$",
+        " Infant"
+      ],
+      [
+        " School$",
+        ""
+      ]
+    ],
+    "canon": [
+      [
+        "One Leisure",
+        "One Leisure"
+      ],
+      [
+        "St\\.? ?Ivo Outdoor",
+        "St Ivo Outdoor"
+      ]
+    ]
+  },
+  "internalSchematic": {
+    "internalRoads": {
+      "terminiClusterDist": 28
+    },
+    "features": {
+      "river": {
+        "labelPos": "auto",
+        "labelReserve": [
+          103,
+          184,
+          150,
+          193
+        ]
+      }
+    }
+  },
+  "design": {
+    "sheetUrl": "busmaps.uk/m/st-ives",
+    "sheetUrlLabel": "Latest version:",
+    "howToUse": {
+      "bullets": [
+        "Find where you want to go, around the edge of the diagram.",
+        "Follow its coloured line in to St Ives Bus Station/ Park and Ride at the centre.",
+        "The badge on that line is the bus service number."
+      ]
+    },
+    "frequencyTiers": {
+      "frequent": {
+        "mm": 2.2
+      },
+      "all-day": {
+        "mm": 1.7
+      },
+      "limited": {
+        "mm": 1.2
+      }
+    },
+    "laneOrientation": false
+  },
+  "labels": {},
+  "frequency": {
+    "9": "limited",
+    "69": "limited",
+    "300": "limited",
+    "301": "limited",
+    "302": "all-day",
+    "A": "frequent",
+    "B": "frequent",
+    "5A": "all-day",
+    "VL14": "limited"
+  },
+  "checkedAt": "August 2026",
+  "parked": {
+    "internalDiagram": {
+      "interchanges": [
+        {
+          "atco": "0500HSTIV002",
+          "label": "St Ives Bus Station"
+        },
+        {
+          "atco": "0500HSTIV071",
+          "label": "St Ives Park & Ride",
+          "size": 2.6
+        }
+      ],
+      "loopArrows": [
+        "300"
+      ],
+      "mapNotes": [
+        {
+          "text": "Only main stops and stops near places of interest are shown",
+          "x": 200,
+          "y": 185,
+          "size": 2.4,
+          "color": "#555"
+        }
+      ]
+    }
+  },
+  "localLoops": [
+    {
+      "route": "300",
+      "label": "town circular (Bus Station – Morrisons)"
+    }
+  ]
+}

@@ -13,8 +13,8 @@
  * map, computed from the map's own newest S3, gone when that S3 no longer carries it.
  *
  * WHAT IS OWED, read off the newest S3 `routes.json` and nothing else:
- *   - a top-level `mapNotes` entry with an `x` or a `y` and no `at` (its `w` goes with it;
- *     a stop-anchored note is a fact about a stop, not a guess about clear ground);
+ *   - a top-level `mapNotes` entry with an `x` or a `y`, no `at` and no `handPlaced` (its `w`
+ *     goes with it; a stop-anchored note is a fact about a stop, not a guess about clear ground);
  *   - `legendAt`, `legendWrap`, `design.howToUse.width`, `badgeOffset`, `externalNoteAt`
  *     (no reader in either engine, found 2026-10-11) — present at all;
  *   - `design.howToUse.bullets` — eight of nine stored lists were the default three
@@ -24,6 +24,14 @@
  *     carried as a tagged paragraph matching the register.
  * NOT owed: `panelCols.keyAt` and `keyCols`, whose engine half is not built (OA-437 "Left:
  * A1 engine"), and anything under `parked.`, which no generator draws.
+ *
+ * `handPlaced: "<why>"` ON A NOTE IS A DECISION, NOT A DEBT (OA-437, decided by Peter
+ * 2026-10-15). The search covers the map frame only, so a note in the title band or a
+ * margin the frame does not reach can never be placed by it, and a note the author put
+ * on ground the search's stricter ink test refuses is the author's call. Ely Co-op's six
+ * notes are both: draft claude-skills #370 showed no scoring reaches them, and v1.34's
+ * searched layout was rejected. The reason must be a non-empty string, so the S3 says
+ * WHY the coordinate is typed. The generator ignores the key, so adding it moves no ink.
  *
  * NOT A TICK'S. The loop takes only the row kinds its prompt names, and this is not one:
  * a re-placed note or legend is a new layout, and someone looks at it against the
@@ -42,12 +50,13 @@ import { createRequire } from 'node:module';
 
 const TOP = ['legendAt', 'legendWrap', 'badgeOffset', 'externalNoteAt'];
 const has = (o, k) => !!o && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k);
+const decided = (n) => typeof n.handPlaced === 'string' && n.handPlaced.trim() !== '';
 
 /** What one routes.json owes, as { typedNotes, keys[], unsets[], bullets, facts[] }. */
 export function knobsOwed(routes, { name, register = null, checkConfig = null } = {}) {
   const r = routes || {};
   const notes = Array.isArray(r.mapNotes) ? r.mapNotes : [];
-  const typedNotes = notes.filter((n) => n && typeof n === 'object' && !has(n, 'at') && (has(n, 'x') || has(n, 'y'))).length;
+  const typedNotes = notes.filter((n) => n && typeof n === 'object' && !has(n, 'at') && !decided(n) && (has(n, 'x') || has(n, 'y'))).length;
   const keys = TOP.filter((k) => has(r, k));
   const how = r.design && typeof r.design.howToUse === 'object' ? r.design.howToUse : null;
   if (has(how, 'width')) keys.push('design.howToUse.width');
@@ -95,7 +104,7 @@ export function knobAdoptItems({ towns, places = [], readS3, register, checkConf
       who: 'a session, with someone to look at the result', runbook: 'S3', towns: [place ? (m.town || m.name) : m.name],
       do: [
         ...(o.facts.length ? [{ kind: 'shell', cwd: sk, cmd: `node fact_notes.js --name "${m.name}" --facts "${facts}"`, note: 'prints the register\'s demand-responsive block, which replaces the hand-typed lines; read-only' }] : []),
-        ...(set ? [{ kind: 'skill', what: 'Write the new top-level mapNotes to a UTF-8 file as {"mapNotes":[...]} — the whole array, because --set-file replaces an array. Keep every note\'s words; drop x, y and w from each note with no `at` (a `near` {x,y} hint may say roughly where); put the block above in place of the hand-typed demand-responsive lines (a sheet may still override one, OA-004). <notes.json> below is that file\'s path.' }] : []),
+        ...(set ? [{ kind: 'skill', what: 'Write the new top-level mapNotes to a UTF-8 file as {"mapNotes":[...]} — the whole array, because --set-file replaces an array. Keep every note\'s words; drop x, y and w from each note with no `at` (a `near` {x,y} hint may say roughly where), or, where the search cannot reach the spot (the title band, a margin outside the map frame), keep them and add `handPlaced: "<why>"`; put the block above in place of the hand-typed demand-responsive lines (a sheet may still override one, OA-004). <notes.json> below is that file\'s path.' }] : []),
         { kind: 'shell', cwd: sk, cmd: `node adopt_config.js ${sel}${set}${unset}`, note: 'dry run — prints the routes.json change and writes nothing' + (o.bullets ? '; drop the --unset of design.howToUse.bullets if they are the map\'s own words rather than the default three' : '') },
         { kind: 'shell', cwd: sk, cmd: `node adopt_config.js ${sel}${set}${unset} --apply --by <who> --note "OA-437 adoption: the engine places these"`, note: '<who> is the session\'s name; opens and commits the new S3' },
         { kind: 'shell', cwd: sk, cmd: `node ${tool} ${sel} --apply --commit --note "OA-437 adoption"`, note: 'builds a new S4 and S5 from that S3 and commits the map by pathspec; never pushes' },

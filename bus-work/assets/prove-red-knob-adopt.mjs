@@ -54,6 +54,11 @@ console.log('1. typed note positions — raised, then cleared');
   // gen_internal.js draws an `at` note at its stop and reads x/y only if the stop is unknown.
   check('an at note keeping x/y as its fallback is not owed', run({ mapNotes: [TAGGED, { at: '0500HHOLY010', text: '300 stops here', x: 120, y: 80 }] }).items.length === 0);
   check('a lone y is owed too', knobsOwed({ mapNotes: [{ text: 't', y: 3 }] }).typedNotes === 1);
+  // OA-437, Peter 2026-10-15: a typed note the search cannot reach is a decision when it says why.
+  check('a typed note with a handPlaced reason is not owed', run({ mapNotes: [TAGGED, { text: 'School buses', x: 140, y: 6, w: 56, handPlaced: 'title band, outside the map frame' }] }).items.length === 0);
+  check('an empty handPlaced reason is still owed', knobsOwed({ mapNotes: [{ text: 't', x: 1, y: 2, handPlaced: ' ' }] }).typedNotes === 1);
+  check('handPlaced: true is not a reason and is still owed', knobsOwed({ mapNotes: [{ text: 't', x: 1, y: 2, handPlaced: true }] }).typedNotes === 1);
+  check('the row tells a session it may keep a typed note by giving handPlaced', (run({ mapNotes: [TAGGED, { text: 'x', x: 1, y: 2 }] }).items[0] || { do: [] }).do.some((d) => /handPlaced: "<why>"/.test(d.what || '')));
 }
 
 console.log('2. the typed layout keys — each raised, then cleared');
@@ -84,6 +89,13 @@ console.log('4. demand-responsive lines, through the real fact_notes.js');
   check('the register\'s tagged block clears it', run(CLEAN).items.length === 0);
   check('a drifted tagged line raises it again', run({ mapNotes: [{ text: 'h', then: [{ fact: 'SF-900', text: 'Dial-a-Ride: ring 0000.' }] }] }).items.length === 1);
   check('a map no fact scopes owes no line', run({ mapNotes: [] }, { towns: [town('Gamma')] }).items.length === 0);
+  // Ely Co-op: the hand-placed path draws no `then`, so the fact line is split over typed notes tagged `fact`.
+  const hand = (b) => ({ mapNotes: [
+    { text: 'Dial-a-Ride:', fact: 'SF-900', x: 140, y: 17.8, handPlaced: 'title band' },
+    { text: b, fact: 'SF-900', x: 140, y: 21.6, handPlaced: 'title band' },
+  ] });
+  check('hand-placed lines tagged fact, joined, carry the fact and owe nothing', run(hand('ring 01234 567890.')).items.length === 0);
+  check('the same lines with a changed number raise the row as drifted', (() => { const r = run(hand('ring 0000.')); return r.items.length === 1 && /1 fact not carried/.test(r.items[0].why); })());
 }
 
 console.log('5. blind is not clean');

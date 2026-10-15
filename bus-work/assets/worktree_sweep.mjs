@@ -74,6 +74,11 @@
  * deleted, because an unregistered folder with files in it is somebody's work
  * whose history git has already lost.
  *
+ * TEMP FOLDER (added 2026-10-14). After the repositories, main() calls temp_sweep.mjs to
+ * clear the portal tests' idle scratch folders from the temp folder; its header holds the
+ * rules, and its result is written into the record under `temp`. A folder a program holds
+ * open is left for the next run and does not fail this sweep.
+ *
  * THE PR-SWEEP SHAPE. The writer (`main()`, bottom, runs only when EXECUTED)
  * writes `<buses>/loop/worktree-sweep.json`; `worktreeSweepItems()` is pure and
  * is all worklist.mjs imports, so the board still opens no socket and runs no git.
@@ -82,10 +87,12 @@
  * busy worktree is somebody's live work and is a note, never a row.
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, resolveBuses, resolvePortal } from './engine.mjs';
+import { sweepTemp } from './temp_sweep.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -476,8 +483,8 @@ export function sweepRepo({ repo, apply, now, idleHours, strayRoots, log }) {
 }
 
 /** The record the reader parses. Pure; clock is an argument. */
-export function buildSweepRecord({ results, apply, now = new Date() }) {
-  return { checkedAt: now.toISOString(), tool: 'worktree_sweep.mjs', mode: apply ? 'apply' : 'report', repos: results };
+export function buildSweepRecord({ results, apply, temp = null, now = new Date() }) {
+  return { checkedAt: now.toISOString(), tool: 'worktree_sweep.mjs', mode: apply ? 'apply' : 'report', repos: results, ...(temp ? { temp } : {}) };
 }
 
 async function main() {
@@ -509,10 +516,16 @@ async function main() {
     results.push(r);
   }
 
+  // The temp folder's test scratch (temp_sweep.mjs). A folder a program holds
+  // open is left for the next run and is not a failure of this sweep.
+  console.log('\ntemp folder');
+  const temp = sweepTemp({ dir: args.temp || os.tmpdir(), apply, now, log: (s) => console.log(s) });
+  for (const f of temp.failed) console.error(`  left: ${f}`);
+
   const loopDir = path.join(buses, 'loop');
   if (fs.existsSync(loopDir)) {
     const outFile = path.join(loopDir, 'worktree-sweep.json');
-    fs.writeFileSync(outFile, JSON.stringify(buildSweepRecord({ results, apply }), null, 2) + '\n', 'utf8');
+    fs.writeFileSync(outFile, JSON.stringify(buildSweepRecord({ results, apply, temp }), null, 2) + '\n', 'utf8');
     console.log(`\nwritten: ${outFile}`);
   }
   const n = (f) => results.reduce((a, r) => a + f(r), 0);

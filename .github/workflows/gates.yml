@@ -501,6 +501,14 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-worktree-sweep
 
+      # 2026-10-14. The same sweep now also deletes the portal tests' scratch folders from
+      # the temp folder, so the cases are refusals again: a stranger's folder, a file with our
+      # prefix, a folder touched an hour ago -- and a junction whose target must keep its file.
+      # Throwaway folders only; the last section breaks the sweep on purpose and needs it red.
+      - name: Prove the temp sweep removes only idle portal test scratch
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-temp-sweep
+
       # 2026-09-27. The pull-request train replaced pr-train.yml, whose bot-made
       # branch updates started runs GitHub held for a maintainer's approval. The
       # case that matters is an up-to-date PR with NO checks -- what a held run

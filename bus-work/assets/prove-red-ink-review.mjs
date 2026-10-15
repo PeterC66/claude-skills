@@ -435,6 +435,34 @@ console.log('\n10. A session answers by rule only when the words are the same an
   check('Peter\'s answer clears selfCheck and records his sightings', !pw.selfCheck && pw.answer.engine && pw.answer.engine.commits[0].kinds.join() === 'area:internal' && !pw.answer.self, JSON.stringify(pw));
   const fill = backfillEngine({ ...rv10, maps: [{ ...base.entry, answer: { verdict: 'accept', by: 'peter', at: 'z', after: NEW } }, { ...base.entry, map: 'Selfie', answer: { verdict: 'accept', by: 's', at: 'z', after: NEW, self: true } }] }, { evidenceFor: base.evidenceFor });
   check('backfill gives an older answer of Peter\'s its sightings, and never a self-answer', fill.filled === 1 && fill.review.maps[0].answer.engine.commits[0].sha === SHA_A && !fill.review.maps[1].answer.engine, JSON.stringify(fill.review.maps.map((m) => m.answer)));
+
+  /* OA-643: an OA-437 adoption counts like an engine commit, and the first map to adopt stays Peter's. */
+  const NOTE = { text: 'School services also call here', size: 2.7 };
+  const typedRoutes = (extra = {}) => routes(SHA_X, { mapNotes: [{ ...NOTE, x: 10, y: 90, w: 60 }], legendAt: { x: 1, y: 2 }, ...extra });
+  const adoptedRoutes = (extra = {}) => routes(SHA_A, { mapNotes: [{ ...NOTE, near: { x: 10, y: 90 } }], ...extra });
+  const adoptSeen = (labels = ['mapNotes.near', 'legendAt'], kinds = ['area:internal']) => ({ scan: '2026-10-01', review: { maps: [{ map: 'Beaconsfield Simpson Centre', answer: { verdict: 'accept', by: 'peter', at: '2026-10-02T00:00:00Z', after: 'v1.45_2026-10-13_1950', engine: { from: SHA_X, to: SHA_X, commits: labels.map((l) => ({ sha: `adopt:${l}`, subject: `OA-437 adoption of ${l}`, kinds })) } } }] } });
+  const adopt = fixture({ rb: typedRoutes(), ra: adoptedRoutes() });
+  const ad = verdict(adopt, [seen(), adoptSeen()]);
+  check('an adoption Peter accepted on another map is accepted by rule, and the note says it was an adoption', ad.verdict === 'accept' && /differ only by the OA-437 adoption of legendAt, mapNotes\.near/.test(ad.note) && /adopt:mapNotes\.near \(accepted on Beaconsfield Simpson Centre by peter\)/.test(ad.note), JSON.stringify(ad));
+  const first = verdict(adopt, [seen()]);
+  check('THE FIRST MAP TO ADOPT STAYS PETER\'S: with no accept of the adoption elsewhere it waits, naming it', first.verdict === 'waiting' && /adopt:legendAt "OA-437 adoption of legendAt" moves area:internal ink and Peter has not accepted it on another map/.test(first.reason), JSON.stringify(first));
+  check('  and an accept of only one of its adoptions vouches for neither the other nor the whole', verdict(adopt, [seen(), adoptSeen(['mapNotes.near'])]).verdict === 'waiting');
+  check('  and an adoption accepted on an external sheet does not vouch for an internal one', verdict(adopt, [seen(), adoptSeen(undefined, ['area:external'])]).verdict === 'waiting');
+  check('  and a self-answered adoption is never a sighting', verdict(adopt, [seen(), (() => { const s = adoptSeen(); s.review.maps[0].answer.self = true; return s; })()]).verdict === 'waiting');
+  const alone = verdict(fixture({ rb: typedRoutes(), ra: routes(SHA_X, { mapNotes: [{ ...NOTE, near: { x: 10, y: 90 } }] }), commits: {} }), [adoptSeen()]);
+  check('an adoption with no engine commit at all explains the moved ink by itself', alone.verdict === 'accept', JSON.stringify(alone));
+  const switched = verdict(fixture({ rb: typedRoutes(), ra: adoptedRoutes({ design: { sheetVersion: 'x', strandedOnInk: false } }) }), [seen(), adoptSeen()]);
+  check('A PER-MAP SWITCH STAYS WITH PETER, even riding on an adoption he accepted elsewhere', switched.verdict === 'waiting' && /neither an engine commit nor an OA-437 adoption explains/.test(switched.reason), JSON.stringify(switched));
+  const moved = verdict(fixture({ rb: typedRoutes(), ra: routes(SHA_A, { mapNotes: [{ ...NOTE, x: 50, y: 90, w: 60 }], legendAt: { x: 1, y: 2 } }) }), [seen(), adoptSeen()]);
+  check('a typed coordinate moved by hand is not an adoption', moved.verdict === 'waiting' && /inputs changed/.test(moved.reason), JSON.stringify(moved));
+  check('a knob ADDED is not an adoption', verdict(fixture({ rb: routes(SHA_X), ra: routes(SHA_A, { legendAt: { x: 1, y: 2 } }) }), [seen(), adoptSeen()]).verdict === 'waiting');
+  check('a note whose words changed as it was adopted is not an adoption', verdict(fixture({ rb: typedRoutes(), ra: adoptedRoutes({ mapNotes: [{ ...NOTE, text: 'Other words', near: { x: 10, y: 90 } }] }) }), [seen(), adoptSeen()]).verdict === 'waiting');
+  check('a note that kept its w is not adopted, because the search sets the width', verdict(fixture({ rb: typedRoutes(), ra: adoptedRoutes({ mapNotes: [{ ...NOTE, near: { x: 10, y: 90 }, w: 60 }] }) }), [seen(), adoptSeen()]).verdict === 'waiting');
+  const hp = verdict(fixture({ rb: routes(SHA_X, { mapNotes: [{ ...NOTE, x: 10, y: 90 }] }), ra: routes(SHA_A, { mapNotes: [{ ...NOTE, x: 10, y: 90, handPlaced: 'in the title band' }] }) }));
+  check('a handPlaced reason added to a typed note needs no sighting, since it moves no ink', hp.verdict === 'accept' && /OA-437 adoption of a handPlaced reason/.test(hp.note), JSON.stringify(hp));
+  const other = fixture({ rb: typedRoutes(), ra: adoptedRoutes() });
+  const otherInputs = other.evidenceFor(other.entry, OLD, NEW);
+  check('recordable writes the adoption onto the answer, so Peter\'s --answer accept becomes the sighting', JSON.stringify(recordable(otherInputs).commits.map((c) => c.sha)) === JSON.stringify([SHA_A, 'adopt:legendAt', 'adopt:mapNotes.near']), JSON.stringify(recordable(otherInputs)));
 }
 
 console.log(`\n${ran - bad} of ${ran} passed`);

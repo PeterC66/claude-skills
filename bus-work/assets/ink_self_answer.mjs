@@ -28,6 +28,18 @@
  *      on a DIFFERENT map, for the same kind of sheet, whose range held that commit.
  *      A commit Peter HELD on another map, with no later accept on that map, refuses.
  *
+ * AN OA-437 ADOPTION COUNTS LIKE AN ENGINE COMMIT (buses-data OA-643, Peter's yes of
+ * 2026-10-14). Three of the 1 October review's moved maps changed only because
+ * `knob_adopt.mjs` adopted them: a typed `mapNotes` x/y became `near`, a dead
+ * `legendAt` went. Such a change is not hand config, so when the routes.json
+ * difference is ONLY that — each typed note keeping its words and losing its x/y
+ * (and `w`), a `handPlaced` reason added, or a knob in `ADOPTED_KEYS` dropped, and
+ * every other input file the same — each kind of adoption becomes a pseudo-commit
+ * `adopt:<knob>` and needs its own first sighting on another map, exactly as a
+ * commit does. So the first map to adopt stays Peter's. A per-map switch
+ * (`strandedOnInk`, `exitInFrame`) or a moved typed coordinate is not an adoption
+ * and still waits.
+ *
  * WHERE THE SIGHTINGS ARE KEPT. On the answers themselves, in the tracked
  * `_gtfs/ink-review_<scan>.json` records: `--answer` writes `engine: { from, to,
  * commits: [{ sha, subject, kinds }] }` on every answer it records, and `kinds` holds
@@ -139,6 +151,70 @@ export function inputChange(before, after) {
   return out;
 }
 
+/*
+ * The knobs an OA-437 adoption drops, as paths into routes.json: `knob_adopt.mjs`'s
+ * TOP keys and the two `design.howToUse` ones. Dropping one is an adoption; adding
+ * or changing one is not.
+ */
+export const ADOPTED_KEYS = ['legendAt', 'legendWrap', 'badgeOffset', 'externalNoteAt', 'design.howToUse.width', 'design.howToUse.bullets'];
+const NOTE_PLACE = ['x', 'y', 'w', 'near', 'handPlaced'];
+const getAt = (o, p) => p.split('.').reduce((v, k) => (v && typeof v === 'object' ? v[k] : undefined), o);
+const dropAt = (o, p) => {
+  const ks = p.split('.'), last = ks.pop();
+  const parent = ks.reduce((v, k) => (v && typeof v === 'object' ? v[k] : undefined), o);
+  if (parent && typeof parent === 'object') delete parent[last];
+};
+const without = (o, ks) => Object.fromEntries(Object.entries(o).filter(([k]) => !ks.includes(k)));
+
+/** How one note changed, as an adoption label, '' for no ink change, or null when it is not an adoption. */
+function noteAdoption(a, b) {
+  if (JSON.stringify(a) === JSON.stringify(b)) return '';
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return null;
+  if (JSON.stringify(without(a, NOTE_PLACE)) !== JSON.stringify(without(b, NOTE_PLACE))) return null;
+  const typed = (n) => 'x' in n || 'y' in n;
+  if (typed(a) && !typed(b) && !('at' in a) && !('w' in b)) return 'mapNotes.near';
+  /* A `handPlaced` reason added to a note that keeps its typed place is a decision, and moves no ink. */
+  if (typeof b.handPlaced === 'string' && b.handPlaced.trim() && JSON.stringify(without(a, ['handPlaced'])) === JSON.stringify(without(b, ['handPlaced']))) return '';
+  return null;
+}
+
+/**
+ * The OA-437 adoptions that are the WHOLE of an input change, as sorted labels
+ * (`mapNotes.near`, `legendAt`), or null when anything else changed too. `[]` means
+ * the inputs changed in no way that moves ink — only a `handPlaced` reason — or not at all.
+ */
+export function adoptionChange(before, after) {
+  const names = [...new Set([...Object.keys(before), ...Object.keys(after)])];
+  if (names.some((n) => n !== 'routes.json' && before[n] !== after[n])) return null;
+  if (!('routes.json' in before) || !('routes.json' in after)) return before['routes.json'] === after['routes.json'] ? [] : null;
+  const a = normaliseInput('routes.json', before['routes.json']), b = normaliseInput('routes.json', after['routes.json']);
+  if (typeof a !== 'object' || typeof b !== 'object') return JSON.stringify(a) === JSON.stringify(b) ? [] : null;
+  const ca = structuredClone(a), cb = structuredClone(b);
+  const labels = new Set();
+  for (const p of ADOPTED_KEYS) {
+    const va = getAt(a, p), vb = getAt(b, p);
+    if (JSON.stringify(va) === JSON.stringify(vb)) continue;
+    if (va === undefined || vb !== undefined) return null;
+    labels.add(p);
+    dropAt(ca, p);
+  }
+  const na = Array.isArray(a.mapNotes) ? a.mapNotes : null, nb = Array.isArray(b.mapNotes) ? b.mapNotes : null;
+  if (JSON.stringify(na) !== JSON.stringify(nb)) {
+    if (!na || !nb || na.length !== nb.length) return null;
+    for (let i = 0; i < na.length; i++) {
+      const l = noteAdoption(na[i], nb[i]);
+      if (l == null) return null;
+      if (l) labels.add(l);
+    }
+    delete ca.mapNotes; delete cb.mapNotes;
+  }
+  /* An empty object left behind by the last dropped key is not a change. */
+  const tidy = (o) => JSON.stringify(o, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) && k && !Object.keys(v).length ? undefined : v));
+  return tidy(ca) === tidy(cb) ? [...labels].sort() : null;
+}
+const ADOPT = 'adopt:';
+const adoptCommit = (label) => ({ sha: `${ADOPT}${label}`, subject: `OA-437 adoption of ${label}` });
+
 const SHEET_KINDS = { 'internal.svg': 'internal', 'external.svg': 'external', 'internal-schematic.svg': 'schematic', 'boarding.svg': 'boarding' };
 export const KINDS = ['area:internal', 'area:external', 'area:schematic', 'place:internal', 'place:external', 'place:boarding'];
 /** `area:internal` and the like, or null for a sheet no rule covers. */
@@ -175,13 +251,16 @@ export function gatherEvidence({ busesDir, entry, before, after, io, engine }) {
   const to = ia['routes.json'] != null ? engineCommitOf(ia['routes.json']) : null;
   if (!from) return unknown(`the before build ${before} records no engineCommit${ib['routes.json'] == null ? ' (its S4 folder holds no routes.json)' : ''}, so no engine commit can be named`);
   if (!to) return unknown(`the after build ${after} records no engineCommit, so no engine commit can be named`);
+  const inputs = inputChange(ib, ia);
+  const adopted = inputs.length ? adoptionChange(ib, ia) : [];
   const byKind = {};
   for (const kind of new Set(sheets.filter((s) => s.change === 'moved' && s.kind).map((s) => s.kind))) {
     const r = engine.commitsIn(from, to, kind);
     if (r.status !== 'ok') return unknown(r.why);
-    byKind[kind] = r.commits;
+    /* An adoption is credited to every kind that moved, like a commit: Peter's accept elsewhere must have seen it on that kind. */
+    byKind[kind] = [...r.commits, ...(adopted || []).map(adoptCommit)];
   }
-  return { status: 'ok', from, to, sheets, inputs: inputChange(ib, ia), byKind };
+  return { status: 'ok', from, to, sheets, inputs, adopted, byKind };
 }
 
 /** What an answer records as its sightings: each commit, with the kinds of sheet that MOVED and that it touches. */
@@ -216,7 +295,7 @@ export function registerFrom(reviews) {
   return rows;
 }
 
-const short = (sha) => String(sha).slice(0, 7);
+const short = (sha) => (String(sha).startsWith(ADOPT) ? String(sha) : String(sha).slice(0, 7));
 
 /** `{ verdict: 'accept', note, attributed }` or `{ verdict: 'waiting', reason }`. */
 export function decide({ entry, evidence, register }) {
@@ -228,13 +307,13 @@ export function decide({ entry, evidence, register }) {
   if (!moved.length) return wait('no sheet moved between these builds, so there is nothing to attribute');
   const worded = moved.find((s) => s.text && s.text.changed);
   if (worded) return wait(`the text on ${worded.sheet} changed: ${describeText(worded.text)}`);
-  if (evidence.inputs.length) return wait(`the build's inputs changed — ${evidence.inputs.join(', ')} — and no engine commit explains a change of input`);
+  if (evidence.inputs.length && !evidence.adopted) return wait(`the build's inputs changed — ${evidence.inputs.join(', ')} — and neither an engine commit nor an OA-437 adoption explains that change`);
   const other = (r) => r.map.toLowerCase() !== String(entry.map).toLowerCase();
   const attributed = [];
   for (const s of moved) {
     if (!s.kind) return wait(`${s.sheet} moved, and no rule covers a sheet of that name`);
     const commits = evidence.byKind[s.kind] || [];
-    if (!commits.length) return wait(`${s.sheet} moved with no input change and no engine commit touching its generator between ${short(evidence.from)} and ${short(evidence.to)}, so nothing explains it`);
+    if (!commits.length) return wait(`${s.sheet} moved with no OA-437 adoption and no engine commit touching its generator between ${short(evidence.from)} and ${short(evidence.to)}, so nothing explains it`);
     for (const c of commits) {
       const rows = register.filter((r) => r.sha === c.sha && r.kind === s.kind && other(r));
       const held = rows.find((r) => r.verdict === 'hold' && !rows.some((x) => x.verdict === 'accept' && x.map === r.map && x.at > r.at));
@@ -245,7 +324,8 @@ export function decide({ entry, evidence, register }) {
     }
   }
   const quiet = moved.filter((s) => s.text).map((s) => `${s.sheet}: ${describeText(s.text)}`);
-  const note = `answered by rule: the text is unchanged on ${moved.map((s) => s.sheet).join(', ')}${quiet.length ? ` (${quiet.join('; ')})` : ''}, the inputs are unchanged, and the ink is ${attributed.map((x) => `${short(x.sha)} (accepted on ${x.map} by ${x.by})`).join(', ')}`;
+  const ins = evidence.inputs.length ? `the inputs differ only by the OA-437 adoption of ${(evidence.adopted || []).join(', ') || 'a handPlaced reason'}` : 'the inputs are unchanged';
+  const note = `answered by rule: the text is unchanged on ${moved.map((s) => s.sheet).join(', ')}${quiet.length ? ` (${quiet.join('; ')})` : ''}, ${ins}, and the ink is ${attributed.map((x) => `${short(x.sha)} (accepted on ${x.map} by ${x.by})`).join(', ')}`;
   return { verdict: 'accept', note, attributed };
 }
 

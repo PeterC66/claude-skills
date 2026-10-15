@@ -673,6 +673,16 @@ function fromCommitments() {
     const days = Math.ceil((byMs - today) / 86400000);
     const warn = Number.isFinite(+c.warnDays) ? +c.warnDays : 14;
     if (days > warn) continue;
+    /*
+     * NOT BEFORE `from`. `by` is a deadline and `warnDays` opens the amber
+     * window BEFORE it, which is right for a letter and wrong for a reading
+     * that cannot be taken until a date: OA-397's week closed on 2026-10-16
+     * and this row told Peter to read it from 2026-10-14 (adhoc
+     * jobs-too-early, 2026-10-15). An entry with `from` says nothing until
+     * that day, whatever its window says.
+     */
+    const fromMs = c.from ? Date.parse(String(c.from) + 'T00:00:00Z') : NaN;
+    if (Number.isFinite(fromMs) && today < fromMs) continue;
 
     const overdue = days < 0;
     const steps = [{ kind: 'chat', what: `Read ${c.link || 'Development Docs/commitments.json'} and do it.` }];
@@ -703,7 +713,7 @@ function fromCommitments() {
         ? `${c.what} — ${Math.abs(days)}d OVERDUE (was due ${c.by})`
         : `${c.what} — due ${c.by}, ${days}d left`,
       why: c.why || 'A dated commitment with no other watcher.',
-      who: 'Peter', runbook: 'commitments',
+      who: c.who || 'Peter', runbook: 'commitments',
       ageDays: overdue ? Math.abs(days) : null,
       do: steps,
     });

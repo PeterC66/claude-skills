@@ -111,6 +111,17 @@ for (const [when, off] of [['inside the window', 3], ['overdue', -5]]) {
   if (!asks) { bad++; console.log(`        steps were: ${row ? row.do.map((d) => d.what).join(' | ') : '(no row)'}`); }
 }
 
+// 5c. NOT BEFORE `from`. A reading that cannot be taken until a date must not
+//    be put in front of Peter inside the warn window ahead of that date --
+//    OA-397 was, from 2026-10-14 for a week closing 2026-10-16 (adhoc
+//    jobs-too-early). Quiet before, fires from the day itself, and `who` is
+//    carried when the entry names someone other than Peter.
+writeCommitments([{ ...base, by: dayOffset(3), from: dayOffset(2) }]);
+expect('inside the window but before `from` -- quiet', { key: 'commitment-letter', present: false });
+writeCommitments([{ ...base, by: dayOffset(3), from: dayOffset(0), who: 'any session or tick' }]);
+const fr = expect('on its `from` day -- fires', { key: 'commitment-letter', present: true, rank: 7 });
+if (fr && fr.who !== 'any session or tick') { bad++; console.log('        who not carried: ' + fr.who); }
+
 // 6. THE ONE THAT MATTERS MOST: done means gone. Remove the entry and the row
 //    must vanish -- not linger, not go amber. A nag that outlives the work is
 //    how the whole list stops being read.

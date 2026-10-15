@@ -24,12 +24,22 @@ const { ENGINE_DIR } = require('./_engine.js');
 
 const STATUS = path.join(ENGINE_DIR, 'status.js');
 
-function tree(by) {
+function tree(by, extra = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'status-commit-'));
   fs.mkdirSync(path.join(root, 'Development Docs'));
   fs.writeFileSync(path.join(root, 'Development Docs', 'commitments.json'),
-    JSON.stringify({ commitments: [{ id: 'x', what: 'Do x', by }] }, null, 2));
+    JSON.stringify({ commitments: [{ id: 'x', what: 'Do x', by, ...extra }] }, null, 2));
   return root;
+}
+
+function stateOf(by, extra) {
+  const root = tree(by, extra);
+  try {
+    const r = spawnSync(process.execPath, [STATUS, '--buses', root, '--portal', path.join(root, '__no-portal__'),
+      '--no-quality', '--no-live', '--commitments-today', '2026-09-30', '--json'],
+      { encoding: 'utf8', timeout: 120000, maxBuffer: 64 * 1024 * 1024 });
+    return JSON.parse(r.stdout).commitments.rows[0].state;
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
 
 function exitCode(root, json) {
@@ -51,6 +61,18 @@ test('control: a commitment not yet due leaves both forms green', () => {
 
 test('an OVERDUE commitment reddens the human board AND --json, alike', () => {
   assert.deepStrictEqual(both('2026-09-01'), { human: 1, json: 1 });
+});
+
+// `from` is a not-before date: inside the warn window but before it, the entry
+// cannot be done yet and must not be amber (buses-data adhoc jobs-too-early,
+// 2026-10-15: OA-397 was put to Peter two days before its week could close).
+test('inside the window but before `from`: ok, not due soon', () => {
+  assert.strictEqual(stateOf('2026-10-02', { warnDays: 7, from: '2026-10-01' }), 'ok');
+  assert.strictEqual(stateOf('2026-10-02', { warnDays: 7 }), 'due soon');
+});
+
+test('on its `from` day: due soon', () => {
+  assert.strictEqual(stateOf('2026-10-02', { warnDays: 7, from: '2026-09-30' }), 'due soon');
 });
 
 test('an UNDATED commitment reddens both forms alike', () => {

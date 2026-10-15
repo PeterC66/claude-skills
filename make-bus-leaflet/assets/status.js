@@ -1374,6 +1374,10 @@ function commitmentRows() {
     if (!Number.isFinite(byMs)) return { ...c, state: 'UNDATED', days: null };
     const days = Math.ceil((byMs - todayMs) / 86400000);
     const warn = Number.isFinite(+c.warnDays) ? +c.warnDays : 14;
+    // `from` is a not-before date: until then the entry cannot be done, so it is
+    // never amber (worklist.mjs says the same; adhoc jobs-too-early, 2026-10-15).
+    const fromMs = c.from ? Date.parse(String(c.from) + 'T00:00:00Z') : NaN;
+    if (Number.isFinite(fromMs) && todayMs < fromMs && days >= 0) return { ...c, days, state: 'ok' };
     return { ...c, days, state: days < 0 ? 'OVERDUE' : days <= warn ? 'due soon' : 'ok' };
   });
   rows.sort((a, b) => (a.days == null ? -1 : b.days == null ? 1 : a.days - b.days));
@@ -1603,7 +1607,7 @@ async function main() {
       for (const r of commit.rows) {
         const when = r.days == null ? 'no date' : r.days < 0 ? Math.abs(r.days) + 'd OVERDUE' : r.days + 'd left';
         const mark = r.state === 'OVERDUE' ? 'OVERDUE ' : r.state === 'due soon' ? 'due soon' : 'ok      ';
-        console.log('  ' + mark + '  ' + String(r.what || r.id) + '   (' + r.by + ', ' + when + ')');
+        console.log('  ' + mark + '  ' + String(r.what || r.id) + '   (' + (r.from ? 'from ' + r.from + ', ' : '') + r.by + ', ' + when + ')');
         if (r.state !== 'ok') {
           if (r.why) console.log('      ' + r.why);
           if (r.link) console.log('      ' + r.link);

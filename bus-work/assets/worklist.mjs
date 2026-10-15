@@ -672,7 +672,7 @@ function fromCommitments() {
     if (!Number.isFinite(byMs)) continue;
     const days = Math.ceil((byMs - today) / 86400000);
     const warn = Number.isFinite(+c.warnDays) ? +c.warnDays : 14;
-    if (days > warn) continue;
+    if (days > warn || today < Date.parse(String(c.from) + 'T00:00:00Z')) continue;   // and nothing before a not-before `from` (OA-397 was put to Peter 2 days early: adhoc jobs-too-early, 2026-10-15)
 
     const overdue = days < 0;
     const steps = [{ kind: 'chat', what: `Read ${c.link || 'Development Docs/commitments.json'} and do it.` }];
@@ -703,7 +703,7 @@ function fromCommitments() {
         ? `${c.what} — ${Math.abs(days)}d OVERDUE (was due ${c.by})`
         : `${c.what} — due ${c.by}, ${days}d left`,
       why: c.why || 'A dated commitment with no other watcher.',
-      who: 'Peter', runbook: 'commitments',
+      who: c.who || 'Peter', runbook: 'commitments',
       ageDays: overdue ? Math.abs(days) : null,
       do: steps,
     });

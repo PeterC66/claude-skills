@@ -52,3 +52,15 @@ test('a hand-typed line with no tag is not judged', () => {
   const hand = { mapNotes: [{ text: 'Dial-a-Ride, typed by hand' }] };
   assert.strictEqual(checkConfig(hand, { facts: [] }, 'Alpha').length, 0);
 });
+
+test('typed notes tagged `fact` carry it when their lines, joined in order, are the sheet line (Ely Co-op)', () => {
+  const split = (a, b) => ({ mapNotes: [
+    { text: 'Ring-a-Ride:', fact: 'SF-1', x: 140, y: 17.8, handPlaced: 'title band' },
+    { text: a, fact: 'SF-1', x: 140, y: 21.6, handPlaced: 'title band' },
+    { text: b, fact: 'SF-2', x: 140, y: 25.4, handPlaced: 'title band' },
+  ] });
+  assert.deepStrictEqual(checkConfig(split('01 111', 'Tiger: 02 222'), REG, 'Alpha'), []);
+  const p = checkConfig(split('01 999', 'Tiger: 02 222'), REG, 'Alpha');
+  assert.strictEqual(p.length, 1);
+  assert.match(p[0], /SF-1 has drifted: the sheet says "Ring-a-Ride: 01 999"/);
+});

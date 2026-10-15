@@ -54,9 +54,17 @@ function blockFor(register, name, heading) {
 }
 
 // What a routes.json is missing or has drifted on, against the register.
+// A fact is carried by a tagged `then` paragraph or, on a sheet whose notes are typed by
+// hand (`handPlaced`, OA-437 2026-10-15), by top-level notes tagged `fact`: the hand-placed
+// path draws no `then`, so one line is split over several typed notes, and their texts are
+// joined with a space in array order before they are compared with the sheet line.
 function checkConfig(routes, register, name) {
-  const tagged = new Map();
-  for (const n of (routes.mapNotes || [])) for (const p of (n.then || [])) if (p.fact) tagged.set(p.fact, p.text);
+  const tagged = new Map(), typed = new Map();
+  for (const n of (routes.mapNotes || [])) {
+    if (n.fact) typed.set(n.fact, (typed.has(n.fact) ? typed.get(n.fact) + ' ' : '') + n.text);
+    for (const p of (n.then || [])) if (p.fact) tagged.set(p.fact, p.text);
+  }
+  for (const [id, text] of typed) if (!tagged.has(id)) tagged.set(id, text);
   const problems = [];
   for (const f of factsFor(register, name)) {
     if (!tagged.has(f.id)) { problems.push(f.id + ' is in scope of ' + name + ' and no tagged paragraph carries it'); continue; }

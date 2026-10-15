@@ -13,8 +13,13 @@
  * is a new module and not an edit to the loop. A note with none of them is searched:
  *
  *   - widest wrap first. A wider note is fewer lines and a shorter box, and a short
- *     box fits in more places, so the first width that finds a clear spot is the best
- *     one. Widths are tried from `w` (or 120 mm) down in 20 mm steps to 40 mm.
+ *     box fits in more places, so with no hint the first width that finds a clear spot
+ *     is the best one. Widths are tried from `w` (or 120 mm) down in 20 mm steps to 40 mm.
+ *   - WITH a `near` hint every width is tried and the spot nearest the hint wins; a
+ *     narrower wrap has to be more than NEAR_SLACK nearer to beat a wider one. Returning
+ *     at the first width that fitted anywhere let a 120 mm wrap in open map beat a 60 mm
+ *     wrap on the hint, and Ely Co-op v1.34 put both its margin notes inside the street
+ *     map (buses-data OA-437, found 2026-10-14, diagnosed in d8ac2f0a).
  *   - the lines wrap by MEASURED width (font_metrics.js), not by a character count.
  *   - a spot is clear when no reserved box touches it (the panel, the footer plate,
  *     a symbol, another note — `overlaps`) and no route ink is under it (`inkCover`
@@ -37,6 +42,7 @@ const WIDTHS_FROM = 120, WIDTHS_TO = 40, WIDTHS_STEP = 20;
 const NL = String.fromCharCode(10);
 const PARA_GAP = 1.6;   // extra space before a `then` paragraph, mm: the hand-set blocks leave 5.4 against a 3.8 line pitch
 const PAD = 1.2;     // clearance kept round every line, mm: a note touching a badge reads as part of it
+const NEAR_SLACK = 2; // mm a narrower wrap must gain on the hint before it is chosen over a wider one
 
 /*
  * noteInk(svg, ir, Labeller) -> (box) => fraction of the box on anything drawn.
@@ -85,6 +91,7 @@ function placeNote(d) {
   for (let w = widest; w >= Math.min(WIDTHS_TO, widest); w -= WIDTHS_STEP) widths.push(w);
   if (!widths.length) widths.push(widest);
   const seen = new Set();
+  let chosen = null;
   for (const width of widths) {
     const rows = layoutRows(d, width);
     const key = rows.map(r => r.ln).join(NL);
@@ -93,11 +100,13 @@ function placeNote(d) {
     const ws = rows.map(r => d.measure(r.ln, r.size));
     const maxW = Math.max(...ws);
     const height = rows[rows.length - 1].dy;
+    // A narrower wrap has to beat the wider one's spot by more than NEAR_SLACK to take it.
+    const bound = chosen ? chosen.dist - NEAR_SLACK : Infinity;
     let best = null;
     for (let y = top + sz; y + height + 1 <= bottomLimit; y += step) {
       for (let x = left; x + maxW <= right; x += step) {
         const dist = Math.hypot(x - near.x, y - near.y);
-        if (best && dist >= best.dist) continue;
+        if (dist >= (best ? best.dist : bound)) continue;
         const boxes = rows.map((r, i) => {
           const ly = y + r.dy;
           return [x - 0.4, ly - r.size, x + ws[i] + 0.4, ly + 1];
@@ -106,9 +115,12 @@ function placeNote(d) {
         best = { x, y, dist, boxes };
       }
     }
-    if (best) return { x: best.x, y: best.y, lines: rows.map(r => r.ln), rows, width, boxes: best.boxes };
+    if (best) chosen = { x: best.x, y: best.y, dist: best.dist, lines: rows.map(r => r.ln), rows, width, boxes: best.boxes };
+    if (chosen && !d.near) break;          // no hint: the widest width that fits is the answer, as it always was
   }
-  return null;
+  if (!chosen) return null;
+  const { dist, ...got } = chosen;
+  return got;
 }
 
 /*

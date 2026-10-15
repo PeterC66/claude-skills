@@ -4,7 +4,7 @@
  * No stored map has a note without a coordinate, so the byte gate runs only the path
  * that is NOT searched; every clause of the search is held here, on a blank page, one
  * at a time: the widest wrap that has a spot wins, a box over reserved space or route
- * ink is refused, the hint decides among clear spots, and "nowhere" is null so the
+ * ink is refused, the hint decides among clear spots and across widths, and "nowhere" is null so the
  * caller can say so instead of dropping the note.
  */
 'use strict';
@@ -49,6 +49,21 @@ test('with no hint it goes bottom-left of the frame, above the footer plate', ()
 test('a hint pulls the note to the nearest clear spot', () => {
   const got = run({ near: { x: 100, y: 60 } });
   assert.ok(Math.abs(got.x - 100) <= 1 && Math.abs(got.y - 60) <= 1, `got ${got.x},${got.y}`);
+});
+
+test('a hint only a narrow wrap can reach beats a wider wrap that fits elsewhere (Ely Co-op v1.34)', () => {
+  // A 47 mm margin at the hint takes only the 40 mm wrap; the open left of the sheet takes the 120 mm one.
+  const reserved = [[100, 30, 148, 190]];
+  const got = run({ reserved, text: TEXT + ' ' + TEXT, near: { x: 160, y: 40 } });
+  assert.strictEqual(got.width, 40);
+  assert.ok(got.boxes.every((b) => b[0] >= 148), `every line sits in the margin at the hint, got x ${got.x}`);
+  const noHint = run({ reserved, text: TEXT + ' ' + TEXT });
+  assert.strictEqual(noHint.width, 120, 'with no hint the widest wrap that fits still wins');
+});
+
+test('a hint a wide wrap can reach keeps the wide wrap: a narrower one is not chosen for no gain', () => {
+  const got = run({ near: { x: 100, y: 60 } });
+  assert.strictEqual(got.width, 120);
 });
 
 test('reserved space and route ink are both refused, every line of the box being tested', () => {

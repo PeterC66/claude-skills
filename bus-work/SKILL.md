@@ -375,3 +375,7 @@ From `C:\Buses\claude-skills\bus-work\assets`, with no placeholders:
 ```bash
 node shadow_rebuild.mjs
 ```
+
+## Remember the others
+
+Nothing schedules the five routine check-ins (summarise-ticks, summarise-adhocs, bus-work, loop-health, triage), so Peter has to remember them. **Only when Peter has run this by hand in a conversation**, and never when a tick, the morning brief or any other unattended run calls it, end your final message with one line reminding him to run the others occasionally: `/summarise-ticks` (what the scheduled ticks did and raised); `/summarise-adhocs` (the same for the ad-hoc runs); `/loop-health` (whether the loop is blocked); `/triage` (the holds and drafts in `loop/your-move/`). Leave this skill out of the list, and do not run any of them yourself.

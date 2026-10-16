@@ -32,6 +32,9 @@
  * Zero dependencies (Node core only), matching worklist.mjs.
  */
 
+/** The newest S5 render as worklist.mjs's tree rows carry it: run id, UTC `at`, version, folder. */
+export const s5Row = (s5) => (s5 ? { id: s5.rec.id, at: s5.rec.at, version: s5.rec.version || null, dir: s5.dir } : null);
+
 /** '2026-10-16T08:22' (manifest) or '2026-10-16 08:22:00' (SQLite) as UTC ms; NaN if unreadable. */
 export const utcMs = (s) => (typeof s === 'string' && s ? Date.parse(/Z$|[+-]\d\d:\d\d$/.test(s) ? s : `${s.replace(' ', 'T')}Z`) : NaN);
 
@@ -75,4 +78,25 @@ export function undeliveredItems({ pairs, remote, portalDir }) {
     });
   }
   return { items, deliveredUpToDate: upToDate, warning: unreadable.length ? `could not read a build or delivery time for ${unreadable.join(', ')} — no undelivered row raised for ${unreadable.length === 1 ? 'it' : 'them'}.` : null };
+}
+
+/**
+ * The join worklist.mjs asks for: each built portal map paired with its local folder (by
+ * worklist's own `localDirOf`), split by the live site's listing (OA-607) — reusing the
+ * engine rows' `listing` when they read one, reading it here otherwise — then
+ * undeliveredItems(). An unread listing raises every row, and says so.
+ * @returns {Promise<{items:object[], warnings:string[], off:string[]}>}
+ */
+export async function undeliveredRows({ portalMaps, localRows, localDirOf, listing, listingLib, liveUrl, noLive, remote, portalDir }) {
+  const pairs = (portalMaps || []).filter((m) => m.built)
+    .map((m) => { const d = localDirOf(m); return { map: m, local: (d && localRows.find((r) => r.dir === d)) || null }; })
+    .filter((p) => p.local);
+  if (!pairs.length) return { items: [], warnings: [], off: [] };
+  const lst = listing || await listingLib.read({ liveUrl, noLive });
+  const warnings = [];
+  if (lst && !lst.listed && lst !== listing) warnings.push(`portal listing not read (${lst.why}) — an undelivered row is raised for every portal map, listed or not (OA-607).`);
+  const { on, off } = listingLib.split(pairs, lst, (p) => p.map.name);
+  const u = undeliveredItems({ pairs: on, remote, portalDir });
+  if (u.warning) warnings.push(u.warning);
+  return { items: u.items, warnings, off: off.map((p) => p.map.name) };
 }

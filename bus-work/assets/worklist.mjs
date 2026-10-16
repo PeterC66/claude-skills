@@ -102,7 +102,7 @@ import { compareRows } from './refresh_deadline.mjs';
 import { waitingItems, readReviews } from './ink_review.mjs';
 import { parseUpcoming, parseDatasets, rebuiltFromScan, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
-import { undeliveredItems } from './undelivered.mjs';
+import { undeliveredRows, s5Row } from './undelivered.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -352,8 +352,6 @@ async function fromRemotePortal() {
 // The cheap signals only (a manifest read + a hash compare). The expensive
 // proof — regenerate every town and diff the SVG — is status.js's job and runs
 // only under --gates.
-/** The newest S5 render as the undelivered row reads it: run id, UTC `at`, version, folder. */
-const s5Row = (s5) => (s5 ? { id: s5.rec.id, at: s5.rec.at, version: s5.rec.version || null, dir: s5.dir } : null);
 function fromMapTree() {
   if (!SK) { warnings.push('make-bus-leaflet assets not found — local staleness skipped.'); return { towns: [], places: [] }; }
   if (!existsSync(path.join(BUSES, 'Areas'))) { warnings.push(`No Areas dir under ${BUSES} — local staleness skipped.`); return { towns: [], places: [] }; }
@@ -1136,27 +1134,9 @@ for (const { row: mapRow, place } of engineStale) {
     ],
   });
 }
-/* BUILT HERE, NOT YET SENT (buses-data, 2026-10-16): a portal map whose newest local S5
- * render post-dates the portal's last delivery of it. undelivered.mjs says what it reads
- * and why a time is the only join there is. Only for a map the live site lists, as the
- * engine rows above (OA-607), reusing their listing when they read one. */
-let undeliveredOff = [];
-{
-  const localRows = tree.towns.concat(tree.places || []);
-  const pairs = (portal ? portal.maps : []).filter((m) => m.built)
-    .map((m) => { const d = localDirOf(m); return { map: m, local: (d && localRows.find((r) => r.dir === d)) || null }; })
-    .filter((p) => p.local);
-  if (pairs.length) {
-    const pl = require(path.join(SK, 'portal_listing.js'));
-    const lst = listed || await pl.read({ liveUrl: typeof args.live === 'string' ? args.live : DEFAULT_LIVE_URL, noLive: !!args['no-live'] });
-    if (lst && !lst.listed && lst !== listed) warnings.push(`portal listing not read (${lst.why}) — an undelivered row is raised for every portal map, listed or not (OA-607).`);
-    const { on, off } = pl.split(pairs, lst, (p) => p.map.name);
-    undeliveredOff = off.map((p) => p.map.name);
-    const u = undeliveredItems({ pairs: on, remote: REMOTE, portalDir: PORTAL });
-    if (u.warning) warnings.push(u.warning);
-    for (const it of u.items) if (!haveKey(it.key)) add(it);
-  }
-}
+// BUILT HERE, NOT YET SENT (buses-data, 2026-10-16) — the join, and why a time is the only one, are undelivered.mjs's.
+const und = await undeliveredRows({ portalMaps: portal ? portal.maps : [], localRows: tree.towns.concat(tree.places || []), localDirOf, listing: listed, listingLib: SK ? require(path.join(SK, 'portal_listing.js')) : null, liveUrl: typeof args.live === 'string' ? args.live : DEFAULT_LIVE_URL, noLive: !!args['no-live'], remote: REMOTE, portalDir: PORTAL });
+for (const w of und.warnings) warnings.push(w); for (const it of und.items) if (!haveKey(it.key)) add(it);
 // OA-480: the portal ahead of engine.lock.json's pin is a chore, carried here; the row is built in pin_behind.js.
 if (SK && PORTAL && findEngineRepo()) { const it = require(path.join(SK, 'pin_behind.js')).pinBehindItem({ buses: BUSES, portal: PORTAL, skillsRoot: findEngineRepo() }); if (it) add(it); }
 if (SK && PORTAL) { const it = require(path.join(SK, 'portal_deps.js')).item(PORTAL); if (it) add(it); } // OA-567: no node_modules is a chore with its repair
@@ -1524,7 +1504,7 @@ const meta = {
   // argument as `adjudicated` directly above.
   correspondenceSettled,
   offPortal: offPortal.map((e) => e.row.name), // OA-607: behind, unlisted, so no engine-rebuild row
-  undeliveredOffPortal: undeliveredOff, // unlisted, so no undelivered row (undelivered.mjs)
+  undeliveredOffPortal: und.off, // unlisted, so no undelivered row (undelivered.mjs)
   stampOnly, // OA-574: behind the pin, but the shadow rebuild reproduced every sheet on an engine it may speak for
   folded: foldedRows, // OA-574: rows taken off the board into the hold that names them
   // OA-221. A caller reading --json must be able to see the same verdict a

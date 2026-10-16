@@ -11,7 +11,7 @@
  * opens and migrates DB_PATH when it is imported, so a stale DATA_DIR used to
  * CREATE an empty database and the worklist reported an empty portal — for five
  * days, from a laptop .env still naming the pre-OA-611 C:/Claude path. The guard
- * asks the portal's side-effect-free src/db/paths.js where the file is and exits 2
+ * asks (through engine.mjs assertLocalPortalDb) the portal's side-effect-free src/db/paths.js where the file is and exits 2
  * naming that path before the import. END TO END: a fixture portal whose
  * db/index.js does what the real one does to a missing path (makes the folder and
  * the file), whose worklist answers one item, and whose paths.js resolves the way
@@ -20,7 +20,7 @@
  * also "passes" the refusal cases.
  *
  * Then the MUTATION arm: a scratch copy of bus-work, make-bus-leaflet and
- * make-place-bus-leaflet assets, one deliberate break each, and the case that must
+ * make-place-bus-leaflet assets, one deliberate break each (in worklist.mjs or engine.mjs), and the case that must
  * object to it. Nothing in the real tree is edited. No network.
  */
 import fs from 'node:fs';
@@ -112,13 +112,16 @@ try {
   const copy = (rel) => fs.cpSync(path.join(SKILLS, rel), path.join(scratch, rel), { recursive: true, filter: (p) => !/node_modules/.test(p) });
   for (const rel of ['bus-work/assets', 'make-bus-leaflet/assets', 'make-place-bus-leaflet/assets']) copy(rel);
   const MUTANTS = [
-    { what: 'the existence check removed', file: 'bus-work/assets/worklist.mjs',
+    { what: 'the existence check removed', file: 'bus-work/assets/engine.mjs',
       find: 'if (!existsSync(DB_PATH)) {', repl: 'if (false) {', must: 'DB_PATH names a missing file: exit 2, the path printed, nothing created' },
-    { what: 'the path guessed from DB_PATH alone instead of asked of paths.js', file: 'bus-work/assets/worklist.mjs',
+    { what: 'the path guessed from DB_PATH alone instead of asked of paths.js', file: 'bus-work/assets/engine.mjs',
       find: 'const { DB_PATH } = await import(pathToFileURL(pathsFile).href);', repl: 'const DB_PATH = process.env.DB_PATH || pathsFile;',
       must: 'a stale DATA_DIR in the portal .env: exit 2, the resolved file printed, nothing created' },
-    { what: 'the check moved after the import that creates the file', file: 'bus-work/assets/worklist.mjs',
-      find: 'const { DB_PATH } = await import(pathToFileURL(pathsFile).href);', repl: "const { DB_PATH } = await import(pathToFileURL(pathsFile).href); await import(pathToFileURL(path.join(PORTAL, 'src', 'db', 'index.js')).href);",
+    { what: 'worklist.mjs no longer calls the guard', file: 'bus-work/assets/worklist.mjs',
+      find: 'await assertLocalPortalDb(PORTAL);', repl: '',
+      must: 'DB_PATH names a missing file: exit 2, the path printed, nothing created' },
+    { what: 'the guard called after the import that creates the file', file: 'bus-work/assets/worklist.mjs',
+      find: 'await assertLocalPortalDb(PORTAL);', repl: "await import(pathToFileURL(path.join(PORTAL, 'src', 'db', 'index.js')).href); await assertLocalPortalDb(PORTAL);",
       must: 'DB_PATH names a missing file: exit 2, the path printed, nothing created' },
   ];
   for (const m of MUTANTS) {

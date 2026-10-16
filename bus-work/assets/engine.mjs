@@ -32,7 +32,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require_ = createRequire(import.meta.url);
@@ -116,5 +116,28 @@ export function loadPortalEnv(dir) {
     if (!m) continue;
     const v = m[2].trim().replace(/^["']|["']$/g, '');
     if (!(m[1] in process.env) && v) process.env[m[1]] = v;
+  }
+}
+
+/** Refuse, and exit 2 naming the path, when the database the portal at `dir`
+ * would open does not exist — call it BEFORE importing the portal's
+ * src/db/index.js, which mkdirSync's DATA_DIR and opens and migrates DB_PATH,
+ * so a stale DATA_DIR CREATES an empty database and a reader reports an empty
+ * portal as if it had read one. It did, for five days: the laptop .env still
+ * named the pre-OA-611 C:/Claude path, and on 14 Oct 2026 `worklist --local`
+ * made a schema-only C:\Claude\community-bus-maps\data\portal.sqlite (buses-data
+ * OA-613). A read-only tool never creates a database, so the path is asked of
+ * the portal's src/db/paths.js, which has no side effects. Call it AFTER
+ * `loadPortalEnv`, which is where DATA_DIR and DB_PATH come from. */
+export async function assertLocalPortalDb(dir) {
+  const pathsFile = path.join(dir, 'src', 'db', 'paths.js');
+  if (!existsSync(pathsFile)) {
+    console.error(`\n  REFUSED: the portal at ${dir} has no src/db/paths.js, so where its database is cannot be asked without opening it — and opening it creates one if the path is wrong. Update that checkout, or pass --url.\n`);
+    process.exit(2);
+  }
+  const { DB_PATH } = await import(pathToFileURL(pathsFile).href);
+  if (!existsSync(DB_PATH)) {
+    console.error(`\n  REFUSED: --local reads the portal database at\n    ${DB_PATH}\n  and there is no file there. Opening it would create an empty one and report an empty portal.\n  DATA_DIR=${process.env.DATA_DIR || '(unset)'}  DB_PATH=${process.env.DB_PATH || '(unset)'} — from the environment or ${path.join(dir, '.env')}.\n  Fix the path there (or pass --url for a remote portal). Nothing was created.\n`);
+    process.exit(2);
   }
 }

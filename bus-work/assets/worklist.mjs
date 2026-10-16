@@ -103,7 +103,7 @@ import { waitingItems, readReviews } from './ink_review.mjs';
 import { parseUpcoming, parseDatasets, rebuiltFromScan, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { undeliveredRows, s5Row } from './undelivered.mjs';
-import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
+import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv, assertLocalPortalDb } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -291,23 +291,7 @@ async function fromLocalPortal() {
       : `Portal repo not found at ${PORTAL} — portal queues skipped. Pass --portal, or --url for a remote portal.`);
     return null;
   }
-  // Importing src/db/index.js mkdirSync's DATA_DIR and opens and migrates DB_PATH,
-  // so a stale DATA_DIR CREATES an empty database and this tool reports an empty
-  // portal as if it had read one. It did, for five days: the .env still named the
-  // pre-OA-611 C:/Claude path, and on 14 Oct 2026 the import made a schema-only
-  // C:\Claude\community-bus-maps\data\portal.sqlite (buses-data OA-613). A read-only
-  // tool never creates a database, so ask where the file is through paths.js —
-  // which has no side effects — and refuse before the import if it is not there.
-  const pathsFile = path.join(PORTAL, 'src', 'db', 'paths.js');
-  if (!existsSync(pathsFile)) {
-    console.error(`\n  REFUSED: the portal at ${PORTAL} has no src/db/paths.js, so where its database is cannot be asked without opening it — and opening it creates one if the path is wrong. Update that checkout, or pass --url.\n`);
-    process.exit(2);
-  }
-  const { DB_PATH } = await import(pathToFileURL(pathsFile).href);
-  if (!existsSync(DB_PATH)) {
-    console.error(`\n  REFUSED: --local reads the portal database at\n    ${DB_PATH}\n  and there is no file there. Opening it would create an empty one and report an empty portal.\n  DATA_DIR=${process.env.DATA_DIR || '(unset)'}  DB_PATH=${process.env.DB_PATH || '(unset)'} — from the environment or ${path.join(PORTAL, '.env')}.\n  Fix the path there (or pass --url for a remote portal). Nothing was created.\n`);
-    process.exit(2);
-  }
+  await assertLocalPortalDb(PORTAL);   // BEFORE either import: both open the db, and a missing one is created (OA-613)
   const { buildWorklist } = await import(pathToFileURL(wlFile).href);
   const db = await import(pathToFileURL(path.join(PORTAL, 'src', 'db', 'index.js')).href);
   return {

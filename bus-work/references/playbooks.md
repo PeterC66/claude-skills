@@ -273,6 +273,18 @@ Same regeneration, no portal step. These towns are printed sheets used outside t
 
 ---
 
+## `delivery` — one `undelivered-<slug>` row per map since 2026-10-16
+
+A map was rendered here after the portal last received it, so the portal and the public sheet do not have that render. The row exists because the refresh row is cleared by the rebuild itself (`rebuiltFromScan()`), so a rebuild that stopped before `npm run deliver` used to have nothing chasing it. Godmanchester Co-op Ermine Street v1.35, held on Peter's instruction on 16 October 2026, was the case that prompted it.
+
+It is a comparison of times. The portal's `lastDeliveryAt` (community-bus-maps `listMaps()`) is the map's first version or its newest proposed update of any status, and a version the customer saved does not count. The render's time is the newest S5 run's `at` in `manifest.json`. Both are UTC.
+
+1. Ask Peter whether this render ships. A delivery mails the customer unless `--no-notify` is given, and a render may be held on purpose (the map's README usually says so).
+2. Run the command the row prints, from the portal root (`C:Busescommunity-bus-maps`). In `npm run deliver -- --map <slug> --kind <area|place> --src "<S5 dir>" --note "<what changed>"`, `<slug>` and `<kind>` are the portal map's, `<S5 dir>` is the absolute path of the render folder the row names, and `<what changed>` is the one-line note the customer sees. Add `--no-notify` to stage the update without the email.
+3. The row clears on the next worklist run, once the portal's `lastDeliveryAt` is later than the render.
+
+---
+
 ## `landmarks` — a town's landmark answer is owed somewhere (buses-data OA-233)
 
 Two rows share this playbook, and they are the two halves of one journey: a customer answers must / may / miss on the portal's `/landmarks` page, the answer has to reach the town's own source data, and the source then has to be built. Neither half is visible to a byte gate — the gate reads a build's own `routes.json` — which is how High Wycombe's answer sat committed and unbuilt for two days in September 2026 with every board green.

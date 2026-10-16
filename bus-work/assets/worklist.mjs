@@ -102,6 +102,7 @@ import { compareRows } from './refresh_deadline.mjs';
 import { waitingItems, readReviews } from './ink_review.mjs';
 import { parseUpcoming, parseDatasets, rebuiltFromScan, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
+import { undeliveredRows, s5Row } from './undelivered.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -299,6 +300,7 @@ async function fromLocalPortal() {
     maps: db.listMaps().map((m) => ({
       id: m.id, slug: m.slug, name: m.name, kind: m.kind, subject: m.subject,
       built: !!m.cur_key, customerName: m.customer_name,
+      lastDeliveryAt: m.last_delivery_at, // undefined = a portal checkout older than the field (undelivered.mjs)
     })),
   };
 }
@@ -337,6 +339,7 @@ async function fromRemotePortal() {
       maps: (maps.maps || []).map((m) => ({
         id: m.id, slug: m.slug, name: m.name, kind: m.kind, subject: m.subject,
         built: !!m.currentVersion, customerName: m.customer && m.customer.name,
+        lastDeliveryAt: m.lastDeliveryAt, // undefined = a deploy older than the field (undelivered.mjs)
       })),
     };
   } catch (e) {
@@ -376,6 +379,7 @@ function fromMapTree() {
     row.s6 = s6 ? s6.rec.id : null;
     row.s6Stale = s6 ? !!(newestData && s6.rec.at < newestData) : true;
     row.s6Age = s6 ? daysSince(s6.rec.at) : null;
+    row.s5 = s5Row(latestRunDir(m, t.dir, 'S5')); // undelivered.mjs: is this render newer than the portal's last delivery
     row.s2 = s2Row(latestRunDir(m, t.dir, 'S2')); // OA-499: its landmark query is read by fresh_pull.mjs
     return row;
   });
@@ -412,6 +416,7 @@ function fromMapTree() {
     // A standalone place has no parent town to borrow an answer from, so its S6
     // is the only blind answer it will ever have.
     row.standalone = !p.town;
+    row.s5 = s5Row(latestRunDir(m, p.dir, 'S5')); // undelivered.mjs
     row.s2 = s2Row(latestRunDir(m, p.dir, 'S2')); // OA-499 item 2: a place's pull is read as a town's is
     // WHICH ENGINE DREW IT, asked of a place for the first time (OA-430). The
     // town branch has had these two lines since the hash existed; this one
@@ -1129,6 +1134,9 @@ for (const { row: mapRow, place } of engineStale) {
     ],
   });
 }
+// BUILT HERE, NOT YET SENT (buses-data, 2026-10-16) — the join, and why a time is the only one, are undelivered.mjs's.
+const und = await undeliveredRows({ portalMaps: portal ? portal.maps : [], localRows: tree.towns.concat(tree.places || []), localDirOf, listing: listed, listingLib: SK ? require(path.join(SK, 'portal_listing.js')) : null, liveUrl: typeof args.live === 'string' ? args.live : DEFAULT_LIVE_URL, noLive: !!args['no-live'], remote: REMOTE, portalDir: PORTAL });
+for (const w of und.warnings) warnings.push(w); for (const it of und.items) if (!haveKey(it.key)) add(it);
 // OA-480: the portal ahead of engine.lock.json's pin is a chore, carried here; the row is built in pin_behind.js.
 if (SK && PORTAL && findEngineRepo()) { const it = require(path.join(SK, 'pin_behind.js')).pinBehindItem({ buses: BUSES, portal: PORTAL, skillsRoot: findEngineRepo() }); if (it) add(it); }
 if (SK && PORTAL) { const it = require(path.join(SK, 'portal_deps.js')).item(PORTAL); if (it) add(it); } // OA-567: no node_modules is a chore with its repair
@@ -1496,6 +1504,7 @@ const meta = {
   // argument as `adjudicated` directly above.
   correspondenceSettled,
   offPortal: offPortal.map((e) => e.row.name), // OA-607: behind, unlisted, so no engine-rebuild row
+  undeliveredOffPortal: und.off, // unlisted, so no undelivered row (undelivered.mjs)
   stampOnly, // OA-574: behind the pin, but the shadow rebuild reproduced every sheet on an engine it may speak for
   folded: foldedRows, // OA-574: rows taken off the board into the hold that names them
   // OA-221. A caller reading --json must be able to see the same verdict a

@@ -317,6 +317,11 @@ function portalMaps(maps) {
   fs.mkdirSync(path.join(stubPortal, 'src', 'db'), { recursive: true });
   fs.writeFileSync(path.join(stubPortal, 'package.json'), '{"type":"module"}');
   fs.writeFileSync(path.join(stubPortal, 'src', 'worklist', 'index.js'), 'export function buildWorklist() { return { items: [] }; }\n');
+  // --local refuses a portal whose database file is missing (OA-613), so the stub has one.
+  const db = path.join(stubPortal, 'data', 'portal.sqlite');
+  fs.mkdirSync(path.dirname(db), { recursive: true });
+  fs.writeFileSync(db, '');
+  fs.writeFileSync(path.join(stubPortal, 'src', 'db', 'paths.js'), `export const DB_PATH = ${JSON.stringify(db)};\n`);
   fs.writeFileSync(path.join(stubPortal, 'src', 'db', 'index.js'),
     `export function listMaps() { return ${JSON.stringify(maps.map((m, i) => ({ id: i + 1, cur_key: 'v1', customer_name: 'test', ...m })))}; }\n`);
 }

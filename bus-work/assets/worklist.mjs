@@ -103,7 +103,7 @@ import { waitingItems, readReviews } from './ink_review.mjs';
 import { parseUpcoming, parseDatasets, rebuiltFromScan, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { undeliveredRows, s5Row } from './undelivered.mjs';
-import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
+import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv, assertLocalPortalDb } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -291,6 +291,7 @@ async function fromLocalPortal() {
       : `Portal repo not found at ${PORTAL} — portal queues skipped. Pass --portal, or --url for a remote portal.`);
     return null;
   }
+  await assertLocalPortalDb(PORTAL);   // BEFORE either import: both open the db, and a missing one is created (OA-613)
   const { buildWorklist } = await import(pathToFileURL(wlFile).href);
   const db = await import(pathToFileURL(path.join(PORTAL, 'src', 'db', 'index.js')).href);
   return {

@@ -69,7 +69,9 @@ function externalConfigWarnings(D) {
   const out = [];
   const d = D || {};
   if (d.design && Object.prototype.hasOwnProperty.call(d.design, 'legendAt')) {
-    out.push('legend: design.legendAt is ignored. legendAt is a top-level routes.json key; '
+    // Worded "legendAt under design" on purpose: check-design-keys.js scans this
+    // folder's raw text for the dotted form and would register it as a design key.
+    out.push('legend: legendAt under design is ignored. legendAt is a top-level routes.json key; '
       + 'move it up out of design, or the legend stays where legendPlace puts it.');
   }
   const ext = Array.isArray(d.external) ? d.external : [];

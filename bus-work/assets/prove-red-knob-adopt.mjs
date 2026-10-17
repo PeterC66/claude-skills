@@ -96,6 +96,11 @@ console.log('4. demand-responsive lines, through the real fact_notes.js');
   ] });
   check('hand-placed lines tagged fact, joined, carry the fact and owe nothing', run(hand('ring 01234 567890.')).items.length === 0);
   check('the same lines with a changed number raise the row as drifted', (() => { const r = run(hand('ring 0000.')); return r.items.length === 1 && /1 fact not carried/.test(r.items[0].why); })());
+  // OA-648, Peter 2026-10-17: a sheet's own words for the fact, with the reason recorded, are carried.
+  const own = (factWords) => ({ mapNotes: [...hand('picked up at home, ring 01234 567890.').mapNotes.slice(0, 1), { ...hand('picked up at home, ring 01234 567890.').mapNotes[1], factWords }] });
+  check('own words with a factWords reason owe nothing', run(own('says it is a pickup area')).items.length === 0);
+  check('the same words with an empty factWords raise the row', run(own(' ')).items.length === 1);
+  check('the row tells a session it may keep its own words with factWords', (typed.items[0] || { do: [] }).do.some((d) => /factWords: "<why>"/.test(d.what || '')));
 }
 
 console.log('5. blind is not clean');

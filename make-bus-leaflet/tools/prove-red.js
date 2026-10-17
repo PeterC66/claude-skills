@@ -2491,6 +2491,24 @@ const MUTATIONS = [
     find: "    area:  { copy: [[SK, EXTERNAL_GENERATOR, 'gen_external.js']], script: 'gen_external.js', fatal: true, out: 'external.svg' },",
     to: "    area:  { copy: [[SK, `gen_external_${style}.js`, 'gen_external.js']], script: 'gen_external.js', fatal: true, out: 'external.svg' }," },
 
+  // external_config_check.js — two routes.json mistakes the external generators draw
+  // wrong in silence (buses-data OA-632). Outside the hash on purpose, so a mutation
+  // here is the only proof its suite can go red.
+  { suite: 'external_config_check.test.js', file: 'external_config_check.js',
+    what: 'any shared word or stem counts as the terminus, so "Cadmore End" passes under "Lane End" again',
+    find: "  'end', 'green', 'common', 'heath', 'hill', 'bottom', 'cross', 'street', 'upper', 'lower',",
+    to: "  'green', 'common', 'heath', 'hill', 'bottom', 'cross', 'street', 'upper', 'lower'," },
+
+  { suite: 'external_config_check.test.js', file: 'external_config_check.js',
+    what: 'the last stop is compared with the first, so a list that leaves out its terminus passes',
+    find: "    const last = stops[stops.length - 1];",
+    to: "    const last = stops[0];" },
+
+  { suite: 'external_config_check.test.js', file: 'build_s4.js',
+    what: 'build_s4 stops asking the config check, so build-warnings.txt never names either mistake',
+    find: "    if (key === 'external') said.push({ source: 'config',",
+    to: "    if (false) said.push({ source: 'config'," },
+
   // wcag.js — the three colour questions, extracted 2026-09-03 (OA-232 Tier 3.1,
   // OA-135) from seven copies across five files. The danger this module creates is
   // that it makes the three look like one, and every "tidy-up" toward one formula

@@ -102,7 +102,7 @@ import { compareRows } from './refresh_deadline.mjs';
 import { waitingItems, readReviews } from './ink_review.mjs';
 import { parseUpcoming, parseDatasets, rebuiltFromScan, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
-import { undeliveredRows, s5Row } from './undelivered.mjs';
+import { undeliveredRows, s5Row, s6Verdict } from './undelivered.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv, assertLocalPortalDb } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -350,9 +350,8 @@ async function fromRemotePortal() {
 }
 
 // ---- local map tree: engine / S6 staleness ---------------------------------
-// The cheap signals only (a manifest read + a hash compare). The expensive
-// proof — regenerate every town and diff the SVG — is status.js's job and runs
-// only under --gates.
+// The cheap signals only (a manifest read + a hash compare); regenerating every
+// town to diff the SVG is status.js's job, run only under --gates.
 function fromMapTree() {
   if (!SK) { warnings.push('make-bus-leaflet assets not found — local staleness skipped.'); return { towns: [], places: [] }; }
   if (!existsSync(path.join(BUSES, 'Areas'))) { warnings.push(`No Areas dir under ${BUSES} — local staleness skipped.`); return { towns: [], places: [] }; }
@@ -381,6 +380,7 @@ function fromMapTree() {
     row.s6Stale = s6 ? !!(newestData && s6.rec.at < newestData) : true;
     row.s6Age = s6 ? daysSince(s6.rec.at) : null;
     row.s5 = s5Row(latestRunDir(m, t.dir, 'S5')); // undelivered.mjs: is this render newer than the portal's last delivery
+    row.s6v = s6Verdict(s6); // undelivered.mjs: a town whose newest S6 is BLOCKED is not offered for delivery
     row.s2 = s2Row(latestRunDir(m, t.dir, 'S2')); // OA-499: its landmark query is read by fresh_pull.mjs
     return row;
   });
@@ -414,10 +414,10 @@ function fromMapTree() {
     row.s6 = s6 ? s6.rec.id : null;
     row.s6Stale = s6 ? !!(newestData && s6.rec.at < newestData) : true;
     row.s6Age = s6 ? daysSince(s6.rec.at) : null;
-    // A standalone place has no parent town to borrow an answer from, so its S6
-    // is the only blind answer it will ever have.
+    // A standalone place has no parent town to borrow from: its S6 is its only blind answer.
     row.standalone = !p.town;
     row.s5 = s5Row(latestRunDir(m, p.dir, 'S5')); // undelivered.mjs
+    row.s6v = s6Verdict(s6); // undelivered.mjs
     row.s2 = s2Row(latestRunDir(m, p.dir, 'S2')); // OA-499 item 2: a place's pull is read as a town's is
     // WHICH ENGINE DREW IT, asked of a place for the first time (OA-430). The
     // town branch has had these two lines since the hash existed; this one
@@ -1136,7 +1136,7 @@ for (const { row: mapRow, place } of engineStale) {
   });
 }
 // BUILT HERE, NOT YET SENT (buses-data, 2026-10-16) — the join, and why a time is the only one, are undelivered.mjs's.
-const und = await undeliveredRows({ portalMaps: portal ? portal.maps : [], localRows: tree.towns.concat(tree.places || []), localDirOf, listing: listed, listingLib: SK ? require(path.join(SK, 'portal_listing.js')) : null, liveUrl: typeof args.live === 'string' ? args.live : DEFAULT_LIVE_URL, noLive: !!args['no-live'], remote: REMOTE, portalDir: PORTAL });
+const und = await undeliveredRows({ portalMaps: portal ? portal.maps : [], localRows: tree.towns.concat(tree.places || []), localDirOf, listing: listed, listingLib: SK ? require(path.join(SK, 'portal_listing.js')) : null, liveUrl: typeof args.live === 'string' ? args.live : DEFAULT_LIVE_URL, noLive: !!args['no-live'], remote: REMOTE, portalDir: PORTAL, actionsDir: BUSES ? path.join(BUSES, 'Development Docs', 'open-actions') : null });
 for (const w of und.warnings) warnings.push(w); for (const it of und.items) if (!haveKey(it.key)) add(it);
 // OA-480: the portal ahead of engine.lock.json's pin is a chore, carried here; the row is built in pin_behind.js.
 if (SK && PORTAL && findEngineRepo()) { const it = require(path.join(SK, 'pin_behind.js')).pinBehindItem({ buses: BUSES, portal: PORTAL, skillsRoot: findEngineRepo() }); if (it) add(it); }

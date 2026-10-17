@@ -43,9 +43,20 @@ const S5 = 'v1.1_2026-10-01_1000';
 fs.mkdirSync(path.join(dir, 'S4-generate', S5), { recursive: true });
 fs.mkdirSync(path.join(dir, 'S5-render', S5), { recursive: true });
 fs.writeFileSync(path.join(dir, 'S4-generate', S5, 'routes.json'), JSON.stringify({ engine: '0000000000' }));
+// …and an S6 run whose verdict each case sets, plus one open action naming Alpha and
+// that run, which a BLOCKED row must point at (buses-data OA-636, Wisbech v5.0).
+const S6 = '2026-10-01_1100';
+fs.mkdirSync(path.join(dir, 'S6-verify', S6), { recursive: true });
+const setVerdict = (verdict) => fs.writeFileSync(path.join(dir, 'S6-verify', S6, 'verification.json'), JSON.stringify({ summary: { verdict, hard: verdict === 'blocked' ? 3 : 0 } }));
+setVerdict('pass');
+const OAS = path.join(root, 'Development Docs', 'open-actions');
+fs.mkdirSync(OAS, { recursive: true });
+fs.writeFileSync(path.join(OAS, 'OA-900.md'), `**Alpha:** the S6 of ${S6} went HARD on two via places.\n`);
+fs.writeFileSync(path.join(OAS, 'OA-901.md'), 'Alpha is mentioned here, but no S6 run is.\n');
 fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ stages: {
   S4: { latest: S5, runs: [{ id: S5, dir: `S4-generate/${S5}`, at: '2026-10-01T09:00', version: '1.1' }] },
   S5: { latest: S5, runs: [{ id: S5, dir: `S5-render/${S5}`, at: '2026-10-01T09:00', version: '1.1' }] },
+  S6: { latest: S6, runs: [{ id: S6, dir: `S6-verify/${S6}`, at: '2026-10-01T10:00' }] },
 } }));
 
 // ---- the fake portal: `portal` is what /api/maps says of Alpha, `listed` what the live site lists ----
@@ -69,8 +80,13 @@ async function worklist(tool) {
   const { stdout } = await run('node', args, { maxBuffer: 64 * 1024 * 1024, env: { ...process.env, BUS_SKILL_ASSETS: '', BUSMAPS_URL: '', BUSMAPS_TOKEN: '' } });
   const j = JSON.parse(stdout);
   const w = j.meta.warnings || [];
+  const rows = j.items.filter((i) => /^undelivered-/.test(i.key));
   return {
-    keys: j.items.filter((i) => /^undelivered-/.test(i.key)).map((i) => i.key).join(','),
+    keys: rows.map((i) => i.key).join(','),
+    // what the row says of the newest S6, whether it offers a delivery, and which actions it points at
+    blocked: rows.some((i) => /BLOCKED/.test(i.title)),
+    deliver: rows.some((i) => (i.do || []).some((d) => d.kind === 'shell' && /deliver|propose-update/.test(d.cmd))),
+    owners: rows.flatMap((i) => i.owners || []).join(','),
     predates: w.some((x) => /does not report lastDeliveryAt/.test(x)),
     unreadable: w.some((x) => /could not read a build or delivery time/.test(x)),
     off: (j.meta.undeliveredOffPortal || []).join(','),
@@ -104,6 +120,18 @@ const CASES = {
     const r = await worklist(tool);
     return r.keys === '' && r.off === 'Alpha' && !r.predates ? null : JSON.stringify(r);
   },
+  async 'newest S6 BLOCKED: the row says so, points at OA-900 alone, and offers no delivery'(tool) {
+    portal = { lastDeliveryAt: '2026-09-20 12:00:00' }; listed = true; setVerdict('blocked');
+    try {
+      const r = await worklist(tool);
+      return r.keys === 'undelivered-alpha' && r.blocked && !r.deliver && r.owners === 'OA-900' && quiet(r) ? null : JSON.stringify(r);
+    } finally { setVerdict('pass'); }
+  },
+  async 'CONTROL: newest S6 PASS: the row offers the delivery and says nothing of BLOCKED'(tool) {
+    portal = { lastDeliveryAt: '2026-09-20 12:00:00' }; listed = true; setVerdict('pass');
+    const r = await worklist(tool);
+    return r.keys === 'undelivered-alpha' && !r.blocked && r.deliver && r.owners === '' && quiet(r) ? null : JSON.stringify(r);
+  },
 };
 
 try {
@@ -128,6 +156,14 @@ try {
       find: "row.s5 = s5Row(latestRunDir(m, t.dir, 'S5'));", repl: 'row.s5 = null;', must: 'delivered BEFORE the render: the row is raised' },
     { what: 'worklist.mjs drops the field from the remote portal\'s maps', file: 'bus-work/assets/worklist.mjs',
       find: 'lastDeliveryAt: m.lastDeliveryAt,', repl: '', must: 'delivered BEFORE the render: the row is raised' },
+    { what: 'the S6 verdict is never read', file: 'bus-work/assets/undelivered.mjs',
+      find: 'verdict: s.verdict || null,', repl: 'verdict: null,', must: 'newest S6 BLOCKED: the row says so, points at OA-900 alone, and offers no delivery' },
+    { what: 'worklist.mjs never reads a town\'s S6 verdict', file: 'bus-work/assets/worklist.mjs',
+      find: 'row.s6v = s6Verdict(s6); // undelivered.mjs: a town', repl: 'row.s6v = null; // a town', must: 'newest S6 BLOCKED: the row says so, points at OA-900 alone, and offers no delivery' },
+    { what: 'an action naming the map but not the S6 run is taken as its owner', file: 'bus-work/assets/undelivered.mjs',
+      find: 'return t.includes(name) && t.includes(s6Id);', repl: 'return t.includes(name);', must: 'newest S6 BLOCKED: the row says so, points at OA-900 alone, and offers no delivery' },
+    { what: 'every verdict is read as blocked', file: 'bus-work/assets/undelivered.mjs',
+      find: "const s6 = local.s6v && local.s6v.verdict === 'blocked' ? local.s6v : null;", repl: 'const s6 = local.s6v || null;', must: 'CONTROL: newest S6 PASS: the row offers the delivery and says nothing of BLOCKED' },
   ];
   for (const m of MUTANTS) {
     const f = path.join(scratch, m.file);

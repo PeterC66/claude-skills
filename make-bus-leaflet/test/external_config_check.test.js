@@ -18,7 +18,7 @@ const { load } = require('./_engine');
 
 const { externalConfigWarnings, namesTheTerminus } = load('external_config_check.js');
 const BUILDLOG = load('build_log.js');
-const { RECIPE, buildSheets } = load('build_s4.js');
+const { buildSheets } = load('build_s4.js');
 const ENGINE = load('engine_version.js');
 
 const FIX = path.join(__dirname, 'fixtures', 'estate', 'Areas');
@@ -88,24 +88,24 @@ test('the Beaconsfield fixture is told that route 31 loses Hazlemere', () => {
   assert.ok(w.some(m => m.includes('route 31') && m.includes('"Hazlemere"')), w.join('\n'));
 });
 
-test('build_s4 asks it on both external recipes, and it stays outside every engine hash', () => {
-  assert.strictEqual(RECIPE.external.area.configCheck, true);
-  assert.strictEqual(RECIPE.external.place.configCheck, true);
+test('it stays outside every engine hash', () => {
   const hashed = [...ENGINE.engineFiles(), ...[].concat(ENGINE.placeEngineFiles() || [])].map(f => path.basename(String(f)));
   assert.ok(!hashed.includes('external_config_check.js'),
     'external_config_check.js joined the engine hash: every map now owes a re-stamp for a warning');
 });
 
-test('a build files what the check said as WARN entries from source config, even when the sheet fails', () => {
+test('a build at either level files what the check said as WARN entries from source config, even when the sheet fails', () => {
   // An empty run folder makes the external generator die on its missing inputs, which
   // is the case where the config is most worth reading: the check runs regardless.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecc-'));
-  const routesJson = { town: 'Nowhere', external: [{ route: '1', label: 'Thame', stops: ['Chinnor'] }] };
-  fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify(routesJson));
-  const r = buildSheets({ dir, level: 'area', routesJson, sheets: ['external'], write: false });
-  const mine = r.warnings.filter(e => e.source === 'config');
-  assert.strictEqual(mine.length, 1, 'build_s4 did not file the config check');
-  assert.strictEqual(mine[0].severity, 'WARN');
-  assert.ok(mine[0].text.includes('"Chinnor"'));
-  fs.rmSync(dir, { recursive: true, force: true });
+  for (const level of ['area', 'place']) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecc-'));
+    const routesJson = { town: 'Nowhere', external: [{ route: '1', label: 'Thame', stops: ['Chinnor'] }] };
+    fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify(routesJson));
+    const r = buildSheets({ dir, level, routesJson, sheets: ['external'], write: false });
+    const mine = r.warnings.filter(e => e.source === 'config');
+    assert.strictEqual(mine.length, 1, `build_s4 did not file the config check at level ${level}`);
+    assert.strictEqual(mine[0].severity, 'WARN');
+    assert.ok(mine[0].text.includes('"Chinnor"'));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

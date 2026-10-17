@@ -136,10 +136,8 @@ const RECIPE = {
              fatal: true, out: 'internal.svg', needsOut: true, label: 'build_internal_place.js' },
   },
   external: {
-    area:  { copy: [[SK, EXTERNAL_GENERATOR, 'gen_external.js']], script: 'gen_external.js', fatal: true,
-             configCheck: true, out: 'external.svg' },
-    place: { copy: [[PSK, 'gen_external_places.js']], script: 'gen_external_places.js', fatal: true,
-             configCheck: true, out: 'external.svg' },
+    area:  { copy: [[SK, EXTERNAL_GENERATOR, 'gen_external.js']], script: 'gen_external.js', fatal: true, out: 'external.svg' },
+    place: { copy: [[PSK, 'gen_external_places.js']], script: 'gen_external_places.js', fatal: true, out: 'external.svg' },
   },
   schematic: {
     area:  { copy: [[SK, 'schematize_internal.js']], script: 'schematize_internal.js',
@@ -245,8 +243,10 @@ function buildSheets({ dir, level, routesJson, sheets = null, has = {}, buildMet
     said.push({ source: key, stderr: res.stderr, ok: res.ok });
     if (r.crossings) said.push({ source: 'crossings', stderr: crossingWarnings(dir).join('\n'), ok: true });
     // Two config mistakes the external generators draw wrong in silence (buses-data
-    // OA-632). Asked here rather than in the generator, which is hashed and vendored.
-    if (r.configCheck) said.push({ source: 'config', stderr: externalConfigWarnings(rj).join('\n'), ok: true });
+    // OA-632). Asked here rather than in the generator, which is hashed and vendored;
+    // keyed on the sheet rather than flagged in RECIPE, whose lines two prove-red
+    // harnesses edit by their exact text.
+    if (key === 'external') said.push({ source: 'config', stderr: externalConfigWarnings(rj).join('\n'), ok: true });
 
     const landed = fs.existsSync(path.join(dir, r.out));
     if (r.fatal && (!res.ok || (r.needsOut && !landed))) {

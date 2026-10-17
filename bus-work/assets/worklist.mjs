@@ -103,6 +103,7 @@ import { waitingItems, readReviews } from './ink_review.mjs';
 import { parseUpcoming, parseDatasets, rebuiltFromScan, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { undeliveredRows, s5Row, s6Verdict } from './undelivered.mjs';
+import { s6RecipeFor } from './s6_next.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv, assertLocalPortalDb } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -379,6 +380,7 @@ function fromMapTree() {
     row.s6 = s6 ? s6.rec.id : null;
     row.s6Stale = s6 ? !!(newestData && s6.rec.at < newestData) : true;
     row.s6Age = s6 ? daysSince(s6.rec.at) : null;
+    row.s6StaleSince = s6 && row.s6Stale ? require(path.join(SK, 's6_stale_limit.js')).staleSince(m, s6.rec.at) : null; // s6_next.mjs: longest-waiting first
     row.s5 = s5Row(latestRunDir(m, t.dir, 'S5')); // undelivered.mjs: is this render newer than the portal's last delivery
     row.s6v = s6Verdict(s6); // undelivered.mjs: a town whose newest S6 is BLOCKED is not offered for delivery
     row.s2 = s2Row(latestRunDir(m, t.dir, 'S2')); // OA-499: its landmark query is read by fresh_pull.mjs
@@ -414,6 +416,7 @@ function fromMapTree() {
     row.s6 = s6 ? s6.rec.id : null;
     row.s6Stale = s6 ? !!(newestData && s6.rec.at < newestData) : true;
     row.s6Age = s6 ? daysSince(s6.rec.at) : null;
+    row.s6StaleSince = s6 && row.s6Stale ? require(path.join(SK, 's6_stale_limit.js')).staleSince(m, s6.rec.at) : null; // s6_next.mjs: longest-waiting first
     // A standalone place has no parent town to borrow from: its S6 is its only blind answer.
     row.standalone = !p.town;
     row.s5 = s5Row(latestRunDir(m, p.dir, 'S5')); // undelivered.mjs
@@ -1141,6 +1144,7 @@ for (const w of und.warnings) warnings.push(w); for (const it of und.items) if (
 // OA-480: the portal ahead of engine.lock.json's pin is a chore, carried here; the row is built in pin_behind.js.
 if (SK && PORTAL && findEngineRepo()) { const it = require(path.join(SK, 'pin_behind.js')).pinBehindItem({ buses: BUSES, portal: PORTAL, skillsRoot: findEngineRepo() }); if (it) add(it); }
 if (SK && PORTAL) { const it = require(path.join(SK, 'portal_deps.js')).item(PORTAL); if (it) add(it); } // OA-567: no node_modules is a chore with its repair
+const s6UnFor = s6RecipeFor({ towns: tree.towns, places: tree.places || [], undelivered: und.items, assetsDir: SK }); // the ONE S6 a tick may take; s6_next.mjs says why
 const s6StalePlaces = (tree.places || []).filter((p) => p.built && p.s6Stale);
 if (s6StalePlaces.length) {
   /*
@@ -1159,10 +1163,10 @@ if (s6StalePlaces.length) {
       + '. This board asked the question of towns only until 2026-09-03, so these never appeared'
       + (standalone.length ? `. ${standalone.length} of them ${standalone.length === 1 ? 'is' : 'are'} STANDALONE and cannot borrow a parent town's answer` : '')
       + '.',
-    who: '\u2014', runbook: 'S6', towns: s6StalePlaces.map((p) => p.name),
+    who: '\u2014', runbook: 'S6', towns: s6StalePlaces.map((p) => p.name), ...s6UnFor(s6StalePlaces.map((p) => p.name)),
     do: [
       ...(nested.length ? [{ kind: 'skill', what: `Run S6 for these nested places, one at a time: ${nested.map((p) => p.name).join(', ')}. Run redteam_source.js FIRST — a nested place may reuse its parent town's blind answer, and then every HARD it produces is restated as a SOFT (OA-141).` }] : []),
-      ...(standalone.length ? [{ kind: 'skill', what: `Run S6 for these STANDALONE places: ${standalone.map((p) => p.name).join(', ')}. There is no parent town to borrow from, so each needs its own blind answer — 89k–137k tokens apiece. Ask Peter before buying more than one.` }] : []),
+      ...(standalone.length ? [{ kind: 'skill', what: `Run S6 for these STANDALONE places: ${standalone.map((p) => p.name).join(', ')}. There is no parent town to borrow from, so each needs its own blind answer — 89k–137k tokens apiece, rationed by the month's red-team budget (redteam_source.js says WAIT when it is spent).` }] : []),
     ],
   });
 }
@@ -1174,8 +1178,8 @@ if (s6Stale.length) {
     title: `${s6Stale.length} town${s6Stale.length === 1 ? '' : 's'} need an independent (S6) verification pass`,
     why: s6Stale.map((t) => `${t.name} (${t.s6 ? `${t.s6Age}d old, pre-dates the current data` : 'never run'})`).join(', ')
       + '. S6 is the cross-model red-team — it is what catches a route we draw that no longer runs.',
-    who: '—', runbook: 'S6', towns: s6Stale.map((t) => t.name),
-    do: [{ kind: 'skill', what: `Run make-bus-leaflet stage S6 for: ${s6Stale.map((t) => t.name).join(', ')}. One town at a time — each needs a human call on its HARD findings.` }],
+    who: '—', runbook: 'S6', towns: s6Stale.map((t) => t.name), ...s6UnFor(s6Stale.map((t) => t.name)),
+    do: [{ kind: 'skill', what: `Run make-bus-leaflet stage S6 for: ${s6Stale.map((t) => t.name).join(', ')}. One town at a time — a HARD finding is a person's call, so it stops the run as a hold.` }],
   });
 }
 

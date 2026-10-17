@@ -464,6 +464,15 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-undelivered
 
+      # buses-data, 2026-10-17 (step 1 of the S6-commissioning proposal). The loop is
+      # handed ONE stale S6: delivery-pending first, then longest-waiting, never a
+      # BLOCKED map; the recipe borrows a parent town's answer before buying and asks
+      # the budget by a dry run before writing; loop_health counts the row as work.
+      # Each rule paired with its opposite, thirteen mutants on a scratch copy. No network.
+      - name: Prove the loop is handed one stale S6, in order, by a recipe that asks the budget first
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-s6-next
+
       # buses-data OA-613 (2026-10-16). --local imports the portal's db module,
       # which creates DATA_DIR and an empty database at a stale path; for five days
       # the worklist read one and reported an empty portal. It now asks paths.js

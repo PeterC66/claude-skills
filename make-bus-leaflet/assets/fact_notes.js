@@ -25,7 +25,8 @@
  *
  * `--check` reads one routes.json and says whether every in-scope fact has a `fact`-tagged paragraph whose text
  * is the register's `sheetLine` (exit 0), or lists what is missing or drifted (exit 1). A hand-typed line with no
- * tag is not judged: a sheet may still override the default, which is the point of OA-004. Not wired into CI —
+ * tag is not judged: a sheet may still override the default, which is the point of OA-004, and a tagged line that
+ * does so says why in `factWords: "<why>"` and is carried (OA-648). Not wired into CI —
  * no stored map carries a tag yet, so there is nothing for it to join; wire it when the first one does.
  *
  * Exit codes: 0 ok, 1 --check found a gap, 2 bad usage or an unreadable file.
@@ -58,17 +59,22 @@ function blockFor(register, name, heading) {
 // hand (`handPlaced`, OA-437 2026-10-15), by top-level notes tagged `fact`: the hand-placed
 // path draws no `then`, so one line is split over several typed notes, and their texts are
 // joined with a space in array order before they are compared with the sheet line.
+// A sheet that words a fact its own way says why in `factWords: "<why>"` on any line
+// carrying it (OA-648, Peter 2026-10-17), and the fact is then carried whatever the words,
+// mirroring `handPlaced`: OA-004 lets a sheet override the register, and this records it.
+const reasoned = (o) => typeof o.factWords === 'string' && o.factWords.trim() !== '';
 function checkConfig(routes, register, name) {
   const tagged = new Map(), typed = new Map();
   for (const n of (routes.mapNotes || [])) {
-    if (n.fact) typed.set(n.fact, (typed.has(n.fact) ? typed.get(n.fact) + ' ' : '') + n.text);
-    for (const p of (n.then || [])) if (p.fact) tagged.set(p.fact, p.text);
+    if (n.fact) { const t = typed.get(n.fact); typed.set(n.fact, { text: (t ? t.text + ' ' : '') + n.text, own: !!(t && t.own) || reasoned(n) }); }
+    for (const p of (n.then || [])) if (p.fact) tagged.set(p.fact, { text: p.text, own: reasoned(p) });
   }
-  for (const [id, text] of typed) if (!tagged.has(id)) tagged.set(id, text);
+  for (const [id, t] of typed) if (!tagged.has(id)) tagged.set(id, t);
   const problems = [];
   for (const f of factsFor(register, name)) {
-    if (!tagged.has(f.id)) { problems.push(f.id + ' is in scope of ' + name + ' and no tagged paragraph carries it'); continue; }
-    if (tagged.get(f.id) !== f.sheetLine) problems.push(f.id + ' has drifted: the sheet says "' + tagged.get(f.id) + '", the register says "' + f.sheetLine + '"');
+    const t = tagged.get(f.id);
+    if (!t) { problems.push(f.id + ' is in scope of ' + name + ' and no tagged paragraph carries it'); continue; }
+    if (t.text !== f.sheetLine && !t.own) problems.push(f.id + ' has drifted: the sheet says "' + t.text + '", the register says "' + f.sheetLine + '" (keep the sheet\'s words with factWords: "<why>")');
   }
   return problems;
 }

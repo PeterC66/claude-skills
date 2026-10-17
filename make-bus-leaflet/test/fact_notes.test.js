@@ -64,3 +64,22 @@ test('typed notes tagged `fact` carry it when their lines, joined in order, are 
   assert.strictEqual(p.length, 1);
   assert.match(p[0], /SF-1 has drifted: the sheet says "Ring-a-Ride: 01 999"/);
 });
+
+test('a line in its own words is carried when it says why in factWords, and drifts without one (OA-648, Godmanchester Co-op)', () => {
+  const own = (extra) => ({ mapNotes: [
+    { text: 'Ring-a-Ride: picked up at home,', fact: 'SF-1', x: 45, y: 156, handPlaced: 'kept' },
+    { text: 'ring 01 111', fact: 'SF-1', x: 45, y: 160, handPlaced: 'kept', ...extra },
+    { text: 'h', then: [{ fact: 'SF-2', text: 'Tiger: 02 222' }] },
+  ] });
+  assert.deepStrictEqual(checkConfig(own({ factWords: 'says it is a pickup area' }), REG, 'Alpha'), []);
+  for (const bad of [{}, { factWords: ' ' }, { factWords: true }]) {
+    const p = checkConfig(own(bad), REG, 'Alpha');
+    assert.strictEqual(p.length, 1, JSON.stringify(bad));
+    assert.match(p[0], /SF-1 has drifted: .*factWords: "<why>"/);
+  }
+  const para = (extra) => ({ mapNotes: [{ text: 'h', then: [{ fact: 'SF-1', text: 'Ring-a-Ride, door to door: 01 111', ...extra }, { fact: 'SF-2', text: 'Tiger: 02 222' }] }] });
+  assert.deepStrictEqual(checkConfig(para({ factWords: 'door to door' }), REG, 'Alpha'), []);
+  assert.strictEqual(checkConfig(para({}), REG, 'Alpha').length, 1);
+  // A reason never stands in for a missing line: SF-2 has none here.
+  assert.match(checkConfig({ mapNotes: [{ text: 'x', fact: 'SF-1', factWords: 'why' }] }, REG, 'Alpha')[0], /SF-2 is in scope/);
+});

@@ -21,7 +21,8 @@
  *     verbatim when the default became three (OA-443), so the row says drop them unless
  *     they are the map's own words;
  *   - an in-scope demand-responsive fact that `fact_notes.js`'s own check says is not
- *     carried as a tagged paragraph matching the register.
+ *     carried as a tagged paragraph matching the register, or as tagged lines whose own
+ *     words carry `factWords: "<why>"` (OA-648, Peter 2026-10-17).
  * NOT owed: `panelCols.keyAt` and `keyCols`, whose engine half is not built (OA-437 "Left:
  * A1 engine"), and anything under `parked.`, which no generator draws.
  *
@@ -104,7 +105,7 @@ export function knobAdoptItems({ towns, places = [], readS3, register, checkConf
       who: 'a session, with someone to look at the result', runbook: 'S3', towns: [place ? (m.town || m.name) : m.name],
       do: [
         ...(o.facts.length ? [{ kind: 'shell', cwd: sk, cmd: `node fact_notes.js --name "${m.name}" --facts "${facts}"`, note: 'prints the register\'s demand-responsive block, which replaces the hand-typed lines; read-only' }] : []),
-        ...(set ? [{ kind: 'skill', what: 'Write the new top-level mapNotes to a UTF-8 file as {"mapNotes":[...]} — the whole array, because --set-file replaces an array. Keep every note\'s words; drop x, y and w from each note with no `at` (a `near` {x,y} hint may say roughly where), or, where the search cannot reach the spot (the title band, a margin outside the map frame), keep them and add `handPlaced: "<why>"`; put the block above in place of the hand-typed demand-responsive lines (a sheet may still override one, OA-004). <notes.json> below is that file\'s path.' }] : []),
+        ...(set ? [{ kind: 'skill', what: 'Write the new top-level mapNotes to a UTF-8 file as {"mapNotes":[...]} — the whole array, because --set-file replaces an array. Keep every note\'s words; drop x, y and w from each note with no `at` (a `near` {x,y} hint may say roughly where), or, where the search cannot reach the spot (the title band, a margin outside the map frame), keep them and add `handPlaced: "<why>"`; put the block above in place of the hand-typed demand-responsive lines, or, where this sheet words a fact its own way (OA-004), keep its lines, tag each one `fact: "SF-nnn"` and give one `factWords: "<why>"` (OA-648), which moves no ink. <notes.json> below is that file\'s path.' }] : []),
         { kind: 'shell', cwd: sk, cmd: `node adopt_config.js ${sel}${set}${unset}`, note: 'dry run — prints the routes.json change and writes nothing' + (o.bullets ? '; drop the --unset of design.howToUse.bullets if they are the map\'s own words rather than the default three' : '') },
         { kind: 'shell', cwd: sk, cmd: `node adopt_config.js ${sel}${set}${unset} --apply --by <who> --note "OA-437 adoption: the engine places these"`, note: '<who> is the session\'s name; opens and commits the new S3' },
         { kind: 'shell', cwd: sk, cmd: `node ${tool} ${sel} --apply --commit --note "OA-437 adoption"`, note: 'builds a new S4 and S5 from that S3 and commits the map by pathspec; never pushes' },

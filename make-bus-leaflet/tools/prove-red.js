@@ -3346,6 +3346,17 @@ const MUTATIONS = [
     what: 'the boarding sheet keeps a page size of its own beside page.js, a second answer to one question',
     find: "const { W, H, svgOpen } = require(_dep('page.js'));",
     to: "const W = 297, H = 210, { svgOpen } = require(_dep('page.js'));" },
+
+  // fact_notes.js - a sheet's own words for a fact, with the reason recorded (buses-data OA-648).
+  { suite: 'fact_notes.test.js', file: 'fact_notes.js',
+    what: 'factWords is ignored, so a sheet that words a fact its own way can never clear its adopt-knobs row',
+    find: "    if (t.text !== f.sheetLine && !t.own) problems.push(",
+    to: "    if (t.text !== f.sheetLine) problems.push(" },
+
+  { suite: 'fact_notes.test.js', file: 'fact_notes.js',
+    what: 'any factWords counts as a reason, an empty one or true included, so an unexplained override passes',
+    find: "const reasoned = (o) => typeof o.factWords === 'string' && o.factWords.trim() !== '';",
+    to: "const reasoned = (o) => o.factWords != null;" },
 ];
 
 /* THE CENSUS (buses-data OA-625). Every file in the town hash and the boarding

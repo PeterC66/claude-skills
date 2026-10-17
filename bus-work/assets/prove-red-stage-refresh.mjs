@@ -15,7 +15,7 @@
  * load-bearing rather than merely present. No disk, no portal, no clock.
  */
 import { planStage, mapLocation, readBack, portalClear, newestRender, planFlush, flushArgs, s6Clear, DELIVER_SCRIPT } from './stage_refresh.mjs';
-import { deliverable, markStaged, markNotified, mergeAnswers, answer, Refused } from './ink_review.mjs';
+import { deliverable, markStaged, markNotified, mergeAnswers, answer, Refused, readJsonFile } from './ink_review.mjs';
 
 let bad = 0, ran = 0;
 const check = (label, ok, detail) => { ran++; if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${label}${ok || detail == null ? '' : ' -- ' + detail}`); };
@@ -174,6 +174,19 @@ console.log('\n7. The deliver script\'s step 0, asked before "deliverable" is sa
   check('no manifest refuses, and a waiver cannot buy it off', !s6Clear(r('no-manifest'), { refuses, waiver: { until: '2099-01-01', expired: false } }).ok);
   check('a verdict step 0 does not know refuses rather than passing', !s6Clear(r('maybe'), { refuses, waiver: { until: '2099-01-01', expired: false } }).ok);
   check('no answer at all refuses', !s6Clear(null, { refuses }).ok);
+}
+
+console.log('\n8. A manifest that will not parse is refused by name, not read as one with no render (OA-633)');
+{
+  // Huntingdon's manifest.json on 2026-10-12: an S4 note carrying ["Kings Ripton"] with its quotes unescaped.
+  const disk = { 'A/manifest.json': '{ "stages": { "S4": { "runs": [ { "note": "kept ["Kings Ripton"]" } ] } } }', 'B/manifest.json': JSON.stringify(manifest(OLD, NEW)) };
+  const io = { exists: (f) => f in disk, read: (f) => disk[f] };
+  const broken = refusal(() => readJsonFile('A/manifest.json', io));
+  check('a file that is there and does not parse refuses, naming the file', /A\/manifest\.json is there and is not valid JSON/.test(broken || ''), broken);
+  check('  and it is a refusal, never the null that read as "no S5 render"', broken !== null && !/NOT A REFUSAL/.test(broken), broken);
+  check('a missing file is still null, which planStage refuses as having no render', readJsonFile('C/manifest.json', io) === null
+    && /no S5 render/.test(plan(review(map('March', 'no-ink')), 'March', readJsonFile('C/manifest.json', io)) || ''));
+  check('a good file is read', newestRender(readJsonFile('B/manifest.json', io)).id === NEW);
 }
 
 console.log(`\n${ran - bad} of ${ran} passed`);

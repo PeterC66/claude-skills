@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /*
  * routine_numbers.mjs — the five numbers R9 says to read off the run each month
- * (buses-data OA-402, R9 of the process review of 2026-09-17).
+ * (buses-data OA-402, R9 of the process review of 2026-09-17), and a sixth that
+ * D10 of the simplification review of 2026-10-06 added (buses-data OA-598).
  *
  * WHY THIS EXISTS. [OA-402] closes with *"the five numbers, read off the run each
  * month and written into the round record, never into a page: human touches per
@@ -74,7 +75,23 @@
  *  5. WORDS BEFORE ACTING — measured, as `wc -w` over the things a session or tick
  *     is told to read before working: the stored task prompt (the text a tick
  *     actually executes), CLAUDE.md, the loop design and the two skills. This is
- *     the review's own `wc` row, and R6's *Done when* is read off it.
+ *     the review's own `wc` row, and R6's *Done when* is read off it. Since
+ *     buses-data OA-598 it also prints the TOTAL, prompt plus pages, because that
+ *     sum is the figure the simplification review of 2026-10-06 quotes (41,300)
+ *     and a reader adding five numbers by hand is how a total gets misquoted.
+ *
+ *  6. RULES BROKEN AGAIN AFTER BEING RECORDED (buses-data OA-598, D10 of the
+ *     simplification review) — measured as a **LOWER BOUND**, like number 4, and
+ *     for the same reason: the only durable trace of a repeat is the sentence a
+ *     session adds to the rule's own memory file (*"violated twice after being
+ *     recorded"*, *"he said once again"*). It greps every memory store under
+ *     `~/.claude/projects/*\/memory/` and the user-scope `~/.claude/CLAUDE.md`,
+ *     one hit per FILE, reported per store so a reader can keep to the bus ones.
+ *     It is a STOCK, not a flow: nothing dates a repeat, so the monthly reading is
+ *     the change since last month's figure. The control is the number of files
+ *     that record a rule at all (a `**Why:**` line), and a shape that merely
+ *     recurred — *"it has now happened twice"* — is deliberately NOT a repeat: a
+ *     bug seen twice is not a rule disobeyed.
  *
  * PURE CORE, INJECTED EDGES, like deploy_pending.mjs and bods_scan.mjs:
  * `routineNumbers()` is a function of an already-read facts object and a clock, and
@@ -88,6 +105,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 import { parseArgs, resolveBuses, resolvePortal, assetsDir } from './engine.mjs';
 import { stageActors, actorWhy, defaultReadManifests } from './stage_actors.mjs';
 
@@ -122,6 +140,22 @@ export const DECISION_PATTERNS = [
   /only (?:Peter|you) can (?:send|approve|reject|decide|answer|sign)/i,
 ];
 
+/* A RULE BROKEN AGAIN, as the memory store records one (OA-598). Narrow on
+ * purpose: measured on 2026-10-17, a looser set that took *happened twice* and
+ * *second time* matched 45 files, almost all of them a failure shape that
+ * recurred rather than a written rule a session then broke. */
+export const REPEAT_PATTERNS = [
+  /\b(?:violated|broken|ignored|disobeyed) (?:again|twice|three times|\d+ times)/i,
+  /again after (?:it was|being|having been) (?:recorded|written|saved)/i,
+  // "violated" only: "still broken" is said of a bug, on 2026-10-17 in two files.
+  /\bstill (?:got |was |been )?violated\b/i,
+  /\bonce again\b/i,
+  /at least the (?:second|third|fourth) time/i,
+];
+
+/* The control: a file that records a rule at all — the memory format's `**Why:**`. */
+export const RECORDED_PATTERNS = [/\*\*Why:\*\*/];
+
 const WORD_COUNT = (s) => (String(s || '').match(/\S+/g) || []).length;
 
 /** The last fenced block under "## The task prompt" — check-task-prompt.mjs's rule,
@@ -153,10 +187,25 @@ export const defaultGhRuns = (dir, { limit = 300, run = execFileSync } = {}) => 
  * a CI red rate of 0% because nobody could ask is the shape this project has a
  * shelf of lessons about.
  */
-export function readFacts({ busesDir, repos = [], readsDir = readdirSync, reads = readFileSync, exists = existsSync, ghRuns = defaultGhRuns, readManifests = defaultReadManifests }) {
+export function readFacts({ busesDir, repos = [], home = os.homedir(), readsDir = readdirSync, reads = readFileSync, exists = existsSync, ghRuns = defaultGhRuns, readManifests = defaultReadManifests }) {
   const at = (...p) => path.join(busesDir, ...p);
   const readText = (p) => { try { return exists(p) ? String(reads(p, 'utf8')) : null; } catch { return null; } };
   const listDir = (p) => { try { return exists(p) ? readsDir(p) : null; } catch { return null; } };
+
+  /* THE RULE STORES (OA-598): every `<home>/.claude/projects/<slug>/memory/*.md`,
+   * plus the user-scope CLAUDE.md as a store of its own. `null` when there is no
+   * projects folder at all, which the core reports as NOT MEASURED. */
+  const projects = home ? path.join(home, '.claude', 'projects') : null;
+  const slugs = projects ? listDir(projects) : null;
+  const ruleTexts = slugs === null ? null : [];
+  for (const slug of slugs || []) {
+    const mem = path.join(projects, slug, 'memory');
+    for (const f of (listDir(mem) || []).filter((x) => x.endsWith('.md') && x !== 'MEMORY.md')) {
+      ruleTexts.push({ store: slug, file: f, text: readText(path.join(mem, f)) || '' });
+    }
+  }
+  const userRules = ruleTexts && readText(path.join(home, '.claude', 'CLAUDE.md'));
+  if (userRules) ruleTexts.push({ store: '~/.claude', file: 'CLAUDE.md', text: userRules });
 
   const readmeMd = readText(at('loop', 'README.md'));
   const runNames = listDir(at('loop', 'runs'));
@@ -177,6 +226,7 @@ export function readFacts({ busesDir, repos = [], readsDir = readdirSync, reads 
     runTexts: (runNames || []).map((f) => readText(at('loop', 'runs', f)) || ''),
     adhocRunTexts: (listDir(at('adhoc', 'runs')) || []).filter((f) => f.endsWith('.md')).map((f) => readText(at('adhoc', 'runs', f)) || ''),
     yourMoveTexts: (listDir(at('loop', 'your-move')) || []).filter((f) => f.endsWith('.md')).map((f) => readText(at('loop', 'your-move', f)) || ''),
+    ruleTexts,
     prompt: promptBlock(readmeMd),
     pages: {
       'CLAUDE.md': readText(at('CLAUDE.md')),
@@ -299,7 +349,33 @@ export function routineNumbers(facts, { now = Date.now(), windowDays = DEFAULT_W
     target: 'a tenth of the review\'s baseline',
     taskPrompt: facts.prompt === null ? null : WORD_COUNT(facts.prompt),
     pages,
+    // OA-598: the review's figure is this sum. A page that could not be read is
+    // out of it, and `pages` says which were in.
+    total: facts.prompt === null && !pages.length ? null
+      : (facts.prompt === null ? 0 : WORD_COUNT(facts.prompt)) + pages.reduce((s, p) => s + p.words, 0),
     note: 'The task prompt is what a tick EXECUTES; since R6 a tick is no longer told to read the loop design first, so the pages below are what a person loads and the prompt alone is what a tick does.',
+  };
+
+  // 6 — rules broken again after being recorded, as a floor (OA-598).
+  const rules = Array.isArray(facts.ruleTexts) ? facts.ruleTexts : null;
+  const byStore = {};
+  for (const r of rules || []) {
+    const s = (byStore[r.store] ||= { store: r.store, files: 0, recorded: 0, repeats: 0, repeatFiles: [] });
+    s.files++;
+    if (anyOf(RECORDED_PATTERNS, r.text)) s.recorded++;
+    if (anyOf(REPEAT_PATTERNS, r.text)) { s.repeats++; s.repeatFiles.push(r.file); }
+  }
+  const stores = Object.values(byStore).filter((s) => s.files).sort((a, b) => b.repeats - a.repeats || a.store.localeCompare(b.store));
+  out.numbers.rulesBrokenAgain = {
+    label: 'Rules broken again after being recorded', measured: rules !== null && rules.length > 0, floor: true,
+    value: rules ? stores.reduce((n, s) => n + s.repeats, 0) : null,
+    files: rules ? rules.length : null,
+    recorded: rules ? stores.reduce((n, s) => n + s.recorded, 0) : null,
+    stores,
+    target: 'falls, month on month: the test of whether the rulebook can shrink further',
+    note: 'A LOWER BOUND and a STOCK: one hit per memory FILE that says its rule was broken again, over every store on disk regardless of date. Read the monthly change, never the level as a count of repeats.',
+    control: 'The recorded count is files that carry a rule at all (`**Why:**`); a failure shape that merely recurred (\'happened twice\') is not counted.',
+    why: rules === null ? 'no ~/.claude/projects folder on this machine — not a count of zero' : (rules.length ? undefined : 'the projects folder holds no memory files'),
   };
 
   return out;
@@ -309,7 +385,7 @@ export function routineNumbers(facts, { now = Date.now(), windowDays = DEFAULT_W
 export function render(r) {
   const pct = (x) => (x === null || x === undefined ? '—' : `${(x * 100).toFixed(1)}%`);
   const L = [];
-  L.push(`The five numbers — ${r.windowDays}-day window, read ${r.at}`);
+  L.push(`The routine numbers — ${r.windowDays}-day window, read ${r.at}`);
   L.push('');
   const n = r.numbers;
   /* NUMBER 1 IS PRINTED WITH ITS COVERAGE OR NOT AT ALL (OA-427). A rate over
@@ -331,6 +407,14 @@ export function render(r) {
   L.push(`4. ${n.relayedCommands.label}: at least ${n.relayedCommands.value} of ${n.relayedCommands.files} run records and your-move files — a LOWER BOUND, never a total`);
   L.push(`     control: ${n.relayedCommands.decisions} of the same files carry a DECISION only Peter can make (send, approve, answer), which is not a relay — so the patterns bite and ${n.relayedCommands.value} is low because relays are rarer, not because the regex is dead`);
   L.push(`5. ${n.wordsBeforeActing.label}: task prompt ${n.wordsBeforeActing.taskPrompt === null ? '—' : n.wordsBeforeActing.taskPrompt} words${n.wordsBeforeActing.pages.length ? '; ' + n.wordsBeforeActing.pages.map((p) => `${p.name} ${p.words}`).join(', ') : ''}`);
+  L.push(`     total: ${n.wordsBeforeActing.total === null ? '—' : n.wordsBeforeActing.total} words, prompt and pages together`);
+  const rb = n.rulesBrokenAgain;
+  if (rb.measured) {
+    L.push(`6. ${rb.label}: at least ${rb.value} of ${rb.files} memory files — a LOWER BOUND and a stock; read the change since last month`);
+    L.push(`     control: ${rb.recorded} of the same files record a rule (**Why:**); by store: ${rb.stores.filter((s) => s.repeats).map((s) => `${s.store} ${s.repeats}`).join(', ') || 'none'}`);
+  } else {
+    L.push(`6. ${rb.label}: NOT MEASURED — ${rb.why}`);
+  }
   return L.join('\n');
 }
 

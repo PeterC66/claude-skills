@@ -28,11 +28,19 @@
  *     node tools/prove-red.js --census-only
  *                                         ask only whether every hashed engine
  *                                         file is named by a mutation (OA-625)
+ *     node tools/prove-red.js --file gen_internal.js [--file render.js ...]
+ *                                         only the mutations that break the named
+ *                                         engine file(s), stale anchors included,
+ *                                         and only their suites' baseline. The
+ *                                         whole run outlasts a 600 s tool timeout,
+ *                                         so an unattended run checks what it
+ *                                         edited this way and leaves the rest to
+ *                                         gates.yml (2026-10-17, sched-adhoc-1735)
  *
  * THREE OUTCOMES, THREE EXIT CODES (buses-data OA-353). 0 every mutation was
  * caught; 1 the harness RAN and found a hole — a mutation survived, or an anchor
  * is stale; 2 the harness DID NOT RUN, because the baseline was red and not one
- * mutation was attempted. Until 2026-09-14 the third shared the second's exit
+ * mutation was attempted, or a --file named no mutation's file. Until 2026-09-14 the third shared the second's exit
  * code and printed one ordinary-looking line, so a day of switched-off coverage
  * read exactly like a day of ordinary failure. See tools/lib/baseline.js.
  */
@@ -48,6 +56,9 @@ const SK = path.join(__dirname, '..');
 const ASSETS = path.join(SK, 'assets');
 const KEEP = process.argv.includes('--keep');
 const BASELINE_ONLY = process.argv.includes('--baseline-only');
+/* --file, repeatable. undefined is a --file with nothing after it, which must
+ * refuse rather than quietly select nothing. */
+const ONLY_FILES = process.argv.flatMap((a, i) => a === '--file' ? [process.argv[i + 1]] : []);
 /* --keep means the scratch is EVIDENCE: switch off scratch.js's exit sweep, or
  * the paths printed below would name directories that no longer exist. */
 if (KEEP) require('../assets/scratch').keepScratch();
@@ -3399,6 +3410,19 @@ for (const f of staleEntries) console.log(`  STALE  ${f} is excused in UNMUTATED
 const censusRed = holes.length + staleEntries.length > 0;
 if (process.argv.includes('--census-only')) { process.exitCode = censusRed ? EXIT_FOUND_A_HOLE : 0; return; }
 
+/* --file narrows everything below to the mutations of the named files. A name no
+ * mutation uses is a refusal, not an empty green: "0 mutations, 0 survived" for a
+ * misspelt file would read exactly like a pass. */
+const unknownFiles = ONLY_FILES.filter(f => f === undefined || f.startsWith('--') || !named.has(f));
+if (unknownFiles.length) {
+  for (const f of unknownFiles) console.error(`prove-red: --file ${f === undefined ? '(nothing after it)' : f} names no mutation's file, so nothing was run.`);
+  console.error(`  The files mutations name are the "file" column of the full run, e.g. ${[...named].slice(0, 3).join(', ')}.`);
+  process.exitCode = EXIT_DID_NOT_RUN;
+  return;
+}
+const SELECTED = ONLY_FILES.length ? MUTATIONS.filter(m => ONLY_FILES.includes(m.file)) : MUTATIONS;
+if (ONLY_FILES.length) console.log(`--file: ${SELECTED.length} of ${MUTATIONS.length} mutations, for ${ONLY_FILES.join(', ')}.`);
+
 const scratch = scratchDir('prove-red-');
 const engine = path.join(scratch, 'assets');
 fs.cpSync(ASSETS, engine, { recursive: true });
@@ -3414,8 +3438,8 @@ const rows = [];
 // The STOP is reported by tools/lib/baseline.js and exits 2 rather than 1, because
 // "the harness did not run" and "a mutation survived" are two different answers
 // that shared one exit path until OA-353 (buses-data).
-const suites = [...new Set(MUTATIONS.map(m => m.suite))];
-const verdict = checkBaseline({ suites, mutationCount: MUTATIONS.length, runSuite });
+const suites = [...new Set(SELECTED.map(m => m.suite))];
+const verdict = checkBaseline({ suites, mutationCount: SELECTED.length, runSuite });
 if (!verdict.ok) {
   for (const line of stopLines(verdict)) console.error(line);
   for (const r of verdict.red) { console.error(`\n--- ${r.suite}, unmutated ---`); console.error(r.output); }
@@ -3430,7 +3454,7 @@ if (BASELINE_ONLY) {
   return;
 }
 
-for (const m of MUTATIONS) {
+for (const m of SELECTED) {
   const p = path.join(engine, m.file);
   const original = fs.readFileSync(p, 'utf8');
   const hits = original.split(m.find).length - 1;

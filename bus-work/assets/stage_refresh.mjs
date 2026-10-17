@@ -76,7 +76,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
-import { deliverable, markStaged, markNotified, Refused, commitRecord, reportCommit, newestRender, isRenderOf } from './ink_review.mjs';
+import { deliverable, markStaged, markNotified, Refused, commitRecord, reportCommit, newestRender, isRenderOf, readJsonFile } from './ink_review.mjs';
 
 /* The portal's `deliver` npm script, run as its own command line rather than
  * through npm, because npm on Windows is a .cmd that Node will not spawn without
@@ -215,7 +215,8 @@ export function flushArgs({ host, key, appDir, slugs }) {
 
 /* ------------------------------------------------------------------ the edge */
 
-const readJson = (f) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return null; } };
+/* Null for a missing file, a refusal by path for one that will not parse (OA-633). */
+const readJson = (f) => readJsonFile(f);
 
 /** The portal's maps and worklist items, or `{ error }`; never throws. */
 async function fetchPortal() {

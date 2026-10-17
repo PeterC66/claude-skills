@@ -245,7 +245,7 @@ export function isRenderOf(render, s4Id) {
 /**
  * Build the review. `io` is the disk:
  *   readGradeFiles(dir)  as refresh_grades.mjs's
- *   readManifest(mapDir) → object | null
+ *   readManifest(mapDir) → object | null, or throws for a file that will not parse
  *   readSheet(file)      → text | null
  * `places` is `[{ name, dir }]`, `dir` relative to busesDir, already found by the
  * edge (`resolvePlaces`), so this core walks no folder.
@@ -272,7 +272,9 @@ export function collect({ busesDir, scan, towns = [], places = [], io }) {
   for (const { town, why, kind = 'area', rel = `Areas/${town}` } of [...population.values()].sort((a, b) => a.town.localeCompare(b.town))) {
     const mapDir = path.join(busesDir, rel);
     const entry = { map: town, kind, dir: rel, why, status: null, before: null, after: null, sheets: [], answer: null };
-    const manifest = io.readManifest(mapDir);
+    /* One map's broken manifest is that map's status, not the end of the review (OA-633). */
+    let manifest;
+    try { manifest = io.readManifest(mapDir); } catch (e) { maps.push({ ...entry, status: 'unreadable', detail: e.message }); continue; }
     if (!manifest) { maps.push({ ...entry, status: 'unreadable', detail: 'no manifest.json' }); continue; }
     const picked = pickRuns(manifest, scan);
     entry.after = picked.after ? picked.after.id : null;
@@ -528,7 +530,8 @@ export function readReviews(busesDir) {
   const dir = path.join(busesDir, '_gtfs');
   if (!existsSync(dir)) return [];
   return readdirSync(dir).map((f) => /^ink-review_(\d{4}-\d{2}-\d{2})\.json$/.exec(f)).filter(Boolean).map((m) => m[1]).sort()
-    .map((scan) => ({ scan, review: readJson(path.join(dir, `ink-review_${scan}.json`)), page: existsSync(path.join(busesDir, 'loop', 'ink-review', scan, 'index.html')) }));
+    /* Lenient on purpose: the worklist reads every scan, and one broken file must not blank the board. */
+    .map((scan) => ({ scan, review: (() => { try { return readJson(path.join(dir, `ink-review_${scan}.json`)); } catch { return null; } })(), page: existsSync(path.join(busesDir, 'loop', 'ink-review', scan, 'index.html')) }));
 }
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -563,7 +566,21 @@ ${sec}
 
 /* ------------------------------------------------------------------ the edge */
 
-const readJson = (f) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return null; } };
+/**
+ * A JSON file, or null when there is no such file. A file that IS there and does not
+ * parse refuses, naming its path and the parse error (buses-data OA-633): on
+ * 2026-10-12 Huntingdon's manifest.json carried an unescaped quote, this reader's
+ * old catch-all turned it into null, and stage_refresh.mjs refused with "no S5
+ * render in its manifest" while the render sat there. The same null here would
+ * have let a collection overwrite a review file it could not read. `exists` and
+ * `read` are injected for prove-red-stage-refresh.mjs.
+ */
+export function readJsonFile(f, { exists = existsSync, read = readFileSync } = {}) {
+  if (!exists(f)) return null;
+  const text = read(f, 'utf8');
+  try { return JSON.parse(text); } catch (e) { throw new Refused(`${f} is there and is not valid JSON (${e.message}); repair it.`); }
+}
+const readJson = (f) => readJsonFile(f);
 
 /**
  * `--place` names to `[{ name, dir }]`, matched against `found` (`[{ name, rel }]`,

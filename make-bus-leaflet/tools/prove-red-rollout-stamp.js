@@ -105,9 +105,11 @@ const BUSES = resolveBuses({ buses: argOf('buses') });
  * same fault OA-219 fixed in prove-red-held-back and did not fix here; it
  * surfaced as `Ramsey has no manifest.json` the moment this was pointed at the
  * fixture estate. `--town` still names one, and a name that is not there is an
- * error rather than a substitution (tools/lib/pick-fixture.js). */
+ * error rather than a substitution (tools/lib/pick-fixture.js). `requireCurrent`
+ * because control A rebuilds the town it borrows: with no town drawn by this engine
+ * the harness refuses by name rather than lending one that answers DRY-RUN (OA-604). */
 const { pickTown, pickPlace } = require('./lib/pick-fixture');
-const townPick = pickTown(BUSES, argOf('town', null), 'prove-red-rollout-stamp');
+const townPick = pickTown(BUSES, argOf('town', null), 'prove-red-rollout-stamp', { requireCurrent: true });
 const TOWN = townPick.name;
 
 let failures = 0;
@@ -407,8 +409,10 @@ const ROLLOUT_PLACES = path.join(ROOT, 'assets', 'rollout_places.js');
  * off it. NOT `requireTown` any more (buses-data OA-603): the fixture below builds whichever
  * layout the pick has, because the control must borrow a place the CURRENT engine reproduces, and
  * today no nested place is one — every place under a town trails the engine by design (OA-430), so
- * the control reached a rebuild and answered DRY-RUN where it must say UP-TO-DATE. */
-const placePick = pickPlace(BUSES, argOf('place', null), 'prove-red-rollout-stamp');
+ * the control reached a rebuild and answered DRY-RUN where it must say UP-TO-DATE. And with no
+ * place at all stamped by this engine, name order did the same thing one level further out, so
+ * `requireCurrent` refuses by name there instead (buses-data OA-604). */
+const placePick = pickPlace(BUSES, argOf('place', null), 'prove-red-rollout-stamp', { requireCurrent: true });
 const PLACE = placePick.name;
 const PLACE_TOWN = placePick.town;   // null for a standalone place
 const srcPlace = placePick.dir;

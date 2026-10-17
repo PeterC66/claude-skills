@@ -40,6 +40,16 @@
  * equals this checkout's hash wins, as prove-red-gates.js's pickMap() has chosen
  * since claude-skills #236; with none, name order as before. Still stable: the
  * answer moves only when the engine or the estate does.
+ *
+ * AND FOR A HARNESS WHOSE CONTROL REBUILDS, NAME ORDER IS NO ANSWER AT ALL
+ * (buses-data OA-604). With no map stamped by the running engine, name order lends
+ * one the engine does not reproduce, and `prove-red-rollout-stamp`'s control then
+ * answers DRY-RUN where it must say UP-TO-DATE — red on the estate, with nothing
+ * wrong in rollout.js or rollout_places.js. Every place under a town trails the
+ * engine by design (OA-430), so for places this is the ordinary state after any
+ * hashed edit. `requireCurrent` drops the fallback and refuses, naming the cause.
+ * CI cannot meet it: the fixture-estate step before that harness fails unless
+ * every fixture stamp is current. A harness that never rebuilds keeps name order.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -66,10 +76,25 @@ function stampOf(dir) {
   try { return JSON.parse(fs.readFileSync(path.join(dir, 'ci-reference', 'routes.json'), 'utf8')).engine || null; } catch { return null; }
 }
 
-/** The first usable map drawn by `engine`, else the first usable one. `sorted` is in name order. */
-function preferStamped(sorted, engine) {
+/** The first usable map drawn by `engine`, else (unless `requireCurrent`) the first
+ *  usable one. `sorted` is in name order. */
+function preferStamped(sorted, engine, requireCurrent) {
   const ok = sorted.filter((x) => usable(x.dir));
-  return ok.find((x) => engine && stampOf(x.dir) === engine) || ok[0];
+  const current = ok.find((x) => engine && stampOf(x.dir) === engine);
+  return requireCurrent ? current : current || ok[0];
+}
+
+/* The refusal when `requireCurrent` finds no map drawn by the running engine: a
+ * different fact from finding nothing usable, so it says so and lists the stamps. */
+function refuseStale(who, kind, engine, sorted, buses) {
+  const ok = sorted.filter((x) => usable(x.dir));
+  if (!ok.length) return;   // nothing usable at all: refuse() says that
+  console.error(`${who}: no ${kind} under ${buses} is stamped by the running engine ${engine}, so none can be borrowed.`);
+  console.error(`  This harness's control rebuilds the map it borrows under TODAY's engine, and a map drawn by another`);
+  console.error(`  engine answers DRY-RUN there with nothing wrong in the code (OA-604). Usable, with their stamps:`);
+  for (const x of ok) console.error(`    ${x.name}  ${stampOf(x.dir) || '(none)'}`);
+  console.error(`  Rebuild one under this engine, or name one with the flag if you know this engine still draws it.`);
+  process.exit(1);
 }
 
 /* `who` is the harness's own name, so a refusal says which run stopped and why. */
@@ -88,7 +113,7 @@ function refuse(who, kind, named, tried, buses) {
 
 /** The town to borrow: the one named, or the first usable one drawn by the running
  *  engine, or the first usable one in name order. `engine` overrides the hash (tests). */
-function pickTown(buses, named, who, { engine } = {}) {
+function pickTown(buses, named, who, { engine, requireCurrent = false } = {}) {
   const towns = gl.findTowns(buses);
   const sorted = towns.slice().sort((a, b) => a.name.localeCompare(b.name));
   if (named) {
@@ -96,7 +121,9 @@ function pickTown(buses, named, who, { engine } = {}) {
     if (!t || !usable(t.dir)) refuse(who, 'town', named, [], buses);
     return t;
   }
-  const t = preferStamped(sorted, engine === undefined ? computeEngineVersion() : engine);
+  const hash = engine === undefined ? computeEngineVersion() : engine;
+  const t = preferStamped(sorted, hash, requireCurrent);
+  if (!t && requireCurrent) refuseStale(who, 'town', hash, sorted, buses);
   if (!t) refuse(who, 'town', null, sorted.map((x) => x.name), buses);
   return t;
 }
@@ -109,7 +136,7 @@ function pickTown(buses, named, who, { engine } = {}) {
  * and a standalone place has none. Asked for by the caller rather than assumed,
  * because the other harness is happy with any layout and narrowing both would
  * shrink what can be borrowed for no reason. */
-function pickPlace(buses, named, who, { requireTown = false, engine } = {}) {
+function pickPlace(buses, named, who, { requireTown = false, engine, requireCurrent = false } = {}) {
   const places = gl.findPlaces(gl.findTowns(buses), buses)
     .filter((p) => !requireTown || p.town);
   const sorted = places.slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -119,7 +146,9 @@ function pickPlace(buses, named, who, { requireTown = false, engine } = {}) {
     if (!p || !usable(p.dir)) refuse(who, kind, named, [], buses);
     return p;
   }
-  const p = preferStamped(sorted, engine === undefined ? computePlaceEngineVersion() : engine);
+  const hash = engine === undefined ? computePlaceEngineVersion() : engine;
+  const p = preferStamped(sorted, hash, requireCurrent);
+  if (!p && requireCurrent) refuseStale(who, kind, hash, sorted, buses);
   if (!p) refuse(who, kind, null, sorted.map((x) => x.name), buses);
   return p;
 }

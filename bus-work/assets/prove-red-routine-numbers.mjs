@@ -22,7 +22,7 @@
  * an argument and `routineNumbers()` takes its clock, so every window boundary here is
  * exact rather than "run this before the end of the month".
  */
-import { readFacts, routineNumbers, render, promptBlock, parseRunName, RELAY_PATTERNS, DECISION_PATTERNS, DEFAULT_WINDOW_DAYS } from './routine_numbers.mjs';
+import { readFacts, routineNumbers, render, promptBlock, parseRunName, RELAY_PATTERNS, DECISION_PATTERNS, REPEAT_PATTERNS, DEFAULT_WINDOW_DAYS } from './routine_numbers.mjs';
 
 let bad = 0, ran = 0;
 const check = (label, ok, detail) => { ran++; if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${label}${ok || detail == null ? '' : ' -- ' + detail}`); };
@@ -170,6 +170,36 @@ console.log('\n5. Words before acting, and the prompt block rule');
   check('a page that could not be read is left OUT rather than counted as zero words', n.pages.length === 1 && n.pages[0].name === 'CLAUDE.md' && n.pages[0].words === 2, JSON.stringify(n.pages));
   check('and a missing prompt reads null, not 0 — a tick that loads no words is not the win it would look like',
     routineNumbers(facts({ prompt: null }), { now: NOW }).numbers.wordsBeforeActing.taskPrompt === null);
+  // OA-598: the review quotes the SUM, so the sum is printed, over the pages that were read.
+  check('the total is the prompt plus every page that was read', n.total === 6, String(n.total));
+  check('and nothing read at all is a null total, not 0', routineNumbers(facts(), { now: NOW }).numbers.wordsBeforeActing.total === null);
+  check('the printed block carries the total', /total: 6 words/.test(render(routineNumbers(facts({ prompt: 'a b c d', pages: { 'CLAUDE.md': 'one two' } }), { now: NOW }))));
+}
+
+console.log('\n5b. Rules broken again (OA-598): a rule disobeyed counts, a shape that recurred does not');
+{
+  /* The hard-wraps memory says its rule "was already recorded once and still got
+   * violated", and the first pattern set missed it on the real store on 2026-10-17. */
+  const broken = { store: 'S', file: 'feedback_a.md', text: '**Why:** x. It has been violated twice after being recorded.' };
+  const still = { store: 'S', file: 'feedback_b.md', text: '**Why:** y. This rule was already recorded once and still got violated on a fresh Write.' };
+  const recurred = { store: 'S', file: 'feedback_c.md', text: '**Why:** z. It has now happened twice, both times after a build.' };
+  const other = { store: 'T', file: 'feedback_d.md', text: 'He said "once again", so this was at least the second time.' };
+  const n = routineNumbers(facts({ ruleTexts: [broken, still, recurred, other] }), { now: NOW }).numbers.rulesBrokenAgain;
+  check('a rule recorded and broken again counts', n.measured === true && n.stores.find((s) => s.store === 'S').repeatFiles.includes('feedback_a.md'), JSON.stringify(n.stores));
+  check('"already recorded once and still got violated" counts — the case the first patterns missed', n.stores.find((s) => s.store === 'S').repeatFiles.includes('feedback_b.md'), JSON.stringify(n.stores));
+  check('a failure shape that merely "happened twice" does NOT — a bug seen twice is not a rule disobeyed', !n.stores.find((s) => s.store === 'S').repeatFiles.includes('feedback_c.md'));
+  check('3 of 4 files, one hit per FILE, split by store', n.value === 3 && n.files === 4 && n.stores.length === 2, JSON.stringify({ v: n.value, f: n.files }));
+  // Both counts are 3 here over DIFFERENT files: c records a rule and is no repeat, d is a repeat with no **Why:**.
+  check('the control counts files that record a rule — a different population from the repeats', n.recorded === 3 && n.stores.find((s) => s.store === 'T').recorded === 0 && n.stores.find((s) => s.store === 'T').repeats === 1, JSON.stringify(n.stores));
+  check('it is flagged as a floor', n.floor === true);
+  check('the repeat set is not vacuous on its own example', REPEAT_PATTERNS.some((re) => re.test(broken.text)));
+  check('a BUG "still broken after the fix" is not a rule broken again (two real files, 2026-10-17)', !REPEAT_PATTERNS.some((re) => re.test('the two sheets were still broken after the fix')));
+  const none = routineNumbers(facts({ ruleTexts: null }), { now: NOW }).numbers.rulesBrokenAgain;
+  check('no projects folder reads as NOT MEASURED, not as zero repeats', none.measured === false && none.value === null && /not a count of zero/.test(none.why), JSON.stringify(none));
+  check('and the printed block says NOT MEASURED rather than a number', /6\. Rules broken again[^\n]*NOT MEASURED/.test(render(routineNumbers(facts({ ruleTexts: null }), { now: NOW }))));
+  const f = readFacts({ busesDir: 'C:/x', home: 'C:/home', exists: (p) => /projects$|memory$|\.md$/.test(p), readsDir: (p) => (/projects$/.test(p) ? ['C--Store'] : ['MEMORY.md', 'feedback_x.md', 'notes.txt']), reads: (p) => (/feedback_x/.test(p) ? 'violated again' : 'user rules'), ghRuns: () => null, readManifests: () => [] });
+  check('readFacts reads every memory store\'s .md files but not its MEMORY.md index', f.ruleTexts.some((r) => r.store === 'C--Store' && r.file === 'feedback_x.md') && !f.ruleTexts.some((r) => r.file === 'MEMORY.md' || r.file === 'notes.txt'), JSON.stringify(f.ruleTexts));
+  check('and the user-scope CLAUDE.md is a store of its own', f.ruleTexts.some((r) => r.store === '~/.claude' && r.file === 'CLAUDE.md'), JSON.stringify(f.ruleTexts.map((r) => r.store)));
 }
 
 console.log('\n6. readFacts asks the disk once and never throws on a tree that is not there');
@@ -195,15 +225,15 @@ console.log('\n7. The window default and the shape of the report');
 {
   const out = routineNumbers(facts(), { now: NOW });
   check(`the default window is ${DEFAULT_WINDOW_DAYS} days and is reported back`, out.windowDays === DEFAULT_WINDOW_DAYS, String(out.windowDays));
-  check('all five numbers are present under their own keys, so none can go missing silently',
-    ['humanTouchesPerMapMonth', 'ciRedRate', 'idleTicks', 'relayedCommands', 'wordsBeforeActing'].every((k) => out.numbers[k]), JSON.stringify(Object.keys(out.numbers)));
+  check('all six numbers are present under their own keys, so none can go missing silently',
+    ['humanTouchesPerMapMonth', 'ciRedRate', 'idleTicks', 'relayedCommands', 'wordsBeforeActing', 'rulesBrokenAgain'].every((k) => out.numbers[k]), JSON.stringify(Object.keys(out.numbers)));
   check('and every one carries a label and a target, so a pasted block explains itself',
     Object.values(out.numbers).every((v) => v.label && v.target), JSON.stringify(Object.values(out.numbers).map((v) => [v.label, v.target])));
 }
 
 console.log('');
 if (bad) {
-  console.log(`FAILED — ${bad} of ${ran} assertions did not hold: the five numbers are not what routine_numbers.mjs says they are.`);
+  console.log(`FAILED — ${bad} of ${ran} assertions did not hold: the routine numbers are not what routine_numbers.mjs says they are.`);
   process.exitCode = 1;
 } else {
   console.log(`OK — all ${ran} assertions held: two of the five refuse to be invented, a repository gh cannot answer for is not a red rate of zero, an uppercase feed is in the denominator, a decision only Peter can make is not a relayed command, and a tree that is not there reads as NOT MEASURED rather than as perfect.`);

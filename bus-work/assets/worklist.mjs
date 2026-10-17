@@ -103,7 +103,7 @@ import { waitingItems, readReviews } from './ink_review.mjs';
 import { parseUpcoming, parseDatasets, rebuiltFromScan, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { undeliveredRows, s5Row, s6Verdict } from './undelivered.mjs';
-import { s6Queue, s6Unattended } from './s6_next.mjs';
+import { s6RecipeFor } from './s6_next.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv, assertLocalPortalDb } from './engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1144,12 +1144,7 @@ for (const w of und.warnings) warnings.push(w); for (const it of und.items) if (
 // OA-480: the portal ahead of engine.lock.json's pin is a chore, carried here; the row is built in pin_behind.js.
 if (SK && PORTAL && findEngineRepo()) { const it = require(path.join(SK, 'pin_behind.js')).pinBehindItem({ buses: BUSES, portal: PORTAL, skillsRoot: findEngineRepo() }); if (it) add(it); }
 if (SK && PORTAL) { const it = require(path.join(SK, 'portal_deps.js')).item(PORTAL); if (it) add(it); } // OA-567: no node_modules is a chore with its repair
-// THE ONE S6 A TICK MAY TAKE (buses-data, 17 Oct 2026, step 1 of the S6-commissioning proposal):
-// s6_next.mjs orders every stale map, delivery-pending first, and the row holding the head
-// carries the recipe. The month's red-team budget rations the buys, so no sentence here asks Peter.
-const s6Q = s6Queue({ towns: tree.towns, places: tree.places || [], undelivered: und.items });
-const s6Un = s6Unattended(s6Q, { assetsDir: SK });
-const s6UnFor = (names) => (s6Un && names.includes(s6Un.map) ? { unattended: s6Un } : {});
+const s6UnFor = s6RecipeFor({ towns: tree.towns, places: tree.places || [], undelivered: und.items, assetsDir: SK }); // the ONE S6 a tick may take; s6_next.mjs says why
 const s6StalePlaces = (tree.places || []).filter((p) => p.built && p.s6Stale);
 if (s6StalePlaces.length) {
   /*

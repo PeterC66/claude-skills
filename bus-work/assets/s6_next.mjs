@@ -81,3 +81,12 @@ export function s6Unattended(queue, { assetsDir = null, placeAssetsDir = null } 
     then: 'Stop there. Delivering the map is a separate unit and stays Peter\'s: the undelivered row offers it once this S6 passes.',
   };
 }
+
+/**
+ * What worklist.mjs spreads into each S6 row: `{ unattended }` for the row whose `towns`
+ * hold the head of the queue, `{}` for every other, so exactly one row is a tick's work.
+ */
+export function s6RecipeFor({ towns, places, undelivered, assetsDir }) {
+  const un = s6Unattended(s6Queue({ towns, places, undelivered }), { assetsDir });
+  return (names) => (un && names.includes(un.map) ? { unattended: un } : {});
+}

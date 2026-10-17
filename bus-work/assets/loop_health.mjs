@@ -168,6 +168,8 @@ export function bucketActions(actions, today) {
 /**
  * The prompt's own rules for the bus-work feed (step 4D), applied to the rows the
  * worklist printed: a `refresh` row is finishable only with an `unattended` block; an
+ * `s6-stale` or `s6-stale-places` row is finishable only with an `unattended` block (the
+ * one S6 s6_next.mjs chose; redteam_source.js rations it, so a WAIT can still end it); an
  * `engine-rebuild` row is finishable unless a town in it is graded ESCALATE with no
  * `no-rebuild` review for that grades file's scan date (`bw.reviewed`). The scan's grade is written once a month; a person's
  * `no-rebuild` verdict in `refresh-reviews.json` answers it (buses-data OA-563), and
@@ -185,6 +187,7 @@ export function classifyBusWork(bw) {
       // What each finishable refresh still owes a tick, for the deadline check (refresh_deadline.mjs).
       if (r.unattended) out.refresh.push({ key: r.key, effectiveDate: r.effectiveDate || null, units: unitsOwed(bw.review || null, r.map, { local: !!r.local }) });
     }
+    else if (r.kind === 's6') { if (r.unattended) out.finishable.push(r.key); } // s6_next.mjs: only the row holding the head of the queue carries a recipe
     else {
       const name = r.key.replace(/^engine-rebuild-/, '');
       const esc = (r.towns || []).filter((t) => grades[t] === 'ESCALATE' && !reviewed.has(t));
@@ -611,6 +614,7 @@ export function parseBusWork(text, { grades = {}, reviewed = [] } = {}) {
     for (const r of items) {
       if (/^refresh-/.test(r.key)) rows.push({ key: r.key, kind: 'refresh', towns: [], unattended: !!r.unattended, effectiveDate: r.effectiveDate || null, map: r.map || null, local: /^refresh-local-/.test(r.key) });
       else if (/^engine-rebuild-/.test(r.key)) rows.push({ key: r.key, kind: 'rebuild', towns: r.towns || [] });
+      else if (/^s6-stale(-places)?$/.test(r.key)) rows.push({ key: r.key, kind: 's6', towns: r.towns || [], unattended: !!r.unattended });
     }
     return { rows, grades, reviewed, scan: (j.meta && j.meta.upcomingReport && j.meta.upcomingReport.date) || null };
   } catch { return null; }

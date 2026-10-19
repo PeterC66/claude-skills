@@ -58,7 +58,13 @@
  *     each hour, and a reader that depended on their wording would break the first
  *     time one was phrased differently. A `-busy` run stood down because ANOTHER
  *     TICK held a live lock, so the queue was being worked by that tick: it is in
- *     neither the numerator nor the denominator, and is counted beside them.
+ *     neither the numerator nor the denominator, and is counted beside them. An
+ *     `-idle` run (buses-data OA-576) dispatched and found nothing to do, and it IS
+ *     idle here although `loop_runs.mjs` files it with `busy` as DEFERRED: that set
+ *     keeps it from extending the board's loop-idle streak, which is right there,
+ *     but this ratio is loop time that did not move the queue. Taking it out with
+ *     `busy` read 16.7% (1 of 6) on 2026-10-19 over a window where 19 of 25 ticks
+ *     were `-idle`.
  *
  *  4. RELAYED COMMANDS — measured as a **LOWER BOUND**, and labelled one. A relayed
  *     command is one a session handed Peter because it could not run it, and the
@@ -253,8 +259,12 @@ import { parseRunName, UNREACHED, DEFERRED } from './loop_runs.mjs';
 
 /** Feeds that mean the tick did not move the queue — loop_runs.mjs's UNREACHED,
  * imported for the parser's reason above: a second copy of this set would have
- * gone on counting a `-missed` run (OA-408) as a tick that worked. */
-export const IDLE_FEEDS = UNREACHED;
+ * gone on counting a `-missed` run (OA-408) as a tick that worked. Plus `idle`,
+ * which loop_runs.mjs files as DEFERRED — see section 3 of the header. */
+export const IDLE_FEEDS = new Set([...UNREACHED, 'idle']);
+
+/** Feeds out of the ratio altogether: DEFERRED less `idle`, which is idle above. */
+const STOOD_DOWN = new Set([...DEFERRED].filter((f) => !IDLE_FEEDS.has(f)));
 
 /** The five numbers, from `readFacts()`'s output. */
 export function routineNumbers(facts, { now = Date.now(), windowDays = DEFAULT_WINDOW_DAYS } = {}) {
@@ -314,7 +324,7 @@ export function routineNumbers(facts, { now = Date.now(), windowDays = DEFAULT_W
 
   // 3 — idle ticks, from the run FILENAMES.
   const all = (facts.runNames || []).map(parseRunName).filter(Boolean).filter((r) => r.at >= since);
-  const runs = all.filter((r) => !DEFERRED.has(r.feed));
+  const runs = all.filter((r) => !STOOD_DOWN.has(r.feed));
   const idle = runs.filter((r) => IDLE_FEEDS.has(r.feed));
   out.numbers.idleTicks = {
     label: 'Idle ticks', measured: facts.runNames !== null, target: 'below 5%',
@@ -323,6 +333,7 @@ export function routineNumbers(facts, { now = Date.now(), windowDays = DEFAULT_W
     none: runs.filter((r) => r.feed === 'none').length,
     around: runs.filter((r) => r.feed === 'around').length,
     missed: runs.filter((r) => r.feed === 'missed').length,
+    foundNothing: runs.filter((r) => r.feed === 'idle').length,
     busy: all.length - runs.length,
     why: facts.runNames === null ? 'no loop/runs/ folder in this tree' : undefined,
   };
@@ -403,7 +414,7 @@ export function render(r) {
   for (const p of n.ciRedRate.perRepo) {
     L.push(p.measured ? `     ${p.name}: ${p.red} of ${p.runs} runs red — ${pct(p.rate)}` : `     ${p.name}: NOT MEASURED — ${p.why}`);
   }
-  L.push(`3. ${n.idleTicks.label} (target: ${n.idleTicks.target}): ${n.idleTicks.measured ? `${n.idleTicks.idle} of ${n.idleTicks.ticks} ticks — ${pct(n.idleTicks.rate)} (${n.idleTicks.none} none, ${n.idleTicks.around} around, ${n.idleTicks.missed} missed; ${n.idleTicks.busy} busy stand-downs not counted)` : `NOT MEASURED — ${n.idleTicks.why}`}`);
+  L.push(`3. ${n.idleTicks.label} (target: ${n.idleTicks.target}): ${n.idleTicks.measured ? `${n.idleTicks.idle} of ${n.idleTicks.ticks} ticks — ${pct(n.idleTicks.rate)} (${n.idleTicks.none} none, ${n.idleTicks.around} around, ${n.idleTicks.missed} missed, ${n.idleTicks.foundNothing} idle; ${n.idleTicks.busy} busy stand-down${n.idleTicks.busy === 1 ? '' : 's'} not counted)` : `NOT MEASURED — ${n.idleTicks.why}`}`);
   L.push(`4. ${n.relayedCommands.label}: at least ${n.relayedCommands.value} of ${n.relayedCommands.files} run records and your-move files — a LOWER BOUND, never a total`);
   L.push(`     control: ${n.relayedCommands.decisions} of the same files carry a DECISION only Peter can make (send, approve, answer), which is not a relay — so the patterns bite and ${n.relayedCommands.value} is low because relays are rarer, not because the regex is dead`);
   L.push(`5. ${n.wordsBeforeActing.label}: task prompt ${n.wordsBeforeActing.taskPrompt === null ? '—' : n.wordsBeforeActing.taskPrompt} words${n.wordsBeforeActing.pages.length ? '; ' + n.wordsBeforeActing.pages.map((p) => `${p.name} ${p.words}`).join(', ') : ''}`);

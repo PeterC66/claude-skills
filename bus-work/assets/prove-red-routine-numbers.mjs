@@ -128,6 +128,17 @@ console.log('\n3. Idle ticks — and case (a) is a REGRESSION this harness caugh
   const b = routineNumbers(facts({ runNames: [stamp(1 * DAY, 'OA'), stamp(2 * DAY, 'busy'), stamp(3 * DAY, 'busy'), stamp(4 * DAY, 'none')] }), { now: NOW }).numbers.idleTicks;
   check('(c) busy runs are in neither numerator nor denominator, and counted as busy', b.ticks === 2 && b.idle === 1 && b.busy === 2 && Math.abs(b.rate - 0.5) < 1e-9, JSON.stringify(b));
 
+  // (d) buses-data status review 2026-10-19: an `-idle` run (OA-576) dispatched and
+  // found nothing to do. loop_runs.mjs files it with `busy` as DEFERRED, which is
+  // right for the loop-idle row, but this ratio is loop time that did not move the
+  // queue, and an `-idle` tick is exactly that. Taking it out with `busy` read 16.7%
+  // (1 of 6) over a window where 19 of 25 ticks were `-idle`.
+  const i = routineNumbers(facts({ runNames: [stamp(1 * DAY, 'OA'), stamp(2 * DAY, 'idle'), stamp(3 * DAY, 'idle'), stamp(4 * DAY, 'busy')] }), { now: NOW }).numbers.idleTicks;
+  check('(d) idle runs are IN the ratio — 2 of 3, with busy still out', i.ticks === 3 && i.idle === 2 && i.busy === 1 && Math.abs(i.rate - 2 / 3) < 1e-9, JSON.stringify(i));
+  check('    and counted apart from none, around and missed', i.foundNothing === 2 && i.none === 0 && i.around === 0 && i.missed === 0, JSON.stringify(i));
+  const line = render(routineNumbers(facts({ runNames: [stamp(1 * DAY, 'OA'), stamp(2 * DAY, 'idle'), stamp(4 * DAY, 'busy')] }), { now: NOW })).split('\n').find((l) => l.startsWith('3.'));
+  check('    and the printed line names idle and busy separately', /1 of 2 ticks/.test(line) && /1 idle/.test(line) && /1 busy stand-down/.test(line), line);
+
   const old = routineNumbers(facts({ runNames: [stamp(90 * DAY, 'none'), stamp(1 * DAY, 'OA')] }), { now: NOW }).numbers.idleTicks;
   check('a tick outside the window is in neither the numerator nor the denominator', old.ticks === 1 && old.idle === 0, JSON.stringify(old));
   const absent = routineNumbers(facts({ runNames: null }), { now: NOW }).numbers.idleTicks;

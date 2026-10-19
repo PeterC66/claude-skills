@@ -102,7 +102,7 @@ import { compareRows } from './refresh_deadline.mjs';
 import { waitingItems, readReviews } from './ink_review.mjs';
 import { parseUpcoming, parseDatasets, rebuiltFromScan, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
-import { undeliveredRows, s5Row, s6Verdict } from './undelivered.mjs';
+import { undeliveredRows, s5Row, s6Verdict, foldUnderHolds } from './undelivered.mjs';
 import { s6RecipeFor } from './s6_next.mjs';
 import { assetsDir, parseArgs, resolveBuses, resolvePortal, loadPortalEnv, assertLocalPortalDb } from './engine.mjs';
 
@@ -1138,7 +1138,7 @@ for (const { row: mapRow, place } of engineStale) {
     ],
   });
 }
-// BUILT HERE, NOT YET SENT (buses-data, 2026-10-16) — the join, and why a time is the only one, are undelivered.mjs's.
+// BUILT HERE, NOT YET SENT (buses-data, 2026-10-16) — the join, the time test and the ink compare (2026-10-19) are undelivered.mjs's.
 const und = await undeliveredRows({ portalMaps: portal ? portal.maps : [], localRows: tree.towns.concat(tree.places || []), localDirOf, listing: listed, listingLib: SK ? require(path.join(SK, 'portal_listing.js')) : null, liveUrl: typeof args.live === 'string' ? args.live : DEFAULT_LIVE_URL, noLive: !!args['no-live'], remote: REMOTE, portalDir: PORTAL, actionsDir: BUSES ? path.join(BUSES, 'Development Docs', 'open-actions') : null });
 for (const w of und.warnings) warnings.push(w); for (const it of und.items) if (!haveKey(it.key)) add(it);
 // OA-480: the portal ahead of engine.lock.json's pin is a chore, carried here; the row is built in pin_behind.js.
@@ -1448,7 +1448,9 @@ if (RUN_GATES && SK) {
 // a portal source reached, and it the live one. Every `draft-*` row comes from that
 // source, so REMOTE is the whole test; a hold naming another source would carry it.
 const heldRows = applyHolds(items, loopHolds.holds);
+foldUnderHolds(items); // undelivered.mjs: a hold naming the map carries its undelivered row
 const foldedRows = foldHeldRows(items); // OA-574: a held row the shadow found regressed is the hold's question, not a row
+foldedRows.push(...und.folded); // undelivered.mjs: a blocked-S6 row folded into the action that owns it
 const boardAuthoritative = !!portal && REMOTE;
 // OA-376 — ONE finding per FILE, and a value that is not a key list is a fault in the
 // FILE, so the three branches below do not apply to it. Both rules: loop_your_move.mjs.

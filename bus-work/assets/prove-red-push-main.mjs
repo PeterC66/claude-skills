@@ -24,7 +24,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pushMain } from './push_main.mjs';
+import { pushMain, engineFastForward, STUCK_RUNS_FOR_HOLD } from './push_main.mjs';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pushmain-'));
 let bad = 0;
@@ -345,6 +345,120 @@ const redHold = (w) => path.join(w.work, 'loop', 'your-move', 'push-job-prefligh
   run(w, { pf: { status: 0, report: RED_REPORT } });
   const log = logOf(w);
   ok(/^=== \S+ exit 0 pushed$/m.test(log) && !log.includes('[FAIL]'), '15j a pushed run is logged without the preflight report', log);
+}
+
+/* 16. The engine checkout (buses-data, 2026-10-19). `work` plays C:\Buses\claude-skills
+ * and `other` merges a pull request into origin; a separate repository plays
+ * buses-data, which owns the lock, the log and loop/your-move/. Case 16a is the
+ * POINT: a checkout behind origin is moved. Every other case is a place it must
+ * not move, and asserts that HEAD did not. */
+function engineWorld() {
+  const w = world();
+  w.buses = path.join(w.dir, 'buses');
+  execFileSync('git', ['init', '-b', 'main', w.buses], { stdio: 'ignore' });
+  commit(w.other, 'engine.js', 'v2\n', 'a merged pull request'); git(w.other, 'push', 'origin', 'main');
+  return w;
+}
+const engineRun = (w, apply = true) => engineFastForward({ engine: w.work, repo: w.buses, apply, now: () => FIXED, log: () => {} });
+const engHead = (w) => git(w.work, 'rev-parse', 'HEAD');
+const engHold = (w) => path.join(w.buses, 'loop', 'your-move', 'engine-checkout-behind-origin.md');
+const busesLock = (w) => path.join(w.buses, 'loop', 'LOCK.d');
+{
+  const w = engineWorld();
+  const r = engineRun(w);
+  ok(r.outcome === 'moved' && engHead(w) === git(w.origin, 'rev-parse', 'main') && fs.existsSync(path.join(w.work, 'engine.js')),
+    '16a a clean checkout on main, behind origin, is fast-forwarded and reads back equal to origin', JSON.stringify(r));
+  ok(!fs.existsSync(busesLock(w)), '16b the loop lock is released after the fast-forward');
+  const log = fs.readFileSync(path.join(w.buses, 'loop', 'push-main.log'), 'utf8');
+  ok(/^=== \S+ engine moved$/m.test(log), '16c the run is in push-main.log', log);
+  const r2 = engineRun(w);
+  ok(r2.outcome === 'current', '16d a second run finds it current and does nothing', JSON.stringify(r2));
+}
+{
+  const w = engineWorld(); const before = engHead(w);
+  const r = engineRun(w, false);
+  ok(r.outcome === 'current' && engHead(w) === before, '16e the dry run neither fetches nor moves (it has not seen origin move)', JSON.stringify(r));
+}
+{
+  const w = engineWorld(); const before = engHead(w);
+  fs.writeFileSync(path.join(w.work, 'a.txt'), 'a person is editing this\n');
+  const r = engineRun(w);
+  ok(r.outcome === 'dirty' && engHead(w) === before && fs.readFileSync(path.join(w.work, 'a.txt'), 'utf8') === 'a person is editing this\n',
+    '16f tracked edits: not moved, the edit untouched', JSON.stringify(r));
+}
+{
+  const w = engineWorld(); const before = engHead(w);
+  fs.writeFileSync(path.join(w.work, 'untracked.txt'), 'scratch\n');
+  const r = engineRun(w);
+  ok(r.outcome === 'moved' && fs.existsSync(path.join(w.work, 'untracked.txt')), '16g an untracked file origin does not touch is no bar, and survives', JSON.stringify(r));
+  void before;
+}
+{
+  const w = engineWorld(); const before = engHead(w);
+  git(w.work, 'checkout', '-b', 'work/elsewhere');
+  const r = engineRun(w);
+  ok(r.outcome === 'wrong-branch' && engHead(w) === before && git(w.work, 'branch', '--show-current') === 'work/elsewhere',
+    '16h on another branch: not moved, branch not switched', JSON.stringify(r));
+}
+{
+  const w = engineWorld(); const before = engHead(w);
+  fs.mkdirSync(path.join(w.work, '.git', 'rebase-merge'));
+  const r = engineRun(w);
+  ok(r.outcome === 'mid-operation' && engHead(w) === before, '16i a rebase in progress: hands off', JSON.stringify(r));
+}
+{
+  const w = engineWorld(); const before = engHead(w);
+  fs.mkdirSync(path.join(w.buses, 'loop'), { recursive: true });
+  fs.mkdirSync(busesLock(w));
+  fs.writeFileSync(path.join(busesLock(w), 'holder'), `sched-1500 ${minAgo(5)} a tick\nexpires: ${new Date(FIXED.getTime() + 3600000).toISOString()}\n`);
+  const r = engineRun(w);
+  ok(r.outcome === 'lock-held' && engHead(w) === before && fs.readFileSync(path.join(busesLock(w), 'holder'), 'utf8').startsWith('sched-1500'),
+    '16j a tick holds the loop lock: the engine under it is not moved, the lock not touched', JSON.stringify(r));
+}
+{
+  const w = engineWorld(); const before = engHead(w);
+  commit(w.work, 'mine.txt', 'local only\n', 'a local commit');
+  const mine = engHead(w);
+  const r = engineRun(w);
+  const text = fs.existsSync(engHold(w)) ? fs.readFileSync(engHold(w), 'utf8') : '';
+  ok(r.outcome === 'diverged' && engHead(w) === mine && mine !== before, '16k a diverged main is never merged or rebased', JSON.stringify(r));
+  ok(/^## What is needed from you$/m.test(text) && /\*\*Raised by:\*\* sched-push-1530, 2026-10-06/.test(text) && text.includes('a merged pull request') && text.includes('merge --ff-only origin/main'),
+    '16l a diverged main raises the hold at once, naming the waiting commit and the command', text.slice(0, 400));
+}
+{
+  // 16m a stuck checkout raises ONE hold after STUCK_RUNS_FOR_HOLD runs, a lock-held run between does not break the streak, and moving ends it.
+  const w = engineWorld();
+  git(w.work, 'checkout', '-b', 'work/elsewhere');
+  for (let i = 1; i < STUCK_RUNS_FOR_HOLD; i++) engineRun(w);
+  ok(!fs.existsSync(engHold(w)), `16m ${STUCK_RUNS_FOR_HOLD - 1} stuck runs raise no hold`);
+  git(w.work, 'checkout', 'main');
+  fs.mkdirSync(busesLock(w)); fs.writeFileSync(path.join(busesLock(w), 'holder'), `sched-1500 ${minAgo(5)} a tick\nexpires: ${new Date(FIXED.getTime() + 3600000).toISOString()}\n`);
+  const held = engineRun(w); // clean on main but the lock is held: asked nothing, counts nothing
+  ok(held.outcome === 'lock-held' && !fs.existsSync(engHold(w)), '16m2 a lock-held run neither raises the hold nor ends the streak', JSON.stringify(held));
+  fs.writeFileSync(path.join(w.work, 'a.txt'), 'x\n');
+  engineRun(w); // dirty, so stuck: run number STUCK_RUNS_FOR_HOLD
+  ok(fs.existsSync(engHold(w)) && new RegExp(`failed on ${STUCK_RUNS_FOR_HOLD} runs in a row`).test(fs.readFileSync(engHold(w), 'utf8')), `16n the ${STUCK_RUNS_FOR_HOLD}th stuck run writes the hold`);
+  git(w.work, 'checkout', '--', 'a.txt');
+  fs.rmSync(busesLock(w), { recursive: true, force: true });
+  const r = engineRun(w);
+  const state = JSON.parse(fs.readFileSync(path.join(w.buses, 'loop', 'engine-ff.state.json'), 'utf8'));
+  ok(r.outcome === 'moved' && state.stuckRuns === 0, '16o once clean it moves and the streak ends', JSON.stringify({ r, state }));
+}
+{
+  // 16p a fast-forward git refuses (an untracked file in the way) is not moved and is a refusal, not a pass.
+  const w = engineWorld(); const before = engHead(w);
+  fs.writeFileSync(path.join(w.work, 'engine.js'), 'an untracked copy in the way\n');
+  const r = engineRun(w);
+  ok(r.outcome === 'ff-refused' && engHead(w) === before && fs.readFileSync(path.join(w.work, 'engine.js'), 'utf8') === 'an untracked copy in the way\n',
+    '16p an untracked file the merge would overwrite: refused, nothing moved or lost', JSON.stringify(r));
+}
+{
+  // 16q nothing but --ff-only: no line of the engine step rebases, resets, checks out or merges otherwise.
+  const src = fs.readFileSync(new URL('./push_main.mjs', import.meta.url), 'utf8');
+  const body = src.slice(src.indexOf('function engineFastForwardOnce'), src.indexOf('function writeEngineHold'));
+  const calls = [...body.matchAll(/git\(engine, \[([^\]]*)\]/g)].map((m) => m[1]);
+  const writes = calls.filter((c) => /'(merge|rebase|reset|checkout|switch|pull|stash|clean)'/.test(c));
+  ok(writes.length === 1 && writes[0] === "'merge', '--ff-only', 'origin/main'", '16q the engine step\'s one write is merge --ff-only origin/main', JSON.stringify(writes));
 }
 
 fs.rmSync(root, { recursive: true, force: true });

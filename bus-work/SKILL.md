@@ -217,6 +217,8 @@ node "C:/Buses/claude-skills/bus-work/assets/preflight.mjs" --repo "C:/Buses/bus
 node "C:/Buses/claude-skills/bus-work/assets/push_main.mjs" --repo "C:/Buses/buses-data" --apply
 ```
 
+**The same job keeps the engine checkout current** (buses-data, 2026-10-19). Nothing moved `C:\Buses\claude-skills` after a pull request merged, a tick may not move it, and on 2026-10-19 that had kept #383 away from the loop for over a day. So every `--apply` run, whatever the push did, fast-forwards the checkout the script runs from, which is the engine checkout because the scheduled task runs the engine's own copy (`--engine "<claude-skills checkout>"` overrides it, for a test). Its one write is `git merge --ff-only origin/main`, and it makes it only when the checkout is on `main`, nothing is mid-operation, no tracked file is modified, local `main` has nothing origin lacks and `loop/LOCK.d` is free, taking that lock for the moment of the merge so no tick's engine changes under it; it reads `HEAD` back against `origin/main`. A diverged `main` writes `loop/your-move/engine-checkout-behind-origin.md` at once; any other refusal writes it after six runs in a row (`STUCK_RUNS_FOR_HOLD`, streak in `loop/engine-ff.state.json`; a lock-held run neither counts nor ends it). Every run is an `engine` block in `loop/push-main.log`, and the step never changes the exit code. Cases 16a to 16q of `npm run test:prove-red-push-main --prefix "C:/Buses/claude-skills/bus-work"` hold it.
+
 `npm run test:prove-red-push-main --prefix "C:/Buses/claude-skills/bus-work"` is the harness: real git against throwaway bare repositories, and each guard has been seen to fail when its one line is broken.
 
 ## Closing a session

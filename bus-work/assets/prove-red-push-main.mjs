@@ -270,6 +270,20 @@ for (const [pf, exit, outcome] of [[1, 1, 'preflight-red'], [2, 2, 'preflight-un
     '13 origin moved between the preflight and the push: exit 1, the commit is still local', JSON.stringify(r));
 }
 
+/* 13a. LOCAL main moved while the preflight ran — another session committed to the
+ * shared checkout (buses-data, 2026-10-19, 3c4b5a87 carried by a push whose
+ * preflight never saw it). Neither commit may go: the green was about the first. */
+{
+  const w = world(); const before = remoteHead(w);
+  commit(w.work, 'a.txt', 'one\ntwo\nthree\nfour\n', 'measured');
+  const { r } = run(w, { onPreflight: () => commit(w.work, 'c.txt', 'unmeasured\n', 'landed mid-preflight') });
+  ok(r.exit === 3 && r.outcome === 'head-moved' && remoteHead(w) === before && git(w.work, 'rev-list', '--count', 'origin/main..main') === '2',
+    '13a local main moved during the preflight: exit 3, origin unmoved, both commits still local', JSON.stringify(r));
+  const { r: again } = run(w);
+  ok(again.outcome === 'pushed' && remoteHead(w) === git(w.work, 'rev-parse', 'main'),
+    '13a the next run measures the new tip and carries both', JSON.stringify(again));
+}
+
 /* 13b. A push that says ok while origin disagrees is not a success. */
 {
   const w = world();

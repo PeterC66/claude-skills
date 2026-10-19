@@ -80,17 +80,25 @@ export function repoRoot(from) {
  * The upstream is asked for rather than assumed: a branch with none is not a
  * push whose contents are zero, it is a question this tool cannot answer, and
  * the two must not report the same way.
+ *
+ * `head` is the commit measured, read ONCE and used for the diff too, so the
+ * scope and the SHA cannot describe two different commits. It is what `--push`
+ * sends: another session committing to a shared checkout while the checks run
+ * moves `HEAD`, not `head` (buses-data, 2026-10-19).
  */
 export function pushScope(repo) {
   const up = git(repo, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']);
   if (!up.ok) return { known: false, why: 'this branch has no upstream, so there is no "what would this push contain" to answer', upstream: null, paths: [] };
-  const diff = git(repo, ['diff', '--name-only', `${up.out}..HEAD`]);
+  const head = git(repo, ['rev-parse', 'HEAD']);
+  if (!head.ok) return { known: false, why: `git rev-parse HEAD failed: ${head.err}`, upstream: up.out, paths: [] };
+  const diff = git(repo, ['diff', '--name-only', `${up.out}..${head.out}`]);
   if (!diff.ok) return { known: false, why: `git diff ${up.out}..HEAD failed: ${diff.err}`, upstream: up.out, paths: [] };
   const paths = diff.out ? diff.out.split('\n').map((s) => s.trim()).filter(Boolean) : [];
   const dirty = git(repo, ['status', '--porcelain']);
   return {
     known: true,
     upstream: up.out,
+    head: head.out,
     paths,
     branch: git(repo, ['rev-parse', '--abbrev-ref', 'HEAD']).out,
     dirtyCount: dirty.ok && dirty.out ? dirty.out.split('\n').filter(Boolean).length : 0,
@@ -751,7 +759,7 @@ export function report(result, quiet) {
   if (!result.scope.known) {
     L.push(`  CANNOT TELL — ${result.scope.why}`);
   } else {
-    L.push(`  ${result.scope.branch} vs ${result.scope.upstream}: ${result.scope.paths.length} path(s) would be pushed · tier ${result.tier.tier.toUpperCase()}`);
+    L.push(`  ${result.scope.branch} vs ${result.scope.upstream}: ${result.scope.paths.length} path(s) would be pushed · tier ${result.tier.tier.toUpperCase()} · measured ${(result.scope.head || '').slice(0, 8)}`);
     if (result.tier.beyond.length) L.push(`  beyond documentation: ${result.tier.beyond.slice(0, 6).join(', ')}${result.tier.beyond.length > 6 ? ` (+${result.tier.beyond.length - 6} more)` : ''}`);
     if (result.scope.dirtyCount) L.push(`  NOTE ${result.scope.dirtyCount} file(s) are modified and are NOT in this push — this preflight measured the WORKING TREE, which is not what would be pushed`);
   }
@@ -879,6 +887,41 @@ export function preflight({ repo, all = false, skillsRoot, urgent = null, now = 
   return { repo, repoName: manifest.name, scope, tier: all ? { tier: 'full (forced by --all)', beyond: tier.beyond } : tier, source: manifest.source, checks, notTriggered, engine, pin: pinReport, pruned, caughtUp, interval, unanswered: manifest.unanswered || [], exit };
 }
 
+/*
+ * `--push`: send the commit the checks MEASURED, and nothing that arrived since.
+ *
+ * On 2026-10-19 a session ran this preflight on buses-data (exit 0, prove-red-gates
+ * not asked because nothing it pushed touched a ci-reference/), and another session
+ * committed 3c4b5a87, which did, to the same shared `main` before the first one ran
+ * `git push origin main`. The push carried a commit no preflight had seen. A green
+ * verdict is about one commit, so the push names that commit: `<head>:<branch>`.
+ *
+ * HEAD having moved is refused rather than quietly pushing the measured commit,
+ * because the newer commits are then left on local main and the person who ran
+ * this would read "pushed" as "everything is pushed". It is CANNOT TELL (2): the
+ * answer is about a commit that is no longer the tip, so run again. A push that
+ * origin refuses is 1, and so is one that origin does not read back as `head`.
+ */
+export function pushMeasured(repo, scope, run = git) {
+  if (!scope || !scope.known || !scope.head) return { pushed: false, exit: EXIT_CANNOT_TELL, why: 'the preflight did not measure a commit, so there is nothing to push' };
+  const slash = scope.upstream.indexOf('/');
+  if (slash < 1) return { pushed: false, exit: EXIT_CANNOT_TELL, why: `the upstream "${scope.upstream}" names no remote` };
+  const remote = scope.upstream.slice(0, slash);
+  const branch = scope.upstream.slice(slash + 1);
+  const now = run(repo, ['rev-parse', 'HEAD']);
+  if (!now.ok || now.out !== scope.head) {
+    const ahead = now.ok ? run(repo, ['rev-list', '--count', `${scope.head}..${now.out}`]).out : '?';
+    return { pushed: false, exit: EXIT_CANNOT_TELL, moved: true, measured: scope.head, now: now.out || null, why: `HEAD moved from ${scope.head.slice(0, 8)} to ${(now.out || 'unreadable').slice(0, 8)} while the checks ran (${ahead} commit(s) nobody measured), so nothing was pushed; run the preflight again` };
+  }
+  const p = run(repo, ['push', remote, `${scope.head}:refs/heads/${branch}`]);
+  if (!p.ok) return { pushed: false, exit: EXIT_FAILED, why: `git push ${remote} ${scope.head.slice(0, 8)}:${branch} was refused: ${p.err}` };
+  // A stateful act is done when a read of the system says so, not when the push said ok.
+  const back = run(repo, ['ls-remote', remote, `refs/heads/${branch}`]);
+  const remoteSha = back.ok ? back.out.split(/\s+/)[0] : '';
+  if (remoteSha !== scope.head) return { pushed: false, exit: EXIT_FAILED, why: `the push reported success but ${remote}'s ${branch} reads back as ${remoteSha || 'unreadable'}, not ${scope.head}` };
+  return { pushed: true, exit: EXIT_OK, sha: scope.head, remote, branch, why: `pushed ${scope.head.slice(0, 8)} to ${remote}/${branch}, read back with ls-remote` };
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const from = args.repo ? path.resolve(String(args.repo)) : process.cwd();
@@ -896,8 +939,15 @@ function main() {
     return;
   }
   const result = preflight({ repo, all: !!args.all, urgent: args.urgent ? String(args.urgent) : null });
+  // Only a green answer about something to push pushes; every other exit is kept as it is.
+  if (args.push && result.exit === EXIT_OK && result.scope.paths.length) {
+    result.push = pushMeasured(repo, result.scope);
+    result.exit = result.push.exit;
+  } else if (args.push) {
+    result.push = { pushed: false, exit: result.exit, why: result.exit === EXIT_OK ? 'nothing to push' : `nothing pushed: the preflight exited ${result.exit}` };
+  }
   if (args.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-  else process.stdout.write(`${report(result, !!args.quiet)}\n`);
+  else process.stdout.write(`${report(result, !!args.quiet)}\n${result.push ? `push — ${result.push.why}\n` : ''}`);
   // `process.exitCode` rather than `process.exit()`: a write to a PIPE is
   // asynchronous on Windows, and `process.exit()` tears the process down before
   // it drains. The harness's `--json` case read an EMPTY stdout beside a correct

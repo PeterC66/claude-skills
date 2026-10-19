@@ -4,8 +4,9 @@
  * (buses-data OA-429, item 5 of R9 of the process review of 2026-09-17).
  *
  * WHAT IT IS FOR. R9 makes the monthly refresh unattended: a SAFE town is taken
- * through S1–S5 by a tick (`refresh_town.py`, OA-426) and delivered by a tick
- * (OA-428). The one human touch R9 leaves is THIS: Peter looks once a month, at
+ * through S1–S5 by a tick (`refresh_town.py`, OA-426). Delivery is an interactive
+ * session's, never a tick's (since 2026-10-19, when OA-428, a tick stages, was
+ * retired). The one human judgement R9 leaves is THIS: Peter looks once a month, at
  * one page, at only the maps whose sheets actually changed, and answers accept or
  * hold per map. A map whose ink did not move is not shown to him at all.
  *
@@ -109,7 +110,7 @@
  *   node ink_review.mjs ... --no-commit                     leave the record written and uncommitted
  *   node ink_review.mjs --scan <scan> --answer "<Town>" --verdict accept|hold --by <who> [--note "<why>"]
  *   node ink_review.mjs --scan <scan> --self-answer --by <who> [--apply] answer by rule what needs no person; print, or write with --apply
- *   node ink_review.mjs --scan <scan> --deliverable [--json] which maps a tick may deliver
+ *   node ink_review.mjs --scan <scan> --deliverable [--json] which maps a session may deliver
  *   node ink_review.mjs --scan <scan> --staged --town "<Map>" --map <slug> --proposal <n> --by <who> [--at <date>] [--notify digest]
  *                                                            record a staging made by hand, not by stage_refresh.mjs
  *

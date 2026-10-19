@@ -1447,10 +1447,8 @@ if (RUN_GATES && SK) {
 // so the confident sentence now requires the board to be AUTHORITATIVE for the row:
 // a portal source reached, and it the live one. Every `draft-*` row comes from that
 // source, so REMOTE is the whole test; a hold naming another source would carry it.
-const heldRows = applyHolds(items, loopHolds.holds);
-foldUnderHolds(items); // undelivered.mjs: a hold naming the map carries its undelivered row
-const foldedRows = foldHeldRows(items); // OA-574: a held row the shadow found regressed is the hold's question, not a row
-foldedRows.push(...und.folded); // undelivered.mjs: a blocked-S6 row folded into the action that owns it
+const heldRows = applyHolds(items, loopHolds.holds); foldUnderHolds(items); // undelivered.mjs: a hold naming the map carries its undelivered row
+const foldedRows = foldHeldRows(items); foldedRows.push(...und.folded); // OA-574: a held row the shadow found regressed is the hold's question, not a row; und.folded went to the OA that owns a blocked S6
 const boardAuthoritative = !!portal && REMOTE;
 // OA-376 — ONE finding per FILE, and a value that is not a key list is a fault in the
 // FILE, so the three branches below do not apply to it. Both rules: loop_your_move.mjs.

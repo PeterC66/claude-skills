@@ -235,7 +235,7 @@ try {
     { what: 'a failed read of the live sheet is taken as the same ink', file: 'bus-work/assets/undelivered.mjs',
       find: 'if (ink && ink.compared && !ink.differs.length)', repl: 'if (ink && !(ink.differs || []).length)', must: 'no public sheet (404): the time test raises the row and says it could not compare' },
     { what: 'worklist.mjs never folds a row under a hold naming its map', file: 'bus-work/assets/worklist.mjs',
-      find: 'foldUnderHolds(items); // undelivered.mjs', repl: '// undelivered.mjs', must: 'a hold naming Alpha: the row is folded into it' },
+      find: ' foldUnderHolds(items);', repl: '', must: 'a hold naming Alpha: the row is folded into it' },
     { what: 'a hold folds every map whose name it merely contains', file: 'bus-work/assets/undelivered.mjs',
       find: '(^|[^A-Za-z0-9])${esc}([^A-Za-z0-9]|$)', repl: '${esc}', must: 'CONTROL: a hold naming Alphaville: the row stays' },
     { what: 'a blocked row with an owner is not folded into the action', file: 'bus-work/assets/undelivered.mjs',

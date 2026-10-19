@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { preflight, pushScope, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, reclaimStalePins, STALE_PIN_HOURS, intervalVerdict, report, EXIT_DEFERRED, PUSH_INTERVAL_MINUTES, pacedInterval, readBudget, meanRunMinutes, INTERVAL_STEPS, catchUpPortal, catchUpLine } from './preflight.mjs';
+import { preflight, pushScope, pushMeasured, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, reclaimStalePins, STALE_PIN_HOURS, intervalVerdict, report, EXIT_DEFERRED, PUSH_INTERVAL_MINUTES, pacedInterval, readBudget, meanRunMinutes, INTERVAL_STEPS, catchUpPortal, catchUpLine } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -913,6 +913,52 @@ function runWith(fixture, opts = {}) {
   releaseEngine(live);
   if (existsSync(killed.dir)) releaseEngine(killed);    // a mutant that never reclaims must not leave it in %TEMP%
   rmSync(skills, { recursive: true, force: true });
+}
+
+// CASE — `--push` sends the commit that was MEASURED (buses-data, 2026-10-19). A
+// session's preflight went green, another session committed 3c4b5a87 to the same
+// shared main, and `git push origin main` carried a commit no preflight had seen.
+// The race is reproduced, not faked: one of the checks IS the other session,
+// committing to the repository while the preflight runs. Driven through the CLI,
+// because `--push` lives in main() and a case on pushMeasured alone would leave
+// the wiring unasked.
+{
+  const cli = (fx) => spawnSync(NODE, [path.join(HERE, 'preflight.mjs'), '--repo', fx.repo, '--push'], { encoding: 'utf8' });
+  const originHead = (fx) => git(path.join(fx.root, 'origin.git'), 'rev-parse', 'main').trim();
+  const ok = { id: 'ok', label: 'passes', cmd: NODE, args: ['-e', 'process.exit(0)'] };
+  const intruder = { id: 'intruder', label: 'another session commits mid-run', cmd: 'git', args: ['commit', '--allow-empty', '-m', 'landed mid-preflight', '--no-verify'] };
+
+  const quiet = makeRepo({ manifest: { name: 'fixture', docsOnly: ['^docs/'], checks: [ok] }, pushed: ['docs/one.md'] });
+  const measured = pushScope(quiet.repo);
+  check('push: the scope names the commit it measured', measured.head === git(quiet.repo, 'rev-parse', 'HEAD').trim(), JSON.stringify(measured));
+  const sent = cli(quiet);
+  check('push: a green preflight with nothing moved pushes and exits 0', sent.status === 0, `exit ${sent.status}: ${sent.stdout.slice(-300)}`);
+  check('push: origin reads back as the measured commit', originHead(quiet) === measured.head, originHead(quiet));
+  check('push: the report says what it pushed', /push — pushed [0-9a-f]{8} to origin\/main, read back/.test(sent.stdout), sent.stdout.slice(-300));
+  rmSync(quiet.root, { recursive: true, force: true });
+
+  const raced = makeRepo({ manifest: { name: 'fixture', docsOnly: ['^docs/'], checks: [ok, intruder] }, pushed: ['docs/one.md'] });
+  const before = originHead(raced);
+  const r = cli(raced);
+  check('push: HEAD moved during the checks is CANNOT TELL (2), not a push', r.status === 2, `exit ${r.status}: ${r.stdout.slice(-300)}`);
+  check('push: and origin did not move', originHead(raced) === before, `${before} -> ${originHead(raced)}`);
+  check('push: both commits are still local', git(raced.repo, 'rev-list', '--count', 'origin/main..main').trim() === '2');
+  check('push: the report names the move', /HEAD moved from [0-9a-f]{8} to [0-9a-f]{8} while the checks ran \(1 commit\(s\) nobody measured\)/.test(r.stdout), r.stdout.slice(-300));
+  rmSync(raced.root, { recursive: true, force: true });
+
+  const red = makeRepo({ manifest: { name: 'fixture', docsOnly: ['^docs/'], checks: [{ ...ok, id: 'no', args: ['-e', 'process.exit(1)'] }] }, pushed: ['docs/one.md'] });
+  const redBefore = originHead(red);
+  const rr = cli(red);
+  check('push: a red preflight pushes nothing and keeps exit 1', rr.status === 1 && originHead(red) === redBefore, `exit ${rr.status}`);
+  rmSync(red.root, { recursive: true, force: true });
+
+  // The read-back is asked of origin, not taken from the push's word.
+  const lying = makeRepo({ manifest: { name: 'fixture', checks: [ok] }, pushed: ['docs/one.md'] });
+  const ls = pushScope(lying.repo);
+  const liar = (dir, args) => (args[0] === 'ls-remote' ? { ok: true, out: `${'0'.repeat(40)}\trefs/heads/main` } : (() => { const x = spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' }); return { ok: x.status === 0, out: (x.stdout || '').trim(), err: (x.stderr || '').trim() }; })());
+  const lie = pushMeasured(lying.repo, ls, liar);
+  check('push: a push origin does not read back as the measured commit is exit 1', lie.exit === 1 && !lie.pushed, JSON.stringify(lie));
+  rmSync(lying.root, { recursive: true, force: true });
 }
 
 const total = pass + fails.length;

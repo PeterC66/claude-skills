@@ -224,9 +224,12 @@ export function gradeSentence(state, town, scanDate, opts = {}) {
  *
  * `through: 'S5'` IS A LIMIT AND NOT A FLOURISH. This command stops at the render;
  * putting the result in front of the customer is a separate, gated step (buses-data
- * OA-428). Since 2026-09-25 a tick may take it, but only through `stage_refresh.mjs` and
- * only for a town the month's ink review (`ink_review.mjs --deliverable`, OA-429) lists
- * under `deliver` -- the review is where somebody looks at a sheet whose ink moved.
+ * OA-428, retired). A tick never takes it: since 2026-10-19 staging is an interactive
+ * session's, through `stage_refresh.mjs` and only for a town the month's ink review
+ * (`ink_review.mjs --deliverable`, OA-429) lists under `deliver` -- the review is where
+ * somebody looks at a sheet whose ink moved. From 2026-09-25 a tick was allowed to stage,
+ * but auto mode refused `stage_refresh.mjs` every time, so Peter took the clause out of
+ * the loop prompt (buses-data 81d0bf63).
  *
  * A PLACE IS NOT COVERED. Since OA-628 a place has a grade of its own, and it may be
  * SAFE, but `refresh_town.py` rebuilds a TOWN and there is no place applier, so the kind
@@ -261,9 +264,9 @@ export function unattendedRefresh(state, town, scanDate, { kind = 'area', assets
     through: 'S5',
     cwd: assetsDir,
     cmd: `python3 "${posix(assetsDir)}/refresh_town.py" --town "${town}" --scan ${scanDate} --apply --by <this run's name>`,
-    then: 'Delivering the result into the portal is a separate step: stage it only with '
-        + 'stage_refresh.mjs, and only once `ink_review.mjs --deliverable` lists the town under '
-        + 'deliver (buses-data OA-428, OA-429).',
+    then: 'Delivering the result into the portal is a separate step, and an interactive '
+        + 'session\'s, never a tick\'s: stage it only with stage_refresh.mjs, and only once '
+        + '`ink_review.mjs --deliverable` lists the town under deliver (buses-data OA-428, OA-429).',
   };
 }
 

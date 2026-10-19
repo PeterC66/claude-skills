@@ -105,6 +105,15 @@ const ARMS = [
     mustFail: ['an S6 run with no decision record is counted as unrecorded, not as zero'],
   },
   {
+    /* buses-data, 2026-10-19: allowance.mjs writes next month's raise as a `schedule` step. */
+    name: 'the schedule — a raise written for a month is ignored',
+    apply: (s) => mutate(s,
+      'const step = month ? schedule.filter((st) => st.from <= month).sort((a, b) => a.from.localeCompare(b.from)).pop() : null;',
+      'const step = null;',
+      'the schedule'),
+    mustFail: ['a scheduled raise applies from its month on, and not before'],
+  },
+  {
     name: 'the one walk — the places are dropped from the estate',
     apply: (s) => mutate(s,
       'const mapDirs = [...towns, ...findPlaces(towns, root)]',
@@ -160,7 +169,7 @@ let bad = false;
  * below says nothing about the mutation. */
 const base = runAgainst(ORIGINAL);
 const CASES = [...base.passed, ...base.failed];
-if (CASES.length !== 13) { console.error(`FAIL: expected 13 cases in the suite, found ${CASES.length}`); bad = true; }
+if (CASES.length !== 15) { console.error(`FAIL: expected 15 cases in the suite, found ${CASES.length}`); bad = true; }
 if (base.failed.size) { console.error(`FAIL: the unmutated suite is not green (${[...base.failed].join('; ')})`); bad = true; }
 if (bad) { console.error('\n--- baseline output ---\n' + base.out); process.exit(1); }
 console.log(`baseline     : ${CASES.length} cases, all green`);

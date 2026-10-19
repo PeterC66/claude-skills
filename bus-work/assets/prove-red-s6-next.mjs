@@ -85,6 +85,11 @@ const CASES = {
     const u = s6Unattended(s6Queue({ towns: [town('A', { s6StaleSince: '2026-09-01' }), town('B'), town('C', { s6StaleSince: '2026-10-09' })] }), { assetsDir: SK });
     return u && u.map === 'A' && u.queue.join() === 'B,C' ? null : JSON.stringify(u && { map: u.map, queue: u.queue });
   },
+  'the block lists every queued map with the day its wait began': ({ s6Queue, s6Unattended }) => {
+    const u = s6Unattended(s6Queue({ towns: [town('A', { s6StaleSince: '2026-09-01' }), town('B', { s6StaleSince: '2026-10-09' })] }), { assetsDir: SK });
+    const w = u && u.waiting;
+    return w && w.map((x) => `${x.name}@${x.waitingSince}`).join() === 'A@2026-09-01,B@2026-10-09' ? null : JSON.stringify(w);
+  },
   'no queue, or no engine folder, is no block rather than a broken command': ({ s6Unattended }) => {
     const a = s6Unattended([], { assetsDir: SK }), b = s6Unattended([{ name: 'A', dir: 'C:/x' }], { assetsDir: null });
     return a === null && b === null ? null : `${JSON.stringify(a)} / ${JSON.stringify(b)}`;
@@ -127,6 +132,7 @@ try {
     { what: 'a nested place never borrows', file: 's6_next.mjs', find: "const borrow = m.parent ? ` --build \"${posix(m.parent)}\" --foreign-build` : '';", repl: "const borrow = '';", must: 'a nested place borrows its town\'s answer first, by the town\'s folder' },
     { what: 'a standalone place is given a parent', file: 's6_next.mjs', find: "kind === 'place' && !row.standalone && row.dir ?", repl: "kind === 'place' && row.dir ?", must: 'CONTROL: a standalone place asks only about its own answers' },
     { what: 'the queue is dropped from the block', file: 's6_next.mjs', find: 'queue: queue.slice(1).map((q) => q.name),', repl: 'queue: [],', must: 'the block names one map and queues the rest for a WAIT' },
+    { what: 'the waiting list loses its dates', file: 's6_next.mjs', find: 'waiting: queue.map((q) => ({ name: q.name, waitingSince: q.waitingSince,', repl: 'waiting: queue.map((q) => ({ name: q.name, waitingSince: null,', must: 'the block lists every queued map with the day its wait began' },
     { what: 'a missing engine folder still makes a block', file: 's6_next.mjs', find: 'if (!assetsDir || !queue || !queue.length) return null;', repl: 'if (!queue || !queue.length) return null;', must: 'no queue, or no engine folder, is no block rather than a broken command' },
     { what: 'loop health drops the S6 rows', file: 'loop_health.mjs', find: "      else if (/^s6-stale(-places)?$/.test(r.key)) rows.push({ key: r.key, kind: 's6', towns: r.towns || [], unattended: !!r.unattended });\n", repl: '', must: 'loop health reads an S6 row with a recipe as a tick\'s work' },
     { what: 'loop health reads an S6 row as a rebuild', file: 'loop_health.mjs', find: "    else if (r.kind === 's6') { if (r.unattended) out.finishable.push(r.key); }", repl: '    else if (false) {}', must: 'CONTROL: an S6 row without one is not, and is never read as a rebuild' },

@@ -78,6 +78,9 @@ export function s6Unattended(queue, { assetsDir = null, placeAssetsDir = null } 
       `\`node "${SK}/stage.js" commit S6 "<run folder>" --outputs redteam.json,verification.json,verification.docx --based-on "S1=…;S2=…;S3=…;S4=…" --note "<N hard / N soft; REUSED from <run> | BOUGHT>"\`, then commit what \`git status --porcelain --untracked-files=all -- "<map folder>"\` lists, with commit_paths.mjs. Never push.`,
     ],
     queue: queue.slice(1).map((q) => q.name),
+    // Every queued map and the day its wait began ('' = never verified), so allowance.mjs's
+    // weekly adjuster can ask how long the oldest one has waited (buses-data, 19 October 2026).
+    waiting: queue.map((q) => ({ name: q.name, waitingSince: q.waitingSince, deliveryPending: q.deliveryPending })),
     then: 'Stop there. Delivering the map is a separate unit and stays Peter\'s: the undelivered row offers it once this S6 passes.',
   };
 }

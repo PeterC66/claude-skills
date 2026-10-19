@@ -198,3 +198,18 @@ test('every place layout is counted, and the portal fixture is not', () => {
   assert.equal(s.coverage.s6Runs, 4, 'four S6 runs, in four layouts, and none of them in the fixture');
   assert.equal(s.spent, 300000);
 });
+
+/* A SCHEDULE OF RAISES (buses-data allowance.mjs, 19 October 2026): a raise written today for
+ * next month must change next month's figure and NOT this month's, or the weekly adjuster's
+ * "from next month" would be a raise that lands at once. */
+test('a scheduled raise applies from its month on, and not before', () => {
+  const root = estate({ budget: { ...OK_BUDGET, schedule: [{ from: '2026-10', monthlyTokens: 413000 }] }, runs: [] });
+  assert.equal(B.budgetState({ root, month: '2026-09' }).budget.monthlyTokens, 300000, 'the month before the raise keeps the base figure');
+  assert.equal(B.budgetState({ root, month: '2026-10' }).budget.monthlyTokens, 413000, 'the raise applies in its own month');
+  assert.equal(B.budgetState({ root, month: '2026-12' }).budget.monthlyTokens, 413000, 'and in every month after it');
+});
+
+test('a schedule step this cannot read makes the file unreadable, never an ignored raise', () => {
+  const root = estate({ budget: { ...OK_BUDGET, schedule: [{ from: 'November', monthlyTokens: 413000 }] }, runs: [] });
+  assert.equal(B.budgetState({ root, month: '2026-11' }).budget.status, 'unreadable');
+});

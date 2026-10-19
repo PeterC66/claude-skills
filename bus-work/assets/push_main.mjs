@@ -42,6 +42,20 @@
  * `loop/your-move/push-job-preflight-red.md`, naming the FAIL arms and the
  * oldest held commit; the streak lives in `loop/push-main.state.json`.
  *
+ * ITS SECOND DUTY: KEEP THE ENGINE CHECKOUT CURRENT (buses-data, 2026-10-19).
+ * The loop, worklist.mjs and status.js all run from C:\Buses\claude-skills, a
+ * checkout nothing moved after a claude-skills pull request merged, and a tick
+ * may not move it. On 2026-10-19 that had kept #383 (the S6 unattended recipe)
+ * away from the loop for over a day, until a person pulled by hand. So every
+ * --apply run, whatever the push did, fast-forwards the checkout THIS SCRIPT RUNS
+ * FROM (`engineFastForward`) — and only fast-forwards: on main, nothing mid-
+ * operation, no tracked edits, not diverged, the loop lock free. A diverged main
+ * raises a hold at once; a checkout that stays behind for STUCK_RUNS_FOR_HOLD
+ * runs in a row raises one. The checkout is the script's own because the
+ * scheduler runs the engine's own copy, so the code that must be current is by
+ * construction the code doing the asking; `--engine` overrides it for a test.
+ * The step never changes this script's exit code, which stays the push's.
+ *
  * Usage, from any folder. The one placeholder is the buses-data checkout whose
  * local main is to be carried, and it is REQUIRED, never defaulted, because a
  * job that guessed which tree to rebase could rebase somebody else's:
@@ -84,6 +98,18 @@ export const LOG_MAX_BYTES = 1024 * 1024;
  * A lock held, a fetch failed or an unanswered preflight asked nothing about red. */
 const STREAK_ENDERS = new Set(['pushed', 'nothing-to-push', 'deferred']);
 
+export const ENGINE_HOLD_FILE = 'engine-checkout-behind-origin.md';
+export const ENGINE_STATE_FILE = 'engine-ff.state.json';
+/* Six hourly runs: long enough that a person's half-hour on a branch in the
+ * engine checkout never raises it, short enough that the loop's next tick after
+ * a stuck morning hears of it rather than the next week. */
+export const STUCK_RUNS_FOR_HOLD = 6;
+const ENGINE_LEASE_MIN = 5;
+/* Runs that end with the checkout at origin/main end a stuck streak; runs that
+ * could not ask (lock held, fetch failed, not a checkout) leave it as it was. */
+const ENGINE_CURRENT = new Set(['current', 'moved']);
+const ENGINE_STUCK = new Set(['wrong-branch', 'mid-operation', 'diverged', 'dirty', 'ff-refused', 'not-read-back']);
+
 function git(repo, args, opts = {}) {
   const r = spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', input: opts.input, maxBuffer: 64 * 1024 * 1024 });
   // `raw` keeps leading whitespace: porcelain's " M file" starts with a space that
@@ -98,9 +124,9 @@ function pad(n) { return String(n).padStart(2, '0'); }
  * from one moment carry one name. */
 function localHHMM(d) { return `${pad(d.getHours())}${pad(d.getMinutes())}`; }
 
-function holderText(name, d) {
-  const exp = new Date(d.getTime() + LEASE_MIN * 60000);
-  return `${name} ${d.toISOString()} push_main.mjs carrying deferred commits to origin/main\nexpires: ${exp.toISOString()}\n`;
+function holderText(name, d, what = 'push_main.mjs carrying deferred commits to origin/main', leaseMin = LEASE_MIN) {
+  const exp = new Date(d.getTime() + leaseMin * 60000);
+  return `${name} ${d.toISOString()} ${what}\nexpires: ${exp.toISOString()}\n`;
 }
 
 function writeHold(repo, name, d, why, files) {
@@ -372,6 +398,160 @@ function pushMainOnce({
   }
 }
 
+/* Bring the engine checkout to origin/main by fast-forward, or say why not.
+ * `engine` is the claude-skills checkout; `repo` is the buses-data checkout,
+ * which owns the loop lock, the log and loop/your-move/. Nothing here ever
+ * merges, rebases, resets or checks out: the one write is `merge --ff-only`. */
+export function engineFastForward(opts = {}) {
+  const { repo, apply = false, now = () => new Date(), log = (s) => process.stdout.write(`push_main: engine: ${s}\n`) } = opts;
+  const lines = [];
+  const res = engineFastForwardOnce({ ...opts, log: (s) => { lines.push(s); log(s); } });
+  if (!apply || !repo || !existsSync(path.join(repo, '.git'))) return res;
+  try {
+    const loopDir = path.join(repo, 'loop');
+    mkdirSync(loopDir, { recursive: true });
+    const t = now();
+    const stateFile = path.join(loopDir, ENGINE_STATE_FILE);
+    const prev = readState(stateFile);
+    let state = { stuckRuns: prev.stuckRuns || 0, firstStuckAt: prev.firstStuckAt || null };
+    if (ENGINE_STUCK.has(res.outcome)) state = { stuckRuns: state.stuckRuns + 1, firstStuckAt: state.firstStuckAt || t.toISOString() };
+    else if (ENGINE_CURRENT.has(res.outcome)) state = { stuckRuns: 0, firstStuckAt: null };
+    state.last = { at: t.toISOString(), outcome: res.outcome, behind: res.behind ?? null };
+    if (res.outcome === 'diverged' || (ENGINE_STUCK.has(res.outcome) && state.stuckRuns >= STUCK_RUNS_FOR_HOLD)) {
+      const h = writeEngineHold(repo, opts.engine, `sched-push-${localHHMM(t)}`, t, state, res);
+      lines.push(h.written ? `wrote the hold ${h.file}` : `the hold ${h.file} already stands`);
+      log(lines[lines.length - 1]);
+      res.hold = h.file;
+    }
+    writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+    appendLog(path.join(loopDir, LOG_FILE), `${[`=== ${t.toISOString()} engine ${res.outcome}`, ...lines.map((l) => `  ${l}`)].join('\n')}\n`);
+  } catch (e) {
+    log(`could not record the engine step under loop/: ${e.message}`);
+  }
+  return res;
+}
+
+function engineFastForwardOnce({ engine, repo, apply = false, now = () => new Date(), log }) {
+  const res = (outcome, extra = {}) => ({ outcome, ...extra });
+  if (!engine || !existsSync(path.join(engine, '.git'))) {
+    log(`${engine} is not a git checkout`);
+    return res('not-a-repo');
+  }
+  if (apply) {
+    const f = git(engine, ['fetch', 'origin']);
+    if (f.status !== 0) { log(`git fetch origin failed: ${f.err}`); return res('fetch-failed'); }
+  }
+  const behind = Number(git(engine, ['rev-list', '--count', 'main..origin/main']).out);
+  const ahead = Number(git(engine, ['rev-list', '--count', 'origin/main..main']).out);
+  if (!Number.isFinite(behind) || !Number.isFinite(ahead) || git(engine, ['rev-parse', '--verify', '-q', 'origin/main']).status !== 0) {
+    log('could not compare main with origin/main (no origin/main ref?)');
+    return res('no-origin-ref');
+  }
+  const waiting = () => git(engine, ['log', '--format=%h %s', 'main..origin/main']).out.split(/\r?\n/).filter(Boolean);
+  const branch = git(engine, ['branch', '--show-current']).out;
+  if (branch !== 'main') {
+    log(`the checkout is on "${branch || 'a detached HEAD'}", not main, so the loop is running that and not main; ${behind} commit${behind === 1 ? '' : 's'} on origin/main wait`);
+    return res('wrong-branch', { behind, waiting: waiting(), branch });
+  }
+  const gitDir = path.resolve(engine, git(engine, ['rev-parse', '--git-dir']).out);
+  for (const mid of ['rebase-merge', 'rebase-apply', 'MERGE_HEAD', 'CHERRY_PICK_HEAD']) {
+    if (existsSync(path.join(gitDir, mid))) {
+      log(`a ${mid} is in progress in the checkout, which is somebody's work; not moved`);
+      return res('mid-operation', { behind, waiting: waiting() });
+    }
+  }
+  if (ahead > 0) {
+    log(`local main has ${ahead} commit${ahead === 1 ? '' : 's'} origin/main lacks, so it cannot fast-forward; a person decides what they are`);
+    return res('diverged', { behind, ahead, waiting: waiting() });
+  }
+  if (behind === 0) { log(`main is at origin/main (${git(engine, ['rev-parse', '--short', 'main']).out})`); return res('current', { behind }); }
+  if (!apply) {
+    log(`main is ${behind} commit${behind === 1 ? '' : 's'} behind origin/main as last fetched; --apply would fetch and fast-forward it`);
+    return res('dry-run', { behind });
+  }
+  const dirty = git(engine, ['status', '--porcelain', '--untracked-files=no']).out;
+  if (dirty) {
+    log(`main is ${behind} behind and the checkout has tracked changes that are not committed, which are a person's; not moved`);
+    return res('dirty', { behind, waiting: waiting() });
+  }
+
+  // The loop lock: a tick mid-run is reading engine scripts, and the code under it must not change.
+  const t0 = now();
+  const name = `sched-push-${localHHMM(t0)}`;
+  const lockDir = path.join(repo, 'loop', 'LOCK.d');
+  const L = readLoopLock(repo, { now: t0.getTime() });
+  if (L.present) {
+    log(`loop/LOCK.d is held by ${L.name || 'an unnamed holder'}, so a run may be reading the engine; main stays ${behind} behind until the next run`);
+    return res('lock-held', { behind });
+  }
+  mkdirSync(path.join(repo, 'loop'), { recursive: true });
+  try { mkdirSync(lockDir); } catch { log('loop/LOCK.d was taken a moment ago; standing down'); return res('lock-held', { behind }); }
+  writeFileSync(path.join(lockDir, 'holder'), holderText(name, t0, 'push_main.mjs fast-forwarding the engine checkout', ENGINE_LEASE_MIN), 'utf8');
+  try {
+    const was = git(engine, ['rev-parse', '--short', 'main']).out;
+    const m = git(engine, ['merge', '--ff-only', 'origin/main']);
+    if (m.status !== 0) {
+      log(`git merge --ff-only origin/main was refused: ${(m.err || m.out).split(/\r?\n/).slice(0, 4).join(' / ')}`);
+      return res('ff-refused', { behind, waiting: waiting() });
+    }
+    // Done when a read of the checkout says so, not when merge said ok.
+    const head = git(engine, ['rev-parse', 'HEAD']).out;
+    const target = git(engine, ['rev-parse', 'origin/main']).out;
+    if (!head || head !== target) {
+      log(`merge reported success but HEAD is ${head || 'unreadable'} and origin/main is ${target}`);
+      return res('not-read-back', { behind });
+    }
+    log(`fast-forwarded main ${was}..${head.slice(0, 7)} (${behind} commit${behind === 1 ? '' : 's'}), read back: HEAD = origin/main`);
+    return res('moved', { behind, sha: head });
+  } finally {
+    try {
+      const first = readFileSync(path.join(lockDir, 'holder'), 'utf8').split(/\r?\n/)[0] || '';
+      if (first.startsWith(name)) rmSync(lockDir, { recursive: true, force: true });
+      else log(`the lock no longer names ${name}; left it alone`);
+    } catch { /* already gone */ }
+  }
+}
+
+function writeEngineHold(repo, engine, name, d, state, r) {
+  const dir = path.join(repo, 'loop', 'your-move');
+  const file = path.join(dir, ENGINE_HOLD_FILE);
+  if (existsSync(file)) return { file, written: false }; // one hold stands for as long as it is unanswered
+  mkdirSync(dir, { recursive: true });
+  const eng = String(engine || '').replace(/\\/g, '/');
+  const why = {
+    'wrong-branch': `it is on \`${r.branch || 'a detached HEAD'}\`, not \`main\`, so the loop is running that branch's code`,
+    'mid-operation': 'a rebase, merge or cherry-pick is left in progress in it',
+    diverged: `its local \`main\` has ${r.ahead} commit${r.ahead === 1 ? '' : 's'} that origin does not, so it cannot fast-forward`,
+    dirty: 'it has tracked changes that are not committed',
+    'ff-refused': '`git merge --ff-only origin/main` refused (the log has git\'s words; usually an untracked file in the way)',
+    'not-read-back': 'a fast-forward reported success and HEAD did not read back equal to origin/main',
+  }[r.outcome] || r.outcome;
+  const list = (r.waiting || []).slice(0, 15).map((l) => `- \`${l}\``).join('\n') || '- (none listed)';
+  writeFileSync(file, [
+    '# The engine checkout is behind origin and the push job cannot fast-forward it',
+    '',
+    `**Raised by:** ${name}, ${d.toISOString().slice(0, 10)}`,
+    '',
+    '## What is needed from you',
+    '',
+    `The hourly push job fast-forwards \`${eng}\` to \`origin/main\` after every claude-skills merge, and it could not, because ${why}. ${r.outcome === 'diverged' ? 'It said so on its first sight of it' : `It has failed on ${state.stuckRuns} runs in a row since ${state.firstStuckAt}`}, and until it is moved the loop, \`worklist.mjs\` and \`status.js\` read the old engine. A session puts the checkout back on a clean \`main\` with nothing of its own (keeping any work on a branch), and the next push job run fast-forwards it; the session may instead run, once it is clean and on \`main\`:`,
+    '',
+    '```bash',
+    `git -C "${eng}" merge --ff-only origin/main`,
+    '```',
+    '',
+    'There are no placeholders in it. This hold is satisfied once `git -C "' + eng + '" rev-list --count main..origin/main` prints 0 after a fetch.',
+    '',
+    `## The ${r.behind ?? '?'} commit${r.behind === 1 ? '' : 's'} on origin/main the loop is not running`,
+    '',
+    list,
+    '',
+    `Every run's engine line is in \`loop/${LOG_FILE}\` in the buses-data checkout, newest last.`,
+    '',
+  ].join('\n'), 'utf8');
+  return { file, written: true };
+}
+
 /* The real preflight and the real stamper, each by status with no shell and no pipe.
  * The preflight's output is captured as well as passed through, so a red run's
  * report reaches the log; its status is still read from spawnSync, never a pipe. */
@@ -394,8 +574,8 @@ export function realDocstamp(script = path.resolve(HERE, '..', '..', 'stamp-docs
 }
 
 function main(flags) {
-  const usage = 'usage: node push_main.mjs --repo "<buses-data checkout>" [--apply]\n';
-  const unknown = Object.keys(flags).filter((k) => k !== '_' && k !== 'repo' && k !== 'apply');
+  const usage = 'usage: node push_main.mjs --repo "<buses-data checkout>" [--apply] [--engine "<claude-skills checkout>"]\n';
+  const unknown = Object.keys(flags).filter((k) => k !== '_' && k !== 'repo' && k !== 'apply' && k !== 'engine');
   if (unknown.length || (Array.isArray(flags._) && flags._.length)) {
     process.stderr.write(`push_main: unknown argument ${unknown.length ? '--' + unknown[0] : flags._[0]}\n${usage}`);
     return EXIT_CANNOT_TELL;
@@ -408,7 +588,12 @@ function main(flags) {
     process.stderr.write('push_main: --repo "<buses-data checkout>" is required\n');
     return EXIT_CANNOT_TELL;
   }
-  return pushMain({ repo: path.resolve(repo), apply, preflight: realPreflight(), docstamp: realDocstamp() }).exit;
+  if (flags.engine === true) { process.stderr.write('push_main: --engine needs a folder\n'); return EXIT_CANNOT_TELL; }
+  const exit = pushMain({ repo: path.resolve(repo), apply, preflight: realPreflight(), docstamp: realDocstamp() }).exit;
+  // The engine step runs whatever the push did, and never changes the exit code.
+  const engine = typeof flags.engine === 'string' ? path.resolve(flags.engine) : git(HERE, ['rev-parse', '--show-toplevel']).out;
+  try { engineFastForward({ engine, repo: path.resolve(repo), apply }); } catch (e) { process.stderr.write(`push_main: engine step failed: ${e.message}\n`); }
+  return exit;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

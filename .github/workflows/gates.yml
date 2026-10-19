@@ -473,6 +473,15 @@ jobs:
         working-directory: skills/bus-work
         run: npm run test:prove-red-s6-next
 
+      # buses-data, 2026-10-19 (steps 2 and 3 of the S6-commissioning proposal). The
+      # one usage gate every scheduled task reads: a class runs only under both its
+      # ceilings, unread usage is a skip, use-it-or-lose-it only near the reset and
+      # under 60%; the weekly adjuster's two rules fire and stop at their hard limits.
+      # Each rule paired with its opposite, mutants on a scratch copy. No network.
+      - name: Prove the shared usage gate admits a class only under its ceilings
+        working-directory: skills/bus-work
+        run: npm run test:prove-red-allowance
+
       # buses-data OA-613 (2026-10-16). --local imports the portal's db module,
       # which creates DATA_DIR and an empty database at a stale path; for five days
       # the worklist read one and reported an empty portal. It now asks paths.js

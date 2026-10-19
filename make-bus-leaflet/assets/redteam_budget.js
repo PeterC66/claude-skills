@@ -137,7 +137,7 @@ const defaultReadEstate = (root) => {
  * nobody has set a budget, the other says somebody set one this cannot read, and
  * a caller that merged them would report a typo as a policy.
  */
-function readBudget(text, { file } = {}) {
+function readBudget(text, { file, month = null } = {}) {
   if (text == null) return { status: 'none', file };
   const bad = (why) => ({ status: 'unreadable', file, why });
   let p;
@@ -149,7 +149,18 @@ function readBudget(text, { file } = {}) {
   if (monthlyTokens === null) return bad(`\`monthlyTokens\` is ${JSON.stringify(p.monthlyTokens)}, which is not a non-negative number`);
   const nominalBuyTokens = n('nominalBuyTokens');
   if (nominalBuyTokens === null) return bad(`\`nominalBuyTokens\` is ${JSON.stringify(p.nominalBuyTokens)}, which is not a non-negative number`);
-  return { status: 'ok', file, monthlyTokens, nominalBuyTokens, setOn: p.setOn || null, setBy: p.setBy || null, note: p.note || null };
+  /* A SCHEDULE OF RAISES (buses-data allowance.mjs, 19 October 2026). `schedule` is an
+   * optional list of `{ from: 'YYYY-MM', monthlyTokens, setOn, setBy, why }`: from its
+   * `from` month on, the latest step replaces `monthlyTokens`. It is how a raise for NEXT
+   * month is written today without changing this month's figure. A step this cannot read
+   * makes the whole file unreadable, never a silently ignored raise. */
+  const schedule = p.schedule === undefined ? [] : p.schedule;
+  if (!Array.isArray(schedule)) return bad('`schedule` is not a list');
+  for (const st of schedule) {
+    if (!st || !/^\d{4}-\d{2}$/.test(st.from || '') || !(Number.isFinite(st.monthlyTokens) && st.monthlyTokens >= 0)) return bad(`a \`schedule\` step ${JSON.stringify(st)} needs \`from\` as YYYY-MM and a non-negative \`monthlyTokens\``);
+  }
+  const step = month ? schedule.filter((st) => st.from <= month).sort((a, b) => a.from.localeCompare(b.from)).pop() : null;
+  return { status: 'ok', file, monthlyTokens: step ? step.monthlyTokens : monthlyTokens, nominalBuyTokens, setOn: (step && step.setOn) || p.setOn || null, setBy: (step && step.setBy) || p.setBy || null, note: p.note || null, ...(step ? { scheduledFrom: step.from, baseMonthlyTokens: monthlyTokens } : {}) };
 }
 
 /** One decision record, parsed, or null with a reason. Never throws at a caller. */
@@ -172,7 +183,7 @@ function readDecision({ map, run, text }) {
  */
 function budgetState({ root, month, read = defaultReadEstate } = {}) {
   const raw = read(root);
-  const budget = readBudget(raw.budgetText, { file: path.join(root, BUDGET_FILE) });
+  const budget = readBudget(raw.budgetText, { file: path.join(root, BUDGET_FILE), month });
   const parsed = raw.decisions.map(readDecision);
   const unreadable = parsed.filter((d) => d.bad);
   const mine = parsed.filter((d) => !d.bad && monthOf(d.at) === month);

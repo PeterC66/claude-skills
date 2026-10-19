@@ -19,7 +19,9 @@
  *      the rebase and writes a hold to loop/your-move/), then run docstamp.py
  *      because a rebase runs no hook, and commit what it wrote by pathspec;
  *   4. run preflight.mjs, its status read straight from spawnSync, never piped;
- *   5. push `origin main` on exit 0 ONLY, then read origin back with ls-remote.
+ *   5. push on exit 0 ONLY, and only the commit the preflight measured
+ *      (`<sha>:main`); a `main` that moved while it ran waits for the next run
+ *      (exit 3, head-moved). Then read origin back with ls-remote.
  *
  * WHAT IT NEVER DOES. It never passes `--urgent` (that is for a red main or a
  * cross-repository pairing, and it is a person's call); it never rebases over
@@ -31,7 +33,7 @@
  * refused or not read back); 2 cannot tell or used wrongly (wrong branch, a
  * rebase already in progress, preflight could not answer, fetch failed);
  * 3 not now (inside the push interval, the lock held, tracked changes in the
- * way of a rebase) and the next run carries it.
+ * way of a rebase, main moved while the preflight ran) and the next run carries it.
  *
  * WHAT IT LEAVES BEHIND (buses-data OA-634). The scheduler's wrapper discards
  * stdout, and on 12 October a preflight that stayed red from 01:43 to 05:43
@@ -96,7 +98,7 @@ export const RED_RUNS_FOR_HOLD = 2;
 export const LOG_MAX_BYTES = 1024 * 1024;
 /* Outcomes that answer "is the preflight red?" with a no, and so end a streak.
  * A lock held, a fetch failed or an unanswered preflight asked nothing about red. */
-const STREAK_ENDERS = new Set(['pushed', 'nothing-to-push', 'deferred']);
+const STREAK_ENDERS = new Set(['pushed', 'nothing-to-push', 'deferred', 'head-moved']);
 
 export const ENGINE_HOLD_FILE = 'engine-checkout-behind-origin.md';
 export const ENGINE_STATE_FILE = 'engine-ff.state.json';
@@ -367,6 +369,10 @@ function pushMainOnce({
       }
     }
 
+    // The commit the preflight is about to measure. Sessions do not take the loop
+    // lock to commit, so `main` can move during the minutes the preflight runs;
+    // the push sends THIS commit, and a move is waited out (buses-data, 2026-10-19).
+    const measured = git(repo, ['rev-parse', 'main']).out;
     const answer = preflight(repo);
     const pf = answer !== null && typeof answer === 'object' ? answer.status : answer;
     const pfx = { preflightExit: pf, report: answer !== null && typeof answer === 'object' ? answer.report : undefined };
@@ -380,21 +386,25 @@ function pushMainOnce({
       return res(exit, pf === 1 ? 'preflight-red' : 'preflight-unanswered', pfx);
     }
 
-    const sending = Number(git(repo, ['rev-list', '--count', 'origin/main..main']).out);
-    const p = git(repo, ['push', 'origin', 'main']);
+    const tip = git(repo, ['rev-parse', 'main']).out;
+    if (tip !== measured) {
+      log(`main moved from ${measured.slice(0, 8)} to ${tip.slice(0, 8)} while the preflight ran, so its green is about a commit that is no longer the tip; nothing pushed, the next run measures and carries both`);
+      return res(EXIT_NOT_NOW, 'head-moved', pfx);
+    }
+    const sending = Number(git(repo, ['rev-list', '--count', `origin/main..${measured}`]).out);
+    const p = git(repo, ['push', 'origin', `${measured}:refs/heads/main`]);
     if (p.status !== 0) {
-      log(`git push origin main was refused: ${p.err}`);
+      log(`git push origin ${measured.slice(0, 8)}:main was refused: ${p.err}`);
       return res(EXIT_NO, 'push-refused');
     }
     // A stateful act is done when a read of the system says so, not when the push said ok.
     const remote = readRemote(repo);
-    const local = git(repo, ['rev-parse', 'main']).out;
-    if (!remote || remote !== local) {
-      log(`push reported success but origin's main is ${remote || 'unreadable'} and local main is ${local}`);
+    if (!remote || remote !== measured) {
+      log(`push reported success but origin's main is ${remote || 'unreadable'} and the measured commit is ${measured}`);
       return res(EXIT_NO, 'not-read-back');
     }
-    log(`pushed ${sending} local commit${sending === 1 ? '' : 's'}; origin/main is now ${local.slice(0, 8)}, read back with ls-remote`);
-    return res(EXIT_OK, 'pushed', { sha: local });
+    log(`pushed ${sending} local commit${sending === 1 ? '' : 's'}; origin/main is now ${measured.slice(0, 8)}, read back with ls-remote`);
+    return res(EXIT_OK, 'pushed', { sha: measured });
   }
 }
 

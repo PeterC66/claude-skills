@@ -51,6 +51,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from './engine.mjs';
 
 export const CLASSES = ['publish-path', 'upkeep', 'background'];
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -164,18 +165,21 @@ export function budgetFor(budget, month) {
 // ---- the command line ----------------------------------------------------------------------
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const [verb, ...rest] = process.argv.slice(2);
+  const args = parseArgs(process.argv.slice(2));
+  const verb = (args._ || [])[0];
   const KNOWN = { gate: ['--task', '--class', '--status', '--five-hour', '--weekly', '--weekly-resets', '--run'], after: ['--task', '--run', '--status', '--five-hour', '--weekly', '--weekly-resets'], report: ['--json'], adjust: ['--buses', '--apply'] };
   const COMMON = ['--policy', '--log', '--now'];
   const BOOL = ['--json', '--apply'];
   const die = (why) => { console.error(`allowance.mjs: ${why}`); process.exit(2); };
   if (!KNOWN[verb]) die(`the first argument must be one of ${Object.keys(KNOWN).join(', ')}; got ${JSON.stringify(verb)}`);
   const o = {};
-  for (let i = 0; i < rest.length; i++) {
-    const f = rest[i];
+  for (const [k, v] of Object.entries(args)) {
+    if (k === '_') continue;
+    const f = `--${k}`;
     if (![...KNOWN[verb], ...COMMON].includes(f)) die(`${verb} does not take ${f}; it takes ${[...KNOWN[verb], ...COMMON].join(' ')}`);
-    if (BOOL.includes(f)) o[f] = true; else { if (rest[i + 1] === undefined) die(`${f} needs a value`); o[f] = rest[++i]; }
+    if (BOOL.includes(f)) o[f] = true; else { if (typeof v !== 'string') die(`${f} needs a value`); o[f] = v; }
   }
+  if ((args._ || []).length > 1) die(`unexpected argument ${JSON.stringify(args._[1])}`);
   const policyFile = o['--policy'] || path.join(os.homedir(), '.claude', 'allowance.json');
   const logFile = o['--log'] || path.join(os.homedir(), '.claude', 'allowance-log.jsonl');
   const now = o['--now'] || new Date().toISOString();

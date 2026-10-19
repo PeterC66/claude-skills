@@ -156,6 +156,7 @@ try {
 const mscratch = fs.mkdtempSync(path.join(os.tmpdir(), 'allowance-m-'));
 try {
   const src = fs.readFileSync(path.join(HERE, 'allowance.mjs'), 'utf8');
+  for (const n of fs.readdirSync(HERE)) if (/\.(mjs|js|json)$/.test(n)) fs.copyFileSync(path.join(HERE, n), path.join(mscratch, n)); // allowance.mjs imports ./engine.mjs
   const MUTANTS = [
     { what: 'unread usage passes', find: "if (status !== 'ok') return", repl: "if (false) return", must: 'usage that could not be read is a skip, never a pass' },
     { what: 'the weekly ceiling becomes inclusive', find: 'return weekly < k.weeklyUnder && fiveHour < k.fiveHourUnder;', repl: 'return weekly <= k.weeklyUnder && fiveHour < k.fiveHourUnder;', must: 'CONTROL: at its weekly ceiling it does not' },

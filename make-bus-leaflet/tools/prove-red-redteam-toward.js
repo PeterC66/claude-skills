@@ -17,6 +17,11 @@
  *       row's "rule that must hold" is about — a day string moving against the
  *       answer must still buy — and every against case must redden ON ITS EXIT
  *       CODE, which a too-generous agreement test would turn into a free reuse.
+ *   M3  THE REGISTER UNASKED (buses-data OA-484 follow-up). registerIncludes()
+ *       returns nothing, the code as it stood when March's two decided includes
+ *       bought on 2026-10-20: the no-feed decided case must redden.
+ *   M4  THE REGISTER ASKED TOO LOOSELY. Any entry excuses, queued, off or
+ *       another map's: the not-decided-for-this-map case must redden.
  *
  * Some M1 reds are on a message rather than an exit code: the old rule bought
  * those cases too, but could not say which value disagreed with what. They are
@@ -50,6 +55,8 @@ const T = {
   refreshAgainst: 'a SAFE refresh S1 that moved a day string AGAINST the answer buys (OA-575 prove-red)',
   refreshTo: 'a SAFE refresh S1 that moved a day string TO the answer is reused (OA-575)',
   decided: 'a decided include in our file is still our reply, not a move (OA-332 under OA-575)',
+  noFeed: 'a decided include arriving in our file with no feed file anywhere is our reply (OA-484)',
+  notDecided: 'an arrival the register has not decided include FOR THIS MAP still buys (OA-484 prove-red)',
 };
 
 /* Replace the span [start, end) of `src` with `next`; both anchors asserted. */
@@ -72,8 +79,8 @@ const MUTATIONS = [
       '',
       '',
     ].join('\n'), 'disagreements()'),
-    red: [T.daysTo, T.operator, T.refreshAgainst],
-    redOnMessage: [T.daysAway, T.terminus, T.noEntry],
+    red: [T.daysTo, T.operator, T.refreshAgainst, T.noFeed],
+    redOnMessage: [T.daysAway, T.terminus, T.noEntry, T.notDecided],
     green: [T.refreshTo, T.decided],
   },
   {
@@ -83,7 +90,26 @@ const MUTATIONS = [
       'function agreesWithAnswer(answer, route, moved) {\n  return { ok: true };   // M2: agreement always holds'),
     red: [T.daysAway, T.operator, T.noEntry, T.refreshAgainst],
     redOnMessage: [],
-    green: [T.daysTo, T.terminus, T.refreshTo, T.decided],
+    green: [T.daysTo, T.terminus, T.refreshTo, T.decided, T.noFeed, T.notDecided],
+  },
+  {
+    name: 'M3, the register unasked',
+    file: 'redteam_source.js',
+    apply: s => s.replace('function registerIncludes() {',
+      'function registerIncludes() {\n  return null;   // M3: the register is not asked'),
+    red: [T.noFeed],
+    redOnMessage: [],
+    green: [T.daysTo, T.daysAway, T.operator, T.terminus, T.noEntry, T.refreshAgainst, T.refreshTo, T.decided, T.notDecided],
+  },
+  {
+    name: 'M4, any register entry excuses',
+    file: 'redteam_source.js',
+    apply: s => s.replace(
+      "if (!e || e.status !== 'decided' || e.outcome !== 'include' || !Array.isArray(e.scope) || !e.scope.includes(thisMap)) continue;",
+      'if (!e) continue;   // M4: status, outcome and scope unread'),
+    red: [T.notDecided],
+    redOnMessage: [],
+    green: [T.daysTo, T.daysAway, T.operator, T.terminus, T.noEntry, T.refreshAgainst, T.refreshTo, T.decided, T.noFeed],
   },
 ];
 

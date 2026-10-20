@@ -87,6 +87,10 @@ function estate(opts = {}) {
     fs.writeFileSync(path.join(rd, 'verified-services.json'),
       JSON.stringify({ town: 'Testton', services }, null, 1));
   }
+  /* THE REGISTER (buses-data OA-484 follow-up). `register` is the `facts` array
+   * of a service-facts.json at the scratch root, which is where the tool looks for
+   * the estate root. Without it nothing is written and no row is excused. */
+  if (opts.register) fs.writeFileSync(path.join(root, 'service-facts.json'), JSON.stringify({ facts: opts.register }, null, 1));
   const runId = day(opts.answerAgeDays === undefined ? 5 : opts.answerAgeDays) + '_1000';
   const answerDir = path.join(dir, 'S6-verify', runId);
   fs.mkdirSync(answerDir, { recursive: true });

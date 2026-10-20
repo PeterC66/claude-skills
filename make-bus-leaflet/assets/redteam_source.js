@@ -391,13 +391,15 @@ function movedPairs(a, b) {
  *   - every moved value must agree with ONE answer entry for that route, by
  *     redteam_agree.js — the rule S6 itself reads, and stricter than it;
  *   - anything else, or an answer with no entry for the route, buys.
- * It returns null when the move qualifies, else the reasons it does not. */
+ * It returns null when the move qualifies, else the reasons it does not.
+ * `excuse` (see registerIncludes below) names a row that arrived as our own
+ * reply, and such a row is not a reason. */
 const AGREEABLE = new Set(['operator', 'days']);
-function disagreements(moved, answer, { pairsOnly = false } = {}) {
+function disagreements(moved, answer, { pairsOnly = false, excuse = null } = {}) {
   const out = [];
   if (!pairsOnly) {
     for (const r of moved.gone) out.push(`${svcLabel(r)} is no longer in the newer file`);
-    for (const r of moved.came) out.push(`${svcLabel(r)} is only in the newer file`);
+    for (const r of moved.came) if (!(excuse && excuse(r))) out.push(`${svcLabel(r)} is only in the newer file`);
   }
   for (const p of moved.pairs) {
     const other = p.fields.filter(f => !AGREEABLE.has(f));
@@ -548,7 +550,41 @@ function eraFileInForce(era, file) {
   return null;
 }
 
-function fingerprintPair(answerDate, files = ['gtfs-services.json', 'verified-services.json']) {
+/* A DECIDED INCLUDE IS OUR REPLY EVEN WITH NO FEED FILE TO INHERIT (buses-data
+ * OA-484 follow-up, 2026-10-20). OA-332 keeps a decided include out of the
+ * comparison by reaching back to the feed derivation in force, and that only
+ * works where some era HAS one. March has none in any S1 run — every one of its
+ * four writes verified-services.json alone — so both sides fell to our own file,
+ * and Dial-a-Ride Fenland (SF-013) and Tiger on Demand (SF-015), moved from
+ * notOnLeaflet[] into services[] by OA-484, read as two services the answer had
+ * never seen: BUY, answered by hand with --reuse-anyway on 2026-10-20.
+ *
+ * So when the comparison is over OUR file, a row that ARRIVED is excused if the
+ * register at the estate root holds a `decided` `include` for it whose scope
+ * names this map. Matched on the route or an alias, folded the way
+ * check-s6-claims.mjs folds them (upper case, whitespace out), because that is the
+ * join the register is already kept honest by. Narrow on purpose:
+ *   - only an ARRIVAL; a row that vanished or changed still counts;
+ *   - only over verified-services.json; a feed row is the world, never our reply;
+ *   - only decided, only include, only this map; queued or another town's
+ *     decision excuses nothing;
+ *   - no register, or one that will not parse, excuses nothing — the safe way. */
+const normRoute = r => String(r == null ? '' : r).toUpperCase().replace(/\s+/g, '');
+function registerIncludes() {
+  const root = BUDGET.findEstateRoot(BUILD);
+  if (!root) return null;
+  let j;
+  try { j = JSON.parse(fs.readFileSync(path.join(root, 'service-facts.json'), 'utf8')); } catch { return null; }
+  const thisMap = m.town || path.basename(BUILD);
+  const keys = new Map();
+  for (const e of (j && Array.isArray(j.facts) ? j.facts : [])) {
+    if (!e || e.status !== 'decided' || e.outcome !== 'include' || !Array.isArray(e.scope) || !e.scope.includes(thisMap)) continue;
+    for (const k of [e.route].concat(Array.isArray(e.aliases) ? e.aliases : [])) { const n = normRoute(k); if (n) keys.set(n, e.id || n); }
+  }
+  return keys;
+}
+
+function fingerprintPair(answerDate,files = ['gtfs-services.json', 'verified-services.json']) {
   const now = s1Latest(), then = s1AsOf(answerDate);
   if (!now || !then) return { ok: false, why: 'the manifest names no S1 run on both sides of the answer' };
   for (const f of files) {
@@ -772,12 +808,20 @@ if (fp.ok) {
     const head = moved.slice(0, 6);
     head.forEach((line, i) => console.log(`${i === 0 ? '  what moved         : ' : '                       '}${line}`));
     if (moved.length > head.length) console.log(`                       … and ${moved.length - head.length} more`);
-    const against = disagreements(movedPairs(fp.a, fp.b), best.answer);
+    const includes = fp.file === 'verified-services.json' ? registerIncludes() : null;
+    const excuse = includes ? r => includes.get(normRoute(r[0])) || null : null;
+    const pairs = movedPairs(fp.a, fp.b);
+    const replies = excuse ? pairs.came.filter(r => excuse(r)) : [];
+    for (const r of replies) console.log(`  our reply          : ${svcLabel(r)} arrived as register-decided include ${excuse(r)} for this map (OA-484)`);
+    const against = disagreements(pairs, best.answer, { excuse });
     if (against.length) {
       reasons.push(`the service facts moved between S1 ${fp.then.id} and S1 ${fp.now.id} — route, operator, days, termini or headsigns differ, and that is exactly what the answer is about`);
       for (const w of against.slice(0, 6)) console.log(`  not toward it      : ${w}`);
+    } else if (replies.length && !pairs.pairs.length) {
+      agreed = `the only service facts that moved between S1 ${fp.then.id} and S1 ${fp.now.id} are rows our verified-services.json gained as register-decided includes (${replies.map(r => excuse(r)).join(', ')}) — our reply to the answer, not the world moving`;
+      console.log(`  toward the answer  : every move is a register-decided include arriving in our own file (OA-484)`);
     } else {
-      agreed = `the only service facts that moved between S1 ${fp.then.id} and S1 ${fp.now.id} are operator or day strings, and each new value agrees with this answer`;
+      agreed = `the only service facts that moved between S1 ${fp.then.id} and S1 ${fp.now.id} are operator or day strings${replies.length ? ' and register-decided includes' : ''}, and each new value agrees with this answer`;
       console.log(`  toward the answer  : every move is an operator or days string that now AGREES with the answer (OA-575)`);
     }
   }

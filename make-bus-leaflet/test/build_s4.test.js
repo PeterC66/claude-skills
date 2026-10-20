@@ -197,8 +197,9 @@ test('a build that dies still writes the log, and names the generator that died'
   assert.ok(r.blockers.length >= 1, 'a generator that died is a blocking entry');
   assert.deepStrictEqual(r.outputs, [LOG_NAME], 'no sheet landed, so only the log is an output');
   // And it stopped there rather than running the external generator over the same
-  // missing inputs: one captured entry, not two.
-  assert.deepStrictEqual(r.said.map(e => e.source), ['internal']);
+  // missing inputs: one captured generator entry, not two. The via check is asked once
+  // after the sheets whatever they did (buses-data OA-650), so it comes last.
+  assert.deepStrictEqual(r.said.map(e => e.source), ['internal', 'via']);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

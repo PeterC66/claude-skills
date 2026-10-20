@@ -81,6 +81,12 @@ const OVERFLOWED = /\bunder the footer plate\b|\binside\/near the footer plate\b
 // all. Found while sweeping the estate for OA-065: ten runs exited non-zero and
 // every one was filed as "worth reading, never worth blocking a build over".
 const CRASHED = /^[A-Za-z]*Error:|^\s*at .+:\d+:\d+\)?$|\bis not vendored\b/m;
+// A village the sheet sends a bus through that is on none of its route's own stops,
+// put there by THIS build (buses-data OA-650, 2026-10-20). via_build_check.js words a
+// via already on the published sheet differently, as WARN, so the five maps OA-636
+// still owes can be refreshed; only a via the build introduced says "never calls at".
+// Swept before landing: the phrase appears in no generator and no committed log.
+const OFF_CHAIN = /\bnever calls at\b/i;
 // A MEASUREMENT (OA-118). The marker is the prefix, not a phrase — see the header.
 const MEASURED = /^\s*measure:\s/;
 
@@ -89,7 +95,7 @@ function severity(line) {
   // text and may legitimately contain any of the phrases below.
   if (MEASURED.test(String(line))) return 'MEASURED';
   return (REFUSED.test(line) || MEANINGLESS.test(line) || OVERFLOWED.test(line)
-          || CRASHED.test(line)) ? 'BLOCKING' : 'WARN';
+          || CRASHED.test(line) || OFF_CHAIN.test(line)) ? 'BLOCKING' : 'WARN';
 }
 
 // Split a captured stderr blob into one entry per message. The generators write

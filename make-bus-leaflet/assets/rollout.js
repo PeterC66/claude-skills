@@ -388,7 +388,7 @@ function rolloutOne(t) {
    * `write: false` because this folder is deleted a few lines down, and `buildMeta:
    * false` because the scratch run would otherwise overwrite build-meta.json with a
    * build that is then thrown away — both were this tool's own rules before the move. */
-  const dry = buildSheets({ dir: s4, level: 'area', routesJson, buildMeta: false, write: false });
+  const dry = buildSheets({ dir: s4, level: 'area', routesJson, buildMeta: false, write: false, mapDir: t.dir });
   if (!dry.ok) {
     fs.rmSync(scratch, { recursive: true, force: true });
     return { name: t.name, status: 'FAIL', detail: dry.failure.label + ': ' + String(dry.failure.stderr).split('\n')[0] };
@@ -510,7 +510,7 @@ function rolloutOne(t) {
    * `--all --apply`. The log itself goes in the run folder BESIDE the artwork it
    * describes and is committed as an output, so "what did the engine say when it drew
    * this?" is answerable later, from the tree, without rebuilding. */
-  const real = buildSheets({ dir: s4Dir, level: 'area', routesJson });
+  const real = buildSheets({ dir: s4Dir, level: 'area', routesJson, mapDir: t.dir });
   if (!real.ok) {
     fs.rmSync(scratch, { recursive: true, force: true });
     return { name: t.name, status: 'FAIL',

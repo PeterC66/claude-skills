@@ -1006,8 +1006,8 @@ const MUTATIONS = [
 
   { suite: 'build_log.test.js', file: 'build_log.js',
     what: 'a generator that DIED is only a WARN again',
-    find: '          || CRASHED.test(line)) ? \'BLOCKING\' : \'WARN\';',
-    to: '          ) ? \'BLOCKING\' : \'WARN\';' },
+    find: '          || CRASHED.test(line) || OFF_CHAIN.test(line)) ? \'BLOCKING\' : \'WARN\';',
+    to: '          || OFF_CHAIN.test(line)) ? \'BLOCKING\' : \'WARN\';' },
 
   { suite: 'build_log.test.js', file: 'build_log.js',
     what: 'a non-zero exit stops being blocking on its own account',
@@ -2141,8 +2141,8 @@ const MUTATIONS = [
   // classifies on a prefix, and both of its neighbours are phrase rules.
   { suite: 'build_log.test.js', file: 'build_log.js',
     what: 'the phrase rules are consulted before the measurement prefix, so a measurement whose payload says "not drawn" is filed as a refusal and blocks the build',
-    find: "  if (MEASURED.test(String(line))) return 'MEASURED';\n  return (REFUSED.test(line) || MEANINGLESS.test(line) || OVERFLOWED.test(line)\n          || CRASHED.test(line)) ? 'BLOCKING' : 'WARN';",
-    to: "  const base = (REFUSED.test(line) || MEANINGLESS.test(line) || OVERFLOWED.test(line)\n          || CRASHED.test(line)) ? 'BLOCKING' : 'WARN';\n  return base === 'WARN' && MEASURED.test(String(line)) ? 'MEASURED' : base;" },
+    find: "  if (MEASURED.test(String(line))) return 'MEASURED';\n  return (REFUSED.test(line) || MEANINGLESS.test(line) || OVERFLOWED.test(line)\n          || CRASHED.test(line) || OFF_CHAIN.test(line)) ? 'BLOCKING' : 'WARN';",
+    to: "  const base = (REFUSED.test(line) || MEANINGLESS.test(line) || OVERFLOWED.test(line)\n          || CRASHED.test(line) || OFF_CHAIN.test(line)) ? 'BLOCKING' : 'WARN';\n  return base === 'WARN' && MEASURED.test(String(line)) ? 'MEASURED' : base;" },
 
   { suite: 'build_log.test.js', file: 'build_log.js',
     what: 'the measurement pattern loses its start anchor, so any message merely CONTAINING "measure:" is reclassified as a number and stops being read as a fault',
@@ -2519,6 +2519,33 @@ const MUTATIONS = [
     what: 'build_s4 stops asking the config check, so build-warnings.txt never names either mistake',
     find: "    if (key === 'external') said.push({ source: 'config',",
     to: "    if (false) said.push({ source: 'config'," },
+
+  // via_build_check.js — S6's via-on-chain check asked at S4 (buses-data OA-650). A via
+  // this build introduced blocks; one already published warns, so OA-636's maps refresh.
+  { suite: 'via_build_check.test.js', file: 'via_build_check.js',
+    what: 'the published config is ignored, so every via OA-636 owes blocks the monthly refresh of five maps',
+    find: "    if (before.has(keyOf(o))) {",
+    to: "    if (false) {" },
+
+  { suite: 'via_build_check.test.js', file: 'via_build_check.js',
+    what: 'every via counts as already published, so a village this build borrowed ships with a WARN',
+    find: "    if (before.has(keyOf(o))) {",
+    to: "    if (true) {" },
+
+  { suite: 'via_build_check.test.js', file: 'via_build_check.js',
+    what: "a rollout's map folder is ignored, so its scratch dry run reads every published via as new",
+    find: "  const map = mapDir === undefined ? mapDirOf(dir) : mapDir;",
+    to: "  const map = mapDirOf(dir);" },
+
+  { suite: 'via_build_check.test.js', file: 'build_log.js',
+    what: 'the off-chain phrase leaves the BLOCKING contract, so a borrowed village is filed as WARN',
+    find: "          || CRASHED.test(line) || OFF_CHAIN.test(line)) ? 'BLOCKING' : 'WARN';",
+    to: "          || CRASHED.test(line)) ? 'BLOCKING' : 'WARN';" },
+
+  { suite: 'via_build_check.test.js', file: 'build_s4.js',
+    what: 'build_s4 stops asking the via check, so S4 ships a borrowed village and only S6 finds it',
+    find: "  said.push({ source: 'via', stderr:",
+    to: "  if (false) said.push({ source: 'via', stderr:" },
 
   // wcag.js — the three colour questions, extracted 2026-09-03 (OA-232 Tier 3.1,
   // OA-135) from seven copies across five files. The danger this module creates is

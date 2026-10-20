@@ -6,8 +6,7 @@ Licensor:             Peter Cooper
 Licensed Work:        BusMaps.uk Claude Skills (this repository) — the
                        bus-leaflet and place-leaflet generation skills
                        (make-bus-leaflet, make-place-bus-leaflet,
-                       audit-bus-leaflet, bus-work) and the St Ives u3a
-                       handout automation skills
+                       audit-bus-leaflet, bus-work)
                        The Licensed Work is (c) 2026 Peter Cooper
 Additional Use Grant:  You may use, copy, modify, and self-host the Licensed
                        Work for any non-commercial, personal, internal, or

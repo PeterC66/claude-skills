@@ -69,8 +69,6 @@
     "DP": "Dynamic programming -- the length-weighted solve that resolves conflicting octants at a junction",
     "EC": "Error correction -- the four redundancy levels a QR code can be encoded at",
     "UA": "User-Agent, the HTTP request header Overpass answers 406 without",
-    "COM": "Component Object Model -- the Windows automation interface the handout skills drive Word and Excel through",
-    "MOM": "Members' Open Meeting -- the monthly St Ives (Cambs) u3a meeting the three handout skills prepare for",
     "AI": "Artificial intelligence"
   },
   "notAbbreviations": [
@@ -99,7 +97,7 @@
     },
     {
       "reason": "ordinary English that our house style shouts, or a verdict token a tool prints in capitals -- REUSE and BUY are redteam_source.js's two answers, PARKED is a status. The checker's lower-case-count rule catches this class in a 301-document corpus and is weaker in a 45-document one, which is why they are declared here rather than left to it.",
-      "tokens": ["BUY", "HALTED", "REUSE", "REUSES", "PARKED", "LATE", "GAIN", "LOUDLY", "REFUSE", "NEVER", "BOTH", "DONE", "STALE", "PASS", "HARD", "SOFT"]
+      "tokens": ["BUY", "HALTED", "REUSE", "REUSES", "PARKED", "LATE", "GAIN", "LOUDLY", "REFUSE", "NEVER", "BOTH", "DONE", "STALE", "PASS", "HARD", "SOFT", "AMBER"]
     },
     {
       "reason": "a fragment of something that is not prose at all -- a hex colour, a font name, an encoding, a coordinate system -- that survived the code stripping because it was written bare.",

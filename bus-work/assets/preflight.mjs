@@ -50,7 +50,7 @@
 // minutes — and it is not run per commit. It is run once per round, and the
 // thing it replaces is three CI round trips plus the analysis between them.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, mkdtempSync, rmSync, symlinkSync, lstatSync, rmdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, symlinkSync, lstatSync, rmdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseArgs, assetsDir, resolvePortal } from './engine.mjs';
@@ -599,6 +599,8 @@ export function pinnedCommit(repo) {
  * A run killed before that leaves the folder AND its registration, which
  * `worktree prune` never clears because the folder still exists — on 2026-10-01
  * three had piled up since 27 Sep — so `reclaimStalePins` runs before the add.
+ * The folder holds `owner.json`, this process's pid, so a reclaim can tell a
+ * killed run from a live one without waiting STALE_PIN_HOURS.
  */
 export function engineAtPin(skillsRoot, commit) {
   if (!skillsRoot || !existsSync(path.join(skillsRoot, '.git'))) return { why: `no claude-skills checkout found at ${skillsRoot || '(unresolved)'}` };
@@ -609,6 +611,7 @@ export function engineAtPin(skillsRoot, commit) {
   git(skillsRoot, ['worktree', 'prune']);
   reclaimStalePins(skillsRoot);
   const dir = mkdtempSync(path.join(tmpdir(), 'preflight-pin-'));
+  writeFileSync(path.join(dir, PIN_OWNER), JSON.stringify({ pid: process.pid }) + '\n');
   const wt = path.join(dir, 'skills');
   const add = () => git(skillsRoot, ['worktree', 'add', '--quiet', '--detach', wt, commit]);
   let r = add();
@@ -630,13 +633,28 @@ export function engineAtPin(skillsRoot, commit) {
 /** A pin worktree older than this belongs to a run that was killed: a whole full-tier preflight takes minutes. */
 export const STALE_PIN_HOURS = 6;
 
+/** The file in a pin folder that names the process which made it. */
+export const PIN_OWNER = 'owner.json';
+
+/** Whether the run that made a pin folder is known to be dead: its owner.json names a pid no process has. */
+function ownerDead(dir) {
+  let pid;
+  try { pid = JSON.parse(readFileSync(path.join(dir, PIN_OWNER), 'utf8')).pid; } catch { return false; }   // no record: only age can tell
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return false; } catch (e) { return e.code === 'ESRCH'; }
+}
+
 /**
  * Release every pin worktree a killed run left registered on `skillsRoot`.
  *
  * Only a registration of the exact shape `engineAtPin` makes is touched —
- * `<base>/preflight-pin-XXXXXX/skills`, base being the temp directory — and only when its folder is
- * older than STALE_PIN_HOURS, so a preflight running in another session at the
- * same moment keeps its tree. Each goes through `releaseEngine`, which unlinks
+ * `<base>/preflight-pin-XXXXXX/skills`, base being the temp directory — and only when its
+ * owner.json names a process that is gone, or its folder is older than STALE_PIN_HOURS
+ * (a folder with no owner.json, or a pid since reused), so a preflight running in another
+ * session at the same moment keeps its tree. The owner test is what reclaims a
+ * timed-out run: push_main.mjs's spawnSync timeout kills the preflight outright on
+ * Windows, its `finally` never runs, and from 19 to 20 October 2026 five hourly runs
+ * left five trees that the age test would have held for six hours each. Each goes through `releaseEngine`, which unlinks
  * the borrowed node_modules junction before git deletes anything. The weekly
  * worktree sweep cannot do this: it refuses any tree holding a junction, by
  * design, and every one of these holds one. Returns the folders it released.
@@ -653,7 +671,7 @@ export function reclaimStalePins(skillsRoot, { base = tmpdir(), now = Date.now()
     if (path.basename(root) !== 'skills' || !/^preflight-pin-[A-Za-z0-9]{6}$/.test(path.basename(dir)) || norm(path.dirname(dir)) !== norm(base)) continue;
     let age;
     try { age = now - statSync(dir).mtimeMs; } catch { continue; }   // folder gone: prune's job, already done
-    if (age < hours * 3600e3) continue;
+    if (age < hours * 3600e3 && !ownerDead(dir)) continue;
     releaseEngine({ via: 'worktree', root, dir, skillsRoot });
     released.push(dir);
   }
@@ -840,6 +858,10 @@ export function preflight({ repo, all = false, skillsRoot, urgent = null, now = 
       exit: EXIT_CANNOT_TELL,
     };
   }
+  // Every run reclaims, not only one that needs a pin: after a timed-out run the next
+  // hourly runs were DEFERRED, never reached engineAtPin, and left its tree standing.
+  const skills = skillsRoot || skillPaths().SKILLS;
+  reclaimStalePins(skills);
   const tier = scope.known ? tierFor(scope.paths, manifest.docsOnly || []) : { tier: 'full', beyond: [] };
   // The interval is asked only of a push that has something in it: a branch level
   // with its upstream has nothing to defer, and an unknown scope is reported as
@@ -857,7 +879,6 @@ export function preflight({ repo, all = false, skillsRoot, urgent = null, now = 
   const wanted = inTier.filter((c) => triggered(c, scope, all));
   // Named in the report, so a check that was not triggered reads as not asked and never as a pass.
   const notTriggered = inTier.filter((c) => !triggered(c, scope, all)).map((c) => ({ id: c.id, label: c.label, when: c.when }));
-  const skills = skillsRoot || skillPaths().SKILLS;
   const pin = pinnedCommit(repo);
   let pinEngine = null;
   if (wanted.some((c) => c.atPin)) pinEngine = pin.commit ? engineAtPin(skills, pin.commit) : { why: pin.why };

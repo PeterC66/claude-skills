@@ -80,11 +80,18 @@ export const EXIT_NO = 1;
 export const EXIT_CANNOT_TELL = 2;
 export const EXIT_NOT_NOW = 3;
 
-/* Longer than the preflight's own 600000 ms ceiling plus a rebase and a stamp,
- * and far inside loop_lock's four-hour maximum. A crashed job's lock is stolen
- * by the first tick after this, because the name starts `sched-`. */
+/* Longer than PREFLIGHT_TIMEOUT_MS plus a rebase and a stamp, and far inside
+ * loop_lock's four-hour maximum. A crashed job's lock is stolen by the first
+ * tick after this, because the name starts `sched-`. */
 export const LEASE_MIN = 40;
-export const PREFLIGHT_TIMEOUT_MS = 600000;
+/* 25 minutes, not 10 (buses-data, 2026-10-20). A full-tier buses-data preflight
+ * with both estate harnesses takes 4 min 32 s on an awake laptop (prove-red-status
+ * 166 s, the board 63 s), but this job runs hidden from Task Scheduler, and six of
+ * the seven ETIMEDOUTs from 17 to 20 Oct began with the laptop in Modern Standby
+ * (System log events 506/507), where the same run took 9 min 10 s when it finished
+ * at all. Each timeout cost a push an hour. Still under the hourly period, and
+ * LEASE_MIN above keeps 15 minutes for the rebase and the stamp. */
+export const PREFLIGHT_TIMEOUT_MS = 25 * 60000;
 
 const HOLD_FILE = 'push-job-rebase-conflict.md';
 export const RED_HOLD_FILE = 'push-job-preflight-red.md';

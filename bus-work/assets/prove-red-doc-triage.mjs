@@ -175,6 +175,28 @@ console.log('\nWhat it does when every half answers:\n');
     + (stamped ? '  <-- it stamped anyway' : ''), 'GREEN');
 }
 
+/* --help ONCE RAN FOR REAL and re-stamped the weekly triage (ad-hoc run
+ * 2026-10-17_2102). It must print usage, exit 0 and write nothing; an unknown
+ * flag must be refused by name, exit 2, and write nothing. */
+for (const flag of ['--help', '-h']) {
+  const dir = fixture({ candidates: CLEAN_CANDS, memory: CLEAN_MEM });
+  const { code, out } = run(dir, [flag]);
+  const stamped = fs.existsSync(path.join(dir, 'loop', 'doc-triage.json'));
+  fs.rmSync(dir, { recursive: true, force: true });
+  report(code === 0 && !stamped && /^usage: /.test(out), `${flag} prints usage, exits 0 and writes neither file`
+    + (stamped ? '  <-- it ran the pass and stamped' : code === 0 ? '' : `  <-- exited ${code}`), 'GREEN');
+}
+
+{
+  const dir = fixture({ candidates: CLEAN_CANDS, memory: CLEAN_MEM });
+  const { code, err } = run(dir, ['--dryrun']);
+  const stamped = fs.existsSync(path.join(dir, 'loop', 'doc-triage.json'));
+  fs.rmSync(dir, { recursive: true, force: true });
+  report(code === 2 && !stamped && /unknown argument --dryrun/.test(err),
+    'an unknown flag (--dryrun) — refused BY NAME, exit 2, nothing stamped'
+    + (stamped ? '  <-- it ignored the typo and stamped' : code === 2 ? '' : `  <-- exited ${code}`));
+}
+
 {
   const r = spawnSync(process.execPath, [RUNNER, '--buses', path.join(os.tmpdir(), 'no-such-buses-xyz')], { encoding: 'utf8' });
   report(r.status === 2 && /no buses tree at/.test(r.stderr || ''),

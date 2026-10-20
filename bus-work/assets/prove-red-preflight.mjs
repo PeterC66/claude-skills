@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { preflight, pushScope, pushMeasured, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, reclaimStalePins, STALE_PIN_HOURS, intervalVerdict, report, EXIT_DEFERRED, PUSH_INTERVAL_MINUTES, pacedInterval, readBudget, meanRunMinutes, INTERVAL_STEPS, catchUpPortal, catchUpLine } from './preflight.mjs';
+import { preflight, pushScope, pushMeasured, tierFor, manifestFor, runCheck, npmArm, triggered, engineTransfers, engineAtPin, releaseEngine, reclaimStalePins, STALE_PIN_HOURS, PIN_OWNER, intervalVerdict, report, EXIT_DEFERRED, PUSH_INTERVAL_MINUTES, pacedInterval, readBudget, meanRunMinutes, INTERVAL_STEPS, catchUpPortal, catchUpLine } from './preflight.mjs';
 
 const NODE = process.execPath;
 // `fileURLToPath`, not `new URL(...).pathname`: this folder is under
@@ -909,6 +909,14 @@ function runWith(fixture, opts = {}) {
   check('reclaim: a young tree is left to its own run', registered(live) && existsSync(live.root), git(skills, 'worktree', 'list'));
   check('reclaim: the CHECKOUT\'s node_modules survives the reclaim', existsSync(sentinel), `${sentinel} is gone`);
   check('reclaim: a tree of another shape is never touched', reclaimStalePins(skills, { now: Date.now() + 1e12, base: path.join(tmpdir(), 'elsewhere') }).length === 0);
+  // A run push_main.mjs timed out: killed minutes ago, so young, but its owner is gone (2026-10-20).
+  const timedOut = engineAtPin(skills, pinSha);
+  const deadPid = spawnSync(process.execPath, ['-e', '']).pid;
+  writeFileSync(path.join(timedOut.dir, PIN_OWNER), JSON.stringify({ pid: deadPid }) + '\n');
+  reclaimStalePins(skills);
+  check('reclaim: a young tree whose owner process is dead is released at once', !registered(timedOut) && !existsSync(timedOut.dir), git(skills, 'worktree', 'list'));
+  check('reclaim: a young tree whose owner is alive is still kept', registered(live) && existsSync(live.root), git(skills, 'worktree', 'list'));
+  if (existsSync(timedOut.dir)) releaseEngine(timedOut);
   releaseEngine(next);
   releaseEngine(live);
   if (existsSync(killed.dir)) releaseEngine(killed);    // a mutant that never reclaims must not leave it in %TEMP%

@@ -69,8 +69,6 @@
     "DP": "Dynamic programming -- the length-weighted solve that resolves conflicting octants at a junction",
     "EC": "Error correction -- the four redundancy levels a QR code can be encoded at",
     "UA": "User-Agent, the HTTP request header Overpass answers 406 without",
-    "COM": "Component Object Model -- the Windows automation interface the handout skills drive Word and Excel through",
-    "MOM": "Members' Open Meeting -- the monthly St Ives (Cambs) u3a meeting the three handout skills prepare for",
     "AI": "Artificial intelligence"
   },
   "notAbbreviations": [

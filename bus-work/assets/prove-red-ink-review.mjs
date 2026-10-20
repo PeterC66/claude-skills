@@ -27,7 +27,7 @@ import {
   recordStaged, markStaged, newestRender, waitingItems,
   liveVerdict, liveDeliverable, newestBuild, fetchPortalMaps, LIVE,
 } from './ink_review.mjs';
-import { svgText, textChange, gatherEvidence, decide, registerFrom, selfAnswer, backfillEngine, recordable, sheetKind } from './ink_self_answer.mjs';
+import { svgText, textChange, gatherEvidence, decide, registerFrom, selfAnswer, backfillEngine, recordable, sheetKind, acceptedBase, deliveryOrder, recordRuling } from './ink_self_answer.mjs';
 
 let bad = 0, ran = 0;
 const check = (label, ok, detail) => { ran++; if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${label}${ok || detail == null ? '' : ' -- ' + detail}`); };
@@ -453,7 +453,7 @@ console.log('\n10. A session answers by rule only when the words are the same an
   const alone = verdict(fixture({ rb: typedRoutes(), ra: routes(SHA_X, { mapNotes: [{ ...NOTE, near: { x: 10, y: 90 } }] }), commits: {} }), [adoptSeen()]);
   check('an adoption with no engine commit at all explains the moved ink by itself', alone.verdict === 'accept', JSON.stringify(alone));
   const switched = verdict(fixture({ rb: typedRoutes(), ra: adoptedRoutes({ design: { sheetVersion: 'x', strandedOnInk: false } }) }), [seen(), adoptSeen()]);
-  check('A PER-MAP SWITCH STAYS WITH PETER, even riding on an adoption he accepted elsewhere', switched.verdict === 'waiting' && /neither an engine commit nor an OA-437 adoption explains/.test(switched.reason), JSON.stringify(switched));
+  check('A PER-MAP SWITCH STAYS WITH PETER, even riding on an adoption he accepted elsewhere', switched.verdict === 'waiting' && /neither an engine commit, an OA-437 adoption nor a ruling of Peter.s explains/.test(switched.reason), JSON.stringify(switched));
   const moved = verdict(fixture({ rb: typedRoutes(), ra: routes(SHA_A, { mapNotes: [{ ...NOTE, x: 50, y: 90, w: 60 }], legendAt: { x: 1, y: 2 } }) }), [seen(), adoptSeen()]);
   check('a typed coordinate moved by hand is not an adoption', moved.verdict === 'waiting' && /inputs changed/.test(moved.reason), JSON.stringify(moved));
   check('a knob ADDED is not an adoption', verdict(fixture({ rb: routes(SHA_X), ra: routes(SHA_A, { legendAt: { x: 1, y: 2 } }) }), [seen(), adoptSeen()]).verdict === 'waiting');
@@ -518,6 +518,100 @@ await (async () => {
   check('  and a body with no maps list is an error', !!(await fetchPortalMaps({ base: 'https://x', token: 't', fetchFn: fake(200, {}) })).error);
   check('  and a good one is its maps', (await fetchPortalMaps({ base: 'https://x/', token: 't', fetchFn: fake(200, { maps: [pm()] }) })).maps[0].slug === 'beaconsfield-simpson-centre');
 })();
+
+console.log('\n12. A ruling of Peter\'s covers the words it names, and a delivery he queued is his accept (OA-659)');
+{
+  const SHA_A = 'a'.repeat(40);
+  const B0 = 'v1.38_2026-10-01_1000', B1 = 'v1.39_2026-10-13_2351', B2 = 'v1.40_2026-10-19_2006';
+  const OLD31 = 'Mon–Sat · Carousel · via Holtspur, Penn & Hazlemere', NEW31 = 'Mon–Sat · Carousel · via Knotty Green, Penn & Hazlemere';
+  const panel = (lines) => `<svg>${lines.map((w, i) => `<text y="${i}">${w.replace(/&/g, '&amp;')}</text>`).join('')}<text>${S('1.40', '19 Oct 2026')}</text></svg>`;
+  const LINES = (d31, extra = []) => ['Services', '31  Beaconsfield – High Wycombe', ...(Array.isArray(d31) ? d31 : [d31]), 'Waitrose', ...extra];
+  const routesOf = (d31, extra = {}) => JSON.stringify({ engine: 'x', engineCommit: SHA_A, version: '1.0', internalDesc: { 31: ['31  Beaconsfield – High Wycombe', d31], 105: ['105', 'via Coleshill & Chesham'] }, ...extra });
+  const RULING = { by: 'peter', on: '2026-10-19', said: 'Peter approved both rulings', where: 'buses-data 3c4b5a87', set: { 'internalDesc.31.1': NEW31 } };
+  /* One place map: S3 runs, S4 builds based on them, and what each build drew and was given. */
+  const fx = ({ ruling = RULING, rulingOn = '2026-10-19_2005', after = panel(LINES(NEW31)), ra = routesOf(NEW31), rb = routesOf(OLD31), afterExt = null, commits = {} } = {}) => {
+    const s3 = [{ id: '2026-10-01_0959' }, { id: '2026-10-13_2350' }, { id: '2026-10-19_2005' }].map((r) => (r.id === rulingOn && ruling ? { ...r, ruling } : r));
+    const s4 = [[B0, '2026-10-01_0959'], [B1, '2026-10-13_2350'], [B2, '2026-10-19_2005']].map(([id, S3]) => ({ id, dir: `S4-generate/${id}`, version: id.slice(1).split('_')[0], basedOn: { S3 }, outputs: ['internal.svg', ...(afterExt ? ['external.svg'] : [])] }));
+    const files = { [B0]: { 'internal.svg': panel(LINES(OLD31)), 'external.svg': '<svg><text>Ely</text></svg>' }, [B1]: { 'internal.svg': panel(LINES(OLD31)), 'external.svg': '<svg><text>Ely</text></svg>' }, [B2]: { 'internal.svg': after, 'external.svg': afterExt } };
+    const inputs = { [B0]: { 'routes.json': rb }, [B1]: { 'routes.json': rb }, [B2]: { 'routes.json': ra } };
+    const io = {
+      readManifest: () => ({ stages: { S3: { runs: s3 }, S4: { runs: s4 } } }),
+      readSheet: (f) => { const [id, name] = f.replace(/\\/g, '/').split('/').slice(-2); return files[id] ? files[id][name] ?? null : null; },
+      readInputs: (d) => inputs[d.replace(/\\/g, '/').split('/').pop()] || {},
+    };
+    const engine = { commitsIn: (from, to, k) => ({ status: 'ok', commits: commits[k] || [] }) };
+    const entry = { map: 'Beaconsfield Waitrose', kind: 'place', dir: 'Areas/Beaconsfield/Places/Beaconsfield Waitrose', status: 'ink-moved', before: B1, after: B2, sheets: [], answer: null };
+    return { entry, s4, evidenceFor: (m, b, a) => gatherEvidence({ busesDir: BUSES, entry: m, before: b, after: a, io, engine }) };
+  };
+  const ask = (f, register = []) => decide({ entry: f.entry, evidence: f.evidenceFor(f.entry, B1, B2), register });
+
+  const ok = ask(fx());
+  check('THE 3c4b5a87 CASE: the one line Peter ruled is accepted by rule, quoting his words and the S3 run', ok.verdict === 'accept' && /but for the words Peter ruled/.test(ok.note) && /ruling of internalDesc\.31\.1 \(S3 2026-10-19_2005, "Peter approved both rulings"/.test(ok.note) && ok.ruled.join() === 'internalDesc.31.1', JSON.stringify(ok));
+  const none = ask(fx({ ruling: null }));
+  check('  and the same build with NO ruling waits on the changed text — the ruling is what turned it', none.verdict === 'waiting' && /text on internal\.svg changed: added "Mon–Sat · Carousel · via Knotty Green, …"/.test(none.reason), JSON.stringify(none));
+  const wrong = ask(fx({ ruling: { ...RULING, set: { 'internalDesc.105.1': 'via Coleshill & Chesham' } } }));
+  check('A RULING OF ANOTHER PATH DOES NOT COVER THIS LINE', wrong.verdict === 'waiting' && /changed beyond what Peter ruled: added "Mon–Sat · Carousel · via Knotty Green/.test(wrong.reason), JSON.stringify(wrong));
+  const extra = ask(fx({ after: panel(LINES(NEW31, ['Penn Street'])) }));
+  check('an unruled string beside the ruled one waits, naming only the unruled string', extra.verdict === 'waiting' && /beyond what Peter ruled: added "Penn Street"$/.test(extra.reason), JSON.stringify(extra));
+  const reedited = ask(fx({ ra: routesOf(`${NEW31} & Amersham`), after: panel(LINES(`${NEW31} & Amersham`)) }));
+  check('a ruled path changed again after the ruling is not covered, and the reason says so', reedited.verdict === 'waiting' && /internalDesc\.31\.1 in the after build is not what Peter ruled on S3 2026-10-19_2005/.test(reedited.reason), JSON.stringify(reedited));
+  const session = ask(fx({ ruling: { ...RULING, by: 'sched-adhoc-0102' } }));
+  check('a ruling not by Peter is not used', session.verdict === 'waiting' && /only Peter rules/.test(session.reason), JSON.stringify(session));
+  check('a ruling that does not quote him is not used', /does not quote what Peter said/.test(ask(fx({ ruling: { ...RULING, said: ' ' } })).reason || ''));
+  check('a ruling on the BEFORE build\'s own S3 run is not read, because that build already had it', ask(fx({ rulingOn: '2026-10-13_2350' })).verdict === 'waiting');
+  check('a ruled line the engine wraps onto two lines is still the ruled words', ask(fx({ after: panel(LINES(['Mon–Sat · Carousel · via Knotty Green,', 'Penn & Hazlemere'])) })).verdict === 'accept');
+  const cmt = ask(fx({ commits: { 'place:internal': [{ sha: 'c'.repeat(40), subject: 'move the panel' }] } }));
+  check('a ruling covers words, not an engine commit nobody accepted elsewhere', cmt.verdict === 'waiting' && /ccccccc "move the panel" moves place:internal ink/.test(cmt.reason), JSON.stringify(cmt));
+  const ext = ask(fx({ afterExt: '<svg><g transform="translate(1)"><text>Ely</text></g></svg>' }));
+  check('a sheet that moved where no ruled word is, with no engine commit, is unexplained and waits', ext.verdict === 'waiting' && /external\.svg moved with no OA-437 adoption and no engine commit/.test(ext.reason), JSON.stringify(ext));
+  const hand = ask(fx({ ra: routesOf(NEW31, { design: { strandedOnInk: false } }) }));
+  check('a hand config change beside the ruled one still waits', hand.verdict === 'waiting' && /inputs changed — routes\.json \(design\)/.test(hand.reason), JSON.stringify(hand));
+
+  /* Asked from the build Peter last accepted on this map, not from the review's before. */
+  const three = fx({ commits: { 'place:internal': [] } });
+  const fromB0 = { ...three.entry, before: B0 };
+  const engineB0 = { commitsIn: (from, to, k) => ({ status: 'ok', commits: [] }) };
+  check('acceptedBase is the newest earlier build Peter accepted', acceptedBase({ ...fromB0, superseded: [{ verdict: 'accept', by: 'peter', at: '1', after: B0 }, { verdict: 'accept', by: 'peter', at: '2', after: B1 }] }) === B1);
+  check('  and a later hold of his means there is none', acceptedBase({ ...fromB0, superseded: [{ verdict: 'accept', by: 'peter', at: '1', after: B1 }, { verdict: 'hold', by: 'peter', at: '2', after: B1 }] }) === null);
+  check('  and a self-answer is never a base', acceptedBase({ ...fromB0, before: 'v0', superseded: [{ verdict: 'accept', by: 's', self: true, at: '1', after: B1 }] }) === null);
+  const sawB0 = (m, b, a) => { const ev = three.evidenceFor(m, b, a); return b === B0 && ev.status === 'ok' ? { ...ev, inputs: ['routes.json (design)'], adopted: null } : ev; };
+  const passB = selfAnswer({ schema: SCHEMA, scan: SCAN, maps: [{ ...fromB0, superseded: [{ verdict: 'accept', by: 'peter', at: '2026-10-14T00:00:00Z', after: B1 }] }] }, { by: 'buses-99', at: 'T', register: [], evidenceFor: sawB0 });
+  check('THE SECOND-ACCEPT CASE: with Peter\'s accept of the build before, a hand change since the review\'s before is his already, and the ruling is accepted', passB.results[0].outcome === 'accept' && /asked from v1\.39_2026-10-13_2351, which Peter accepted, not from v1\.38/.test(passB.results[0].why), JSON.stringify(passB.results));
+  const passNoB = selfAnswer({ schema: SCHEMA, scan: SCAN, maps: [fromB0] }, { by: 'buses-99', at: 'T', register: [], evidenceFor: sawB0 });
+  check('  and without that accept it is asked from the review\'s before, and waits', passNoB.results[0].outcome === 'waiting' && /inputs changed/.test(passNoB.results[0].why), JSON.stringify(passNoB.results));
+
+  /* A delivery Peter queued. */
+  const f = fx({ ruling: null });
+  const order = (text, s4 = f.s4, entry = f.entry) => deliveryOrder(text, entry, s4);
+  const QUEUED = 'Deliver Beaconsfield Simpson Centre v1.46 and Beaconsfield Waitrose v1.40 to the portal (busmaps.uk). Both were rebuilt on 2026-10-19.';
+  check('THE QUEUED CASE: "Deliver … Beaconsfield Waitrose v1.40" names this build', order(QUEUED) === 'Deliver Beaconsfield Simpson Centre v1.46 and Beaconsfield Waitrose v1.40 to the portal (busmaps.uk).', String(order(QUEUED)));
+  check('  and the full build id anywhere in the sentence does too', !!order(`Please deliver the Waitrose map, build ${B2}, today.`));
+  check('"don\'t deliver" is not an order, though it names the build', order('Reword the note on Beaconsfield Waitrose v1.40, and don\'t deliver to the portal without asking.') === null);
+  check('a sentence that does not start "Deliver" is not an order', order('Once Beaconsfield Waitrose v1.40 passes S6, deliver it.') === null);
+  check('an older version named is not this build', order('Deliver Beaconsfield Waitrose v1.39 to the portal.') === null);
+  check('  nor is a version that only begins the same way', order('Deliver Beaconsfield Waitrose v1.4 to the portal.') === null);
+  check('another map\'s name ending in this one is not this map', order('Deliver Old Beaconsfield Waitrose v1.40.') === null);
+  check('  but a list naming it after a comma is', !!order('Deliver Ely Co-op v1.36, Beaconsfield Waitrose v1.40.'));
+  check('the run\'s own report under ## TAKEN is not Peter\'s words', order('Look at Waitrose.\n\n## TAKEN — 2026-10-20 by sched\n\nDeliver Beaconsfield Waitrose v1.40 next time.') === null);
+  check('a version two S4 runs share names no one build, unless the full id is given', order('Deliver Beaconsfield Waitrose v1.40.', [...f.s4, { id: 'v1.40_2026-10-20_0101', version: '1.40' }]) === null && !!order(`Deliver ${B2}.`, [...f.s4, { id: 'v1.40_2026-10-20_0101', version: '1.40' }]));
+  const passD = selfAnswer({ schema: SCHEMA, scan: SCAN, maps: [f.entry] }, { by: 'buses-99', at: 'T', register: [], evidenceFor: f.evidenceFor, ordersFor: (m) => { const s = order(QUEUED, f.s4, m); return s ? { file: 'adhoc/done/beaconsfield-portal-delivery.md', sentence: s } : null; } });
+  const da = passD.review.maps[0].answer;
+  check('a queued delivery is accepted with self: true and basis delivery, quoting the file and the sentence', da && da.self === true && da.basis === 'delivery' && /adhoc\/done\/beaconsfield-portal-delivery\.md says "Deliver Beaconsfield/.test(da.note), JSON.stringify(da));
+  check('  where the rule alone would have waited on the text', ask(f).verdict === 'waiting');
+  check('  and it is never a sighting for another map', registerFrom([{ scan: SCAN, review: passD.review }]).length === 0);
+
+  /* Writing a ruling. */
+  const man = () => ({ stages: { S3: { runs: [{ id: '2026-10-19_2005', dir: 'S3-config/2026-10-19_2005' }] } } });
+  const ROUTES = JSON.parse(routesOf(NEW31));
+  const read = (p) => p.split('.').reduce((v, k) => (v && typeof v === 'object' ? v[k] : undefined), ROUTES);
+  const rec = recordRuling(man(), { s3: '2026-10-19_2005', paths: ['internalDesc.31.1'], said: 'Peter approved both rulings', where: 'buses-data 3c4b5a87', on: '2026-10-19', read });
+  check('recordRuling reads the ruled value from the S3 run itself and writes it on that run', JSON.stringify(rec.manifest.stages.S3.runs[0].ruling) === JSON.stringify(RULING), JSON.stringify(rec.ruling));
+  const throws = (fn, re) => { try { fn(); return false; } catch (e) { return re.test(e.message); } };
+  check('  and refuses a path the S3 run does not hold', throws(() => recordRuling(man(), { s3: '2026-10-19_2005', paths: ['internalDesc.99.1'], said: 'x', on: 'd', read }), /nothing at internalDesc\.99\.1/));
+  check('  and refuses a ruling without Peter\'s words', throws(() => recordRuling(man(), { s3: '2026-10-19_2005', paths: ['internalDesc.31.1'], said: '', on: 'd', read }), /does not quote/));
+  check('  and refuses an S3 run that is not there', throws(() => recordRuling(man(), { s3: '2026-01-01_0000', paths: ['internalDesc.31.1'], said: 'x', on: 'd', read }), /no S3 run/));
+  check('  and never overwrites a different ruling', throws(() => recordRuling(rec.manifest, { s3: '2026-10-19_2005', paths: ['internalDesc.105.1'], said: 'x', on: 'd', read }), /already carries a different ruling/));
+}
 
 console.log(`\n${ran - bad} of ${ran} passed`);
 process.exit(bad ? 1 : 0);

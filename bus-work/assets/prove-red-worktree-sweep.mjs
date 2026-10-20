@@ -103,19 +103,20 @@ check('stray with files → a row; removed empty stray → none', r3.items.filte
 check(`cadence: ${CADENCE_DAYS - 1} days → no due row`, !worktreeSweepItems({ state: st(rec), now: NOW + (CADENCE_DAYS - 1) * 24 * H }).items.some((i) => i.key === 'worktree-sweep-due'));
 check(`cadence: ${CADENCE_DAYS} days → a due row`, worktreeSweepItems({ state: st(rec), now: NOW + CADENCE_DAYS * 24 * H }).items.some((i) => i.key === 'worktree-sweep-due'));
 {
-  // OUTSIDE ITS HOME — the two real cases of 2026-10-20, against a control at home.
-  const R = 'C:/Buses/claude-skills';
+  // OUTSIDE ITS HOME — the two real cases of 2026-10-20 (two worktrees under the pre-move home
+  // folder), against a control at home. D:/ throughout: engine_adoption.mjs refuses a laptop path.
+  const R = 'D:/R/claude-skills';
   check('outsideHome: .claude/worktrees/<name> → home', !outsideHome(`${R}/.claude/worktrees/oa561`, R));
-  check('outsideHome: case and backslashes do not matter', !outsideHome('c:\\buses\\CLAUDE-SKILLS\\.claude\\worktrees\\x', R));
-  check('outsideHome: the old sibling folder → outside', outsideHome('C:/Buses/claude-skills-wt/x', R));
-  check('outsideHome: a prefix-sharing sibling repo → outside', outsideHome('C:/Buses/claude-skills2/.claude/worktrees/x', R));
+  check('outsideHome: case and backslashes do not matter', !outsideHome('d:\\r\\CLAUDE-SKILLS\\.claude\\worktrees\\x', R));
+  check('outsideHome: the old sibling folder → outside', outsideHome('D:/R/claude-skills-wt/x', R));
+  check('outsideHome: a prefix-sharing sibling repo → outside', outsideHome('D:/R/claude-skills2/.claude/worktrees/x', R));
   check('outsideHome: .claude/worktrees itself → outside', outsideHome(`${R}/.claude/worktrees`, R));
-  const TMP = 'C:/Users/P/AppData/Local/Temp';
+  const TMP = 'D:/Temp';
   check('outsideHome: a tool\'s scratch under an allowed root → home', !outsideHome(`${TMP}/preflight-pin-x/skills`, R, [TMP]));
   check('outsideHome: control — the same path with no allowed root → outside', outsideHome(`${TMP}/preflight-pin-x/skills`, R));
   const recM = { checkedAt: new Date(NOW).toISOString(), repos: [{ key: 'engine', name: 'claude-skills', dir: R, kept: [
-    { path: 'C:/u3a St Ives/.claude/skills-oa559', branch: null, reason: 'not merged', mergedButKept: false, misplaced: true },
-    { path: 'C:/u3a St Ives/.claude/skills-wt/oa302-own-badge-cost', branch: 'oa302/own-badge-cost', reason: 'not merged', mergedButKept: false, misplaced: true },
+    { path: 'D:/Old Home/.claude/skills-oa559', branch: null, reason: 'not merged', mergedButKept: false, misplaced: true },
+    { path: 'D:/Old Home/.claude/skills-wt/oa302-own-badge-cost', branch: 'oa302/own-badge-cost', reason: 'not merged', mergedButKept: false, misplaced: true },
     { path: `${R}/.claude/worktrees/oa561`, branch: 'work/oa561', reason: 'not merged', mergedButKept: false, misplaced: false },
   ], strays: [], removed: [] }] };
   const rm = worktreeSweepItems({ state: st(recM), now: NOW }).items.filter((i) => i.key.startsWith('worktree-sweep-misplaced-'));

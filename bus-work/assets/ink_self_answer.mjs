@@ -40,6 +40,44 @@
  * (`strandedOnInk`, `exitInFrame`) or a moved typed coordinate is not an adoption
  * and still waits.
  *
+ * A RULING PETER GAVE COVERS THE WORDS IT NAMES (buses-data OA-659, Peter, 2026-10-20).
+ * On 19 October Peter ruled two "via" descriptions on the Beaconsfield place maps
+ * (buses-data 3c4b5a87), and on the 20th he was asked to accept the very line he had
+ * ruled, because rule 1 refuses any changed word and rule 2 any changed input. So a
+ * ruling is now recorded where the rebuild records its config, as a field on the S3
+ * run in `manifest.json`:
+ *
+ *     "ruling": { "by": "peter", "on": "2026-10-19", "said": "<his words>",
+ *                 "where": "<commit or thread>", "set": { "internalDesc.31": "<the value>" } }
+ *
+ * `set` maps a routes.json path to the value he ruled, and `ink_review.mjs --rule`
+ * writes it, reading each value from that S3 run's own routes.json so it cannot be
+ * mistyped. Every ruling on an S3 run after the before build's and up to the after
+ * build's `basedOn.S3` is read. A ruled path whose value in the after build is still
+ * the ruled one is set aside from rule 2's input comparison, so the rest must still be
+ * unchanged or an adoption. Rule 1 then sets aside every added string that is part of a
+ * ruled value and every removed string that is part of what that path held before,
+ * and what remains must be the same words, re-wrapped or reordered at most. A sheet
+ * whose words the ruling touched counts as explained by it, so a ruling-only rebuild on
+ * an unchanged engine is accepted. Anything else still waits: a ruled path changed
+ * again later, a ruling not by Peter or without his words, an unruled string beside the
+ * ruled one, or a sheet that moved where no ruled word is. A ruling explains WORDS and
+ * not marks, so a ruled colour or coordinate does not explain the ink it moves. Nor is a
+ * part-string test exact: an added string that happens to be part of a ruled value
+ * (one place name, say) passes wherever it is drawn.
+ *
+ * A DELIVERY PETER QUEUED HIMSELF IS HIS ACCEPT (same OA). `adhoc/ready/` is his
+ * in-tray, so a file there, or in `doing/` or `done/`, holding a sentence that starts
+ * "Deliver" and names this map with the after build, is his accept of that build. The
+ * build is named either by its full id or as `<map> v<version>`, and the version only
+ * counts when exactly one S4 run in the manifest carries it. Only the prompt counts,
+ * which is the text above a `## TAKEN` or `## DECLINED` section, because a run's own
+ * report is not Peter's. "Don't deliver" does not start with "Deliver", and a build
+ * named before a later rebuild names the old build and not the new one. The answer is
+ * recorded with `self: true` and `basis: 'delivery'`, quoting the sentence and the
+ * file, because `adhoc/` is gitignored and the quote is the only lasting record of it.
+ * It is not a sighting, because Peter named a build and did not look at its ink.
+ *
  * WHERE THE SIGHTINGS ARE KEPT. On the answers themselves, in the tracked
  * `_gtfs/ink-review_<scan>.json` records: `--answer` writes `engine: { from, to,
  * commits: [{ sha, subject, kinds }] }` on every answer it records, and `kinds` holds
@@ -164,6 +202,12 @@ const dropAt = (o, p) => {
   const parent = ks.reduce((v, k) => (v && typeof v === 'object' ? v[k] : undefined), o);
   if (parent && typeof parent === 'object') delete parent[last];
 };
+const setAt = (o, p, v) => {
+  const ks = p.split('.'), last = ks.pop();
+  let cur = o;
+  for (const k of ks) { if (!cur[k] || typeof cur[k] !== 'object') cur[k] = {}; cur = cur[k]; }
+  cur[last] = structuredClone(v);
+};
 const without = (o, ks) => Object.fromEntries(Object.entries(o).filter(([k]) => !ks.includes(k)));
 
 /** How one note changed, as an adoption label, '' for no ink change, or null when it is not an adoption. */
@@ -215,6 +259,104 @@ export function adoptionChange(before, after) {
 const ADOPT = 'adopt:';
 const adoptCommit = (label) => ({ sha: `${ADOPT}${label}`, subject: `OA-437 adoption of ${label}` });
 
+/* ------------------------------------------------------------------ rulings (OA-659) */
+
+/** A ruling the rule may stand on, or a reason it may not. */
+export function rulingProblem(r) {
+  if (!r || typeof r !== 'object') return 'it is not an object';
+  if (String(r.by || '').trim().toLowerCase() !== 'peter') return `it is by ${JSON.stringify(r.by ?? null)}, and only Peter rules`;
+  if (typeof r.said !== 'string' || !r.said.trim()) return 'it does not quote what Peter said';
+  if (!r.set || typeof r.set !== 'object' || Array.isArray(r.set) || !Object.keys(r.set).length) return 'it sets no path';
+  return null;
+}
+
+/** The rulings on S3 runs after the before build's S3 and up to the after build's, oldest first. */
+export function rulingsBetween(manifest, b, a) {
+  const lo = (b && b.basedOn && b.basedOn.S3) || '', hi = a && a.basedOn && a.basedOn.S3;
+  if (!hi || hi === lo) return [];
+  return ((manifest && manifest.stages && manifest.stages.S3 && manifest.stages.S3.runs) || [])
+    .filter((r) => r && r.ruling && r.id > lo && r.id <= hi)
+    .sort((x, y) => (x.id < y.id ? -1 : 1))
+    .map((r) => ({ s3: r.id, ...r.ruling }));
+}
+
+const leaves = (v) => (typeof v === 'string' ? [v] : v && typeof v === 'object' ? Object.values(v).flatMap(leaves) : []);
+
+/**
+ * Set the ruled paths aside from two routes.json texts. Returns `{ before, after, ruled }`,
+ * where `before` is the before text with each ruled path given its ruled value (so rule 2
+ * no longer sees it) and `ruled` is `{ paths, rulings, to, from, refused }`: the ruled
+ * strings, the strings they replaced, and a phrase for each ruling or path that could not
+ * be used. The LATEST ruling of a path wins, and the after build must still hold it.
+ */
+export function applyRulings(beforeText, afterText, rulings) {
+  const ruled = { paths: [], rulings: [], to: [], from: [], refused: [] };
+  if (!rulings.length) return { before: beforeText, after: afterText, ruled };
+  let b, a;
+  try { b = JSON.parse(beforeText); a = JSON.parse(afterText); } catch { ruled.refused.push('routes.json could not be read'); return { before: beforeText, after: afterText, ruled }; }
+  const latest = new Map();
+  for (const r of rulings) {
+    const why = rulingProblem(r);
+    if (why) { ruled.refused.push(`the ruling on S3 ${r.s3} is not used, because ${why}`); continue; }
+    for (const [p, v] of Object.entries(r.set)) latest.set(p, { v, r });
+  }
+  const masked = structuredClone(b);
+  for (const [p, { v, r }] of latest) {
+    if (JSON.stringify(getAt(a, p)) !== JSON.stringify(v)) { ruled.refused.push(`${p} in the after build is not what Peter ruled on S3 ${r.s3}`); continue; }
+    ruled.from.push(...leaves(getAt(b, p)));
+    ruled.to.push(...leaves(v));
+    setAt(masked, p, v);
+    ruled.paths.push(p);
+    if (!ruled.rulings.includes(r)) ruled.rulings.push(r);
+  }
+  return { before: ruled.paths.length ? JSON.stringify(masked) : beforeText, after: afterText, ruled };
+}
+
+/**
+ * A text change with the ruled words set aside: every added string that is part of a
+ * ruled value and every removed string that is part of what a ruled path held. `touched`
+ * says whether any were; `changed` is recomputed on what remains, re-wrap included.
+ */
+export function ruledTextChange(change, ruled) {
+  if (!change || !ruled || !ruled.paths.length) return change;
+  const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
+  const partOf = (t, xs) => xs.some((x) => norm(x).includes(norm(t)));
+  const added = change.added.filter((t) => !partOf(t, ruled.to)), removed = change.removed.filter((t) => !partOf(t, ruled.from));
+  const touched = added.length < change.added.length || removed.length < change.removed.length;
+  if (!touched) return { ...change, touched };
+  const words = (xs) => xs.join(' ').split(/\s+/).filter(Boolean).join(' ');
+  const rewrapped = !!(added.length || removed.length) && words(added) === words(removed);
+  return { added, removed, reordered: change.reordered, rewrapped, changed: !!(added.length || removed.length) && !rewrapped, touched };
+}
+
+/* ------------------------------------------------------------------ deliveries Peter queued (OA-659) */
+
+const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const versionOf = (r) => (r && typeof r.version === 'string' ? r.version : (/^v(\d+(?:\.\d+)*)_/.exec((r && r.id) || '') || [])[1] || null);
+
+/**
+ * The sentence in an ad-hoc prompt that orders this map's after build delivered, or
+ * null. `s4runs` is the map's manifest S4 runs. Only the text above `## TAKEN` or
+ * `## DECLINED` is read, and only a sentence that starts "Deliver".
+ */
+export function deliveryOrder(text, entry, s4runs) {
+  const prompt = String(text || '').split(/^##\s+(?:TAKEN|DECLINED)\b/m)[0];
+  const id = entry && entry.after;
+  if (!id) return null;
+  const ver = versionOf((s4runs || []).find((r) => r.id === id) || { id });
+  const unique = !!ver && (s4runs || []).filter((r) => versionOf(r) === ver).length === 1;
+  const named = new RegExp(`${esc(entry.map)}\\s+v${esc(ver)}(?![0-9]|\\.[0-9])`, 'gi');
+  /* The name must follow "Deliver", a comma, "and", "both", "the" or "also", so "Old Beaconsfield v2.13" is not "Beaconsfield v2.13". */
+  const lead = /(?:^\s*(?:please\s+)?deliver|,|\band|\bboth|\bthe|\balso)\s+$/i;
+  for (const s of prompt.split(/(?<=[.!?])\s+|\n+/)) {
+    if (!/^\s*(?:please\s+)?deliver\b/i.test(s)) continue;
+    if (s.includes(id)) return s.trim();
+    if (!unique) continue;
+    for (const m of s.matchAll(named)) if (lead.test(s.slice(0, m.index))) return s.trim();
+  }
+  return null;
+}
+
 const SHEET_KINDS = { 'internal.svg': 'internal', 'external.svg': 'external', 'internal-schematic.svg': 'schematic', 'boarding.svg': 'boarding' };
 export const KINDS = ['area:internal', 'area:external', 'area:schematic', 'place:internal', 'place:external', 'place:boarding'];
 /** `area:internal` and the like, or null for a sheet no rule covers. */
@@ -233,7 +375,8 @@ const unknown = (why) => ({ status: 'unknown', why });
  */
 export function gatherEvidence({ busesDir, entry, before, after, io, engine }) {
   const mapDir = path.join(busesDir, entry.dir || path.join('Areas', entry.map));
-  const runs = (io.readManifest(mapDir)?.stages?.S4?.runs) || [];
+  const manifest = io.readManifest(mapDir);
+  const runs = (manifest?.stages?.S4?.runs) || [];
   const b = runs.find((r) => r.id === before), a = runs.find((r) => r.id === after);
   if (!before || !b) return unknown(`the before build ${before || '(none)'} is not in the manifest`);
   if (!after || !a) return unknown(`the after build ${after || '(none)'} is not in the manifest`);
@@ -246,10 +389,15 @@ export function gatherEvidence({ busesDir, entry, before, after, io, engine }) {
     const change = inkChange(tb, ta);
     sheets.push({ sheet, change, kind: sheetKind(entry.kind, sheet), text: change === 'moved' ? textChange(svgText(tb), svgText(ta)) : null });
   }
-  const ib = io.readInputs(path.join(mapDir, b.dir)), ia = io.readInputs(path.join(mapDir, a.dir));
-  const from = ib['routes.json'] != null ? engineCommitOf(ib['routes.json']) : null;
+  const ib0 = io.readInputs(path.join(mapDir, b.dir)), ia = io.readInputs(path.join(mapDir, a.dir));
+  /* A ruling of Peter's is set aside from the inputs here and from the words in `decide()`. */
+  const rulings = rulingsBetween(manifest, b, a);
+  const masked = ib0['routes.json'] != null && ia['routes.json'] != null ? applyRulings(ib0['routes.json'], ia['routes.json'], rulings) : applyRulings('', '', []);
+  if (rulings.length && ib0['routes.json'] == null) masked.ruled.refused.push('the before build holds no routes.json, so no ruled path can be set aside');
+  const ib = masked.ruled.paths.length ? { ...ib0, 'routes.json': masked.before } : ib0;
+  const from = ib0['routes.json'] != null ? engineCommitOf(ib0['routes.json']) : null;
   const to = ia['routes.json'] != null ? engineCommitOf(ia['routes.json']) : null;
-  if (!from) return unknown(`the before build ${before} records no engineCommit${ib['routes.json'] == null ? ' (its S4 folder holds no routes.json)' : ''}, so no engine commit can be named`);
+  if (!from) return unknown(`the before build ${before} records no engineCommit${ib0['routes.json'] == null ? ' (its S4 folder holds no routes.json)' : ''}, so no engine commit can be named`);
   if (!to) return unknown(`the after build ${after} records no engineCommit, so no engine commit can be named`);
   const inputs = inputChange(ib, ia);
   const adopted = inputs.length ? adoptionChange(ib, ia) : [];
@@ -260,7 +408,7 @@ export function gatherEvidence({ busesDir, entry, before, after, io, engine }) {
     /* An adoption is credited to every kind that moved, like a commit: Peter's accept elsewhere must have seen it on that kind. */
     byKind[kind] = [...r.commits, ...(adopted || []).map(adoptCommit)];
   }
-  return { status: 'ok', from, to, sheets, inputs, adopted, byKind };
+  return { status: 'ok', from, to, sheets, inputs, adopted, byKind, ruled: masked.ruled };
 }
 
 /** What an answer records as its sightings: each commit, with the kinds of sheet that MOVED and that it touches. */
@@ -305,14 +453,18 @@ export function decide({ entry, evidence, register }) {
   if (odd) return wait(`${odd.sheet} is ${odd.change}, and a sheet added or dropped is not a rollout`);
   const moved = evidence.sheets.filter((s) => s.change === 'moved');
   if (!moved.length) return wait('no sheet moved between these builds, so there is nothing to attribute');
-  const worded = moved.find((s) => s.text && s.text.changed);
-  if (worded) return wait(`the text on ${worded.sheet} changed: ${describeText(worded.text)}`);
-  if (evidence.inputs.length && !evidence.adopted) return wait(`the build's inputs changed — ${evidence.inputs.join(', ')} — and neither an engine commit nor an OA-437 adoption explains that change`);
+  const ruled = evidence.ruled || { paths: [], rulings: [], to: [], from: [], refused: [] };
+  const unused = ruled.refused.length ? ` (${ruled.refused.join('; ')})` : '';
+  const words = new Map(moved.map((s) => [s.sheet, ruledTextChange(s.text, ruled)]));
+  const worded = moved.find((s) => words.get(s.sheet) && words.get(s.sheet).changed);
+  if (worded) return wait(`the text on ${worded.sheet} changed${ruled.paths.length ? ' beyond what Peter ruled' : ''}: ${describeText(words.get(worded.sheet))}${unused}`);
+  if (evidence.inputs.length && !evidence.adopted) return wait(`the build's inputs changed — ${evidence.inputs.join(', ')} — and neither an engine commit, an OA-437 adoption nor a ruling of Peter's explains that change${unused}`);
   const other = (r) => r.map.toLowerCase() !== String(entry.map).toLowerCase();
   const attributed = [];
   for (const s of moved) {
     if (!s.kind) return wait(`${s.sheet} moved, and no rule covers a sheet of that name`);
     const commits = evidence.byKind[s.kind] || [];
+    if (!commits.length && words.get(s.sheet) && words.get(s.sheet).touched) continue;
     if (!commits.length) return wait(`${s.sheet} moved with no OA-437 adoption and no engine commit touching its generator between ${short(evidence.from)} and ${short(evidence.to)}, so nothing explains it`);
     for (const c of commits) {
       const rows = register.filter((r) => r.sha === c.sha && r.kind === s.kind && other(r));
@@ -323,10 +475,14 @@ export function decide({ entry, evidence, register }) {
       if (!attributed.some((x) => x.sha === c.sha)) attributed.push({ sha: c.sha, map: seen.map, by: seen.by });
     }
   }
-  const quiet = moved.filter((s) => s.text).map((s) => `${s.sheet}: ${describeText(s.text)}`);
-  const ins = evidence.inputs.length ? `the inputs differ only by the OA-437 adoption of ${(evidence.adopted || []).join(', ') || 'a handPlaced reason'}` : 'the inputs are unchanged';
-  const note = `answered by rule: the text is unchanged on ${moved.map((s) => s.sheet).join(', ')}${quiet.length ? ` (${quiet.join('; ')})` : ''}, ${ins}, and the ink is ${attributed.map((x) => `${short(x.sha)} (accepted on ${x.map} by ${x.by})`).join(', ')}`;
-  return { verdict: 'accept', note, attributed };
+  const quiet = moved.filter((s) => s.text && !(words.get(s.sheet) || {}).touched).map((s) => `${s.sheet}: ${describeText(s.text)}`);
+  const said = ruled.rulings.map((r) => `S3 ${r.s3}, "${clip(r.said)}"${r.where ? ` (${r.where})` : ''}`).join('; ');
+  const rule = ruled.paths.length ? `Peter's ruling of ${ruled.paths.join(', ')} (${said})` : '';
+  const ins = evidence.inputs.length ? `the inputs differ only by the OA-437 adoption of ${(evidence.adopted || []).join(', ') || 'a handPlaced reason'}${rule ? ` and ${rule}` : ''}` : rule ? `the inputs differ only by ${rule}` : 'the inputs are unchanged';
+  const text = ruled.paths.length && moved.some((s) => (words.get(s.sheet) || {}).touched) ? 'the text is unchanged but for the words Peter ruled' : 'the text is unchanged';
+  const ink = attributed.length ? `the ink is ${attributed.map((x) => `${short(x.sha)} (accepted on ${x.map} by ${x.by})`).join(', ')}` : 'no engine commit moved it';
+  const note = `answered by rule: ${text} on ${moved.map((s) => s.sheet).join(', ')}${quiet.length ? ` (${quiet.join('; ')})` : ''}, ${ins}, and ${ink}`;
+  return { verdict: 'accept', note, attributed, ...(ruled.paths.length ? { ruled: ruled.paths } : {}) };
 }
 
 /**
@@ -358,23 +514,87 @@ export function backfillEngine(review, { evidenceFor }) {
  * `selfCheck: { by, at, after, reason }` and left waiting. `register` is the rows
  * from `registerFrom()`; `at` is passed in, the core reads no clock.
  */
-export function selfAnswer(review, { by, at, evidenceFor, register }) {
+/**
+ * The newest earlier build of this map that Peter himself accepted, or null. His accept
+ * covers every mark up to that build, so only what changed since then is the rule's to
+ * explain. His newest superseded answer must be that accept: a later hold means there is
+ * no base. A self-answer is never a base, for the reason it is never a sighting.
+ */
+export function acceptedBase(m) {
+  const mine = (m.superseded || []).filter((a) => a && !a.self && a.after && a.after !== m.after && a.after > (m.before || ''));
+  const last = mine.sort((x, y) => (x.at || '').localeCompare(y.at || '') || (x.after < y.after ? -1 : 1)).pop();
+  return last && last.verdict === 'accept' ? last.after : null;
+}
+
+export function selfAnswer(review, { by, at, evidenceFor, register, ordersFor = () => null }) {
   if (!by || typeof by !== 'string' || !by.trim()) throw new Error('--by is required: a self-answer names the session that gave it.');
   const results = [];
   const maps = review.maps.map((m) => {
     if (m.status !== 'ink-moved' || (m.answer && m.answer.after === m.after)) return m;
-    const ev = evidenceFor(m, m.before, m.after);
-    const d = decide({ entry: m, evidence: ev, register });
+    /* The rule is asked from the newest earlier build Peter accepted on this map, when it can still be read (OA-659). */
+    const base = acceptedBase(m);
+    const fromBase = base ? evidenceFor(m, base, m.after) : null;
+    const ev = fromBase && fromBase.status === 'ok' ? fromBase : evidenceFor(m, m.before, m.after);
+    const since = ev === fromBase ? ` (asked from ${base}, which Peter accepted, not from ${m.before})` : '';
+    /* A delivery Peter queued, naming this build, is his accept, whatever the rule would say (OA-659). */
+    const order = ordersFor(m);
+    const d0 = order
+      ? { verdict: 'accept', basis: 'delivery', note: `Peter queued its delivery himself: ${order.file} says "${order.sentence}"` }
+      : decide({ entry: m, evidence: ev, register });
+    const d = order ? d0 : d0.verdict === 'accept' ? { ...d0, note: `${d0.note}${since}` } : { ...d0, reason: `${d0.reason}${since}` };
     results.push({ map: m.map, outcome: d.verdict, why: d.verdict === 'accept' ? d.note : d.reason });
     if (d.verdict !== 'accept') return { ...m, selfCheck: { by: by.trim(), at, after: m.after, reason: d.reason } };
     const superseded = [...(m.superseded || []), ...(m.answer ? [{ ...m.answer, why: `rebuilt as ${m.after} after this answer` }] : [])];
     const { selfCheck, ...rest } = m;
-    return { ...rest, answer: { verdict: 'accept', by: by.trim(), at, after: m.after, note: d.note, self: true, engine: recordable(ev) }, ...(superseded.length ? { superseded } : {}) };
+    return { ...rest, answer: { verdict: 'accept', by: by.trim(), at, after: m.after, note: d.note, self: true, ...(d.basis ? { basis: d.basis } : {}), engine: recordable(ev) }, ...(superseded.length ? { superseded } : {}) };
   });
   return { review: { ...review, maps }, results };
 }
 
+/**
+ * The manifest with a ruling of Peter's written onto one S3 run (OA-659). `read(path)`
+ * gives the value at that path in the S3 run's own routes.json, so the ruled value is
+ * the one the rebuild was given and cannot be mistyped. Throws, naming the problem,
+ * rather than write a ruling the rule would refuse.
+ */
+export function recordRuling(manifest, { s3, paths, said, where, on, read }) {
+  const run = ((manifest && manifest.stages && manifest.stages.S3 && manifest.stages.S3.runs) || []).find((r) => r.id === s3);
+  if (!run) throw new Error(`there is no S3 run ${s3} in the manifest.`);
+  if (!Array.isArray(paths) || !paths.length) throw new Error('--path names the routes.json path(s) Peter ruled, comma-separated, such as internalDesc.31.');
+  const set = {};
+  for (const p of paths) {
+    const v = read(p);
+    if (v === undefined) throw new Error(`S3 ${s3}'s routes.json has nothing at ${p}, so there is no value to record as ruled.`);
+    set[p] = v;
+  }
+  const ruling = { by: 'peter', on, said: String(said || '').trim(), ...(where ? { where: String(where).trim() } : {}), set };
+  const why = rulingProblem(ruling);
+  if (why) throw new Error(`the ruling would not be used, because ${why}.`);
+  if (run.ruling && JSON.stringify(run.ruling) !== JSON.stringify(ruling)) throw new Error(`S3 ${s3} already carries a different ruling; a ruling is a record, so it is not overwritten. Record a new S3 run.`);
+  const next = structuredClone(manifest);
+  next.stages.S3.runs.find((r) => r.id === s3).ruling = ruling;
+  return { manifest: next, ruling };
+}
+
 /* ------------------------------------------------------------------ the edge */
+
+/**
+ * `ordersFor` for `selfAnswer`: the ad-hoc prompts in `adhoc/ready`, `doing` and `done`,
+ * read once, each asked by `deliveryOrder()` against the map's own manifest.
+ */
+export function diskOrders(busesDir, readManifest) {
+  const files = [];
+  for (const sub of ['ready', 'doing', 'done']) {
+    const dir = path.join(busesDir, 'adhoc', sub);
+    if (!existsSync(dir)) continue;
+    for (const f of readdirSync(dir).sort()) if (f.endsWith('.md')) files.push({ file: `adhoc/${sub}/${f}`, text: readFileSync(path.join(dir, f), 'utf8') });
+  }
+  return (m) => {
+    const runs = readManifest(path.join(busesDir, m.dir || path.join('Areas', m.map)))?.stages?.S4?.runs || [];
+    for (const f of files) { const sentence = deliveryOrder(f.text, m, runs); if (sentence) return { file: f.file, sentence }; }
+    return null;
+  };
+}
 
 /** `readInputs` for `gatherEvidence`: the top-level `.json` files of a run folder, minus the engine's `NOT_INPUTS`. */
 export function diskInputs(notInputs) {

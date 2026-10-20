@@ -91,6 +91,10 @@
  * writes, and a self-answer carries `self: true` and never counts as a sighting. Like
  * every local mutator here, it prints by default and writes only with `--apply`; with
  * `--apply` it also backfills `engine` onto older answers whose builds are still on disk.
+ * Since OA-659 two more things count: a RULING of Peter's recorded on the S3 run with
+ * `--rule`, which covers the words it names, and a delivery Peter queued himself in
+ * `adhoc/`, naming the exact build, which is his accept. Both are described in
+ * `ink_self_answer.mjs`'s header.
  *
  * WHERE THINGS GO. The review and its answers are `_gtfs/ink-review_<scan>.json`,
  * tracked, beside the grading it was drawn from. The page and its crops are
@@ -124,6 +128,8 @@
  *   node ink_review.mjs ... --no-commit                     leave the record written and uncommitted
  *   node ink_review.mjs --scan <scan> --answer "<Town>" --verdict accept|hold --by <who> [--note "<why>"]
  *   node ink_review.mjs --scan <scan> --self-answer --by <who> [--apply] answer by rule what needs no person; print, or write with --apply
+ *   node ink_review.mjs --rule "<map folder>" --s3 <S3 id> --path <path>[,<path>] --said "<Peter's words>" [--where "<ref>"] [--apply]
+ *                                                            record a ruling of Peter's on that S3 run (OA-659)
  *   node ink_review.mjs --scan <scan> --deliverable [--json] which maps a session may deliver NOW, asked of
  *                                                            each manifest and the live portal (OA-658)
  *   node ink_review.mjs --scan <scan> --staged --town "<Map>" --map <slug> --proposal <n> --by <who> [--at <date>] [--notify digest]
@@ -144,7 +150,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, resolveBuses, resolvePortal, loadPortalEnv, assetsDir } from './engine.mjs';
 import { readGradeState, defaultReadGradeFiles } from './refresh_grades.mjs';
-import { gatherEvidence, recordable, registerFrom, selfAnswer, backfillEngine, engineEdge, diskInputs } from './ink_self_answer.mjs';
+import { gatherEvidence, recordable, registerFrom, selfAnswer, backfillEngine, engineEdge, diskInputs, diskOrders, recordRuling } from './ink_self_answer.mjs';
 
 export const SCHEMA = 1;
 export const VERDICTS = ['accept', 'hold'];
@@ -801,6 +807,27 @@ async function main() {
   const file = path.join(busesDir, '_gtfs', `ink-review_${scan}.json`);
   const prev = readJson(file);
 
+  if (typeof args.rule === 'string') {
+    /* A ruling is written onto the S3 run the session is about to build from, and committed with it (OA-659). */
+    const mapDir = path.isAbsolute(args.rule) ? args.rule : path.join(busesDir, args.rule);
+    const manifest = readJson(path.join(mapDir, 'manifest.json'));
+    if (!manifest) throw new Refused(`there is no manifest.json in ${mapDir}; --rule takes the map's folder, such as "Areas/Beaconsfield/Places/Beaconsfield Waitrose".`);
+    const s3 = typeof args.s3 === 'string' ? args.s3 : '';
+    const run = (manifest.stages?.S3?.runs || []).find((r) => r.id === s3);
+    const routes = run ? readJson(path.join(mapDir, run.dir, 'routes.json')) : null;
+    if (run && !routes) throw new Refused(`S3 ${s3} has no readable routes.json in ${path.join(mapDir, run.dir)}.`);
+    const d = new Date(), on = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    let got;
+    try {
+      got = recordRuling(manifest, { s3, paths: String(args.path === true || args.path == null ? '' : args.path).split(',').map((x) => x.trim()).filter(Boolean), said: typeof args.said === 'string' ? args.said : '', where: typeof args.where === 'string' ? args.where : '', on: typeof args.on === 'string' ? args.on : on,
+        read: (p) => p.split('.').reduce((v, k) => (v && typeof v === 'object' ? v[k] : undefined), routes) });
+    } catch (e) { throw new Refused(e.message); }
+    console.log(`ink_review: the ruling for S3 ${s3} in ${mapDir}:\n${JSON.stringify(got.ruling, null, 2)}`);
+    if (!args.apply) { console.log('ink_review: dry run, nothing written; add --apply to record it, then commit manifest.json with the S3 run.'); return; }
+    writeFileSync(path.join(mapDir, 'manifest.json'), JSON.stringify(got.manifest, null, 2) + '\n');
+    console.log(`ink_review: recorded on S3 ${s3} in ${path.join(mapDir, 'manifest.json')}; commit it with the rebuild.`);
+    return;
+  }
   if (typeof args.answer === 'string') {
     if (!prev) throw new Refused(`there is no review for ${scan} yet (${file}); collect it first.`);
     /* The sightings a later self-answer stands on. Best effort: an answer is Peter's whether or not they can be read. */
@@ -824,7 +851,7 @@ async function main() {
     const evidenceFor = evidenceSource(busesDir);
     const { review: filled, filled: n } = backfillEngine(prev, { evidenceFor });
     const reviews = readReviews(busesDir).map((r) => (r.scan === scan ? { scan, review: filled } : r));
-    const { review: next, results } = selfAnswer(filled, { by, at: new Date().toISOString(), evidenceFor, register: registerFrom(reviews) });
+    const { review: next, results } = selfAnswer(filled, { by, at: new Date().toISOString(), evidenceFor, register: registerFrom(reviews), ordersFor: diskOrders(busesDir, diskIo.readManifest) });
     for (const r of results) console.log(`  ${r.outcome === 'accept' ? 'ACCEPT ' : 'WAITING'} ${r.map} — ${r.why}`);
     const acc = results.filter((r) => r.outcome === 'accept').length;
     const summary = `${acc} accepted by rule, ${results.length - acc} left for Peter${n ? `, ${n} earlier answer${n === 1 ? '' : 's'} given engine sightings` : ''}`;

@@ -38,7 +38,13 @@
  * `adopt:<knob>` and needs its own first sighting on another map, exactly as a
  * commit does. So the first map to adopt stays Peter's. A per-map switch
  * (`strandedOnInk`, `exitInFrame`) or a moved typed coordinate is not an adoption
- * and still waits.
+ * and still waits. A note's `handPlaced` reason and its `fact`/`factWords` tags
+ * (OA-648, `NOTE_TAGS`) move no ink at all, so they need no sighting and compose with
+ * an adoption or a ruling: Godmanchester Co-op Cambridge Road waited on the 1 October
+ * review, with Peter's ruling of its route 101 line recorded, only because three of its
+ * notes had gained a fact tag since the build he last accepted (buses-data 28b77796).
+ * The generator closure is not asked whether it reads those tags, so a generator that
+ * starts drawing from them must take them out of `NOTE_TAGS`.
  *
  * A RULING PETER GAVE COVERS THE WORDS IT NAMES (buses-data OA-659, Peter, 2026-10-20).
  * On 19 October Peter ruled two "via" descriptions on the Beaconsfield place maps
@@ -210,10 +216,23 @@ const setAt = (o, p, v) => {
 };
 const without = (o, ks) => Object.fromEntries(Object.entries(o).filter(([k]) => !ks.includes(k)));
 
+/*
+ * The tags on a note that no generator reads: `fact` joins a line to the register and
+ * `factWords` says why it keeps its own words (OA-648), and only `fact_notes.js --check`
+ * and `knob_adopt.mjs` read them. Set aside on the note and on each `then` paragraph.
+ */
+export const NOTE_TAGS = ['fact', 'factWords'];
+const untag = (n) => (n && typeof n === 'object' && !Array.isArray(n)
+  ? Object.fromEntries(Object.entries(n).filter(([k]) => !NOTE_TAGS.includes(k)).map(([k, v]) => [k, k === 'then' && Array.isArray(v) ? v.map(untag) : v]))
+  : n);
+
 /** How one note changed, as an adoption label, '' for no ink change, or null when it is not an adoption. */
-function noteAdoption(a, b) {
+function noteAdoption(a0, b0) {
+  if (JSON.stringify(a0) === JSON.stringify(b0)) return '';
+  if (!a0 || !b0 || typeof a0 !== 'object' || typeof b0 !== 'object') return null;
+  /* A fact tag added, changed or dropped moves no ink, so it composes with a handPlaced reason or a ruling. */
+  const a = untag(a0), b = untag(b0);
   if (JSON.stringify(a) === JSON.stringify(b)) return '';
-  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return null;
   if (JSON.stringify(without(a, NOTE_PLACE)) !== JSON.stringify(without(b, NOTE_PLACE))) return null;
   const typed = (n) => 'x' in n || 'y' in n;
   if (typed(a) && !typed(b) && !('at' in a) && !('w' in b)) return 'mapNotes.near';
@@ -478,7 +497,8 @@ export function decide({ entry, evidence, register }) {
   const quiet = moved.filter((s) => s.text && !(words.get(s.sheet) || {}).touched).map((s) => `${s.sheet}: ${describeText(s.text)}`);
   const said = ruled.rulings.map((r) => `S3 ${r.s3}, "${clip(r.said)}"${r.where ? ` (${r.where})` : ''}`).join('; ');
   const rule = ruled.paths.length ? `Peter's ruling of ${ruled.paths.join(', ')} (${said})` : '';
-  const ins = evidence.inputs.length ? `the inputs differ only by the OA-437 adoption of ${(evidence.adopted || []).join(', ') || 'a handPlaced reason'}${rule ? ` and ${rule}` : ''}` : rule ? `the inputs differ only by ${rule}` : 'the inputs are unchanged';
+  const what = (evidence.adopted || []).length ? `the OA-437 adoption of ${evidence.adopted.join(', ')}` : 'a handPlaced reason or a fact tag (neither moves ink)';
+  const ins = evidence.inputs.length ? `the inputs differ only by ${what}${rule ? ` and ${rule}` : ''}` : rule ? `the inputs differ only by ${rule}` : 'the inputs are unchanged';
   const text = ruled.paths.length && moved.some((s) => (words.get(s.sheet) || {}).touched) ? 'the text is unchanged but for the words Peter ruled' : 'the text is unchanged';
   const ink = attributed.length ? `the ink is ${attributed.map((x) => `${short(x.sha)} (accepted on ${x.map} by ${x.by})`).join(', ')}` : 'no engine commit moved it';
   const note = `answered by rule: ${text} on ${moved.map((s) => s.sheet).join(', ')}${quiet.length ? ` (${quiet.join('; ')})` : ''}, ${ins}, and ${ink}`;

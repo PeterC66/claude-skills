@@ -490,7 +490,16 @@ console.log('\n10. A session answers by rule only when the words are the same an
   check('a note whose words changed as it was adopted is not an adoption', verdict(fixture({ rb: typedRoutes(), ra: adoptedRoutes({ mapNotes: [{ ...NOTE, text: 'Other words', near: { x: 10, y: 90 } }] }) }), [seen(), adoptSeen()]).verdict === 'waiting');
   check('a note that kept its w is not adopted, because the search sets the width', verdict(fixture({ rb: typedRoutes(), ra: adoptedRoutes({ mapNotes: [{ ...NOTE, near: { x: 10, y: 90 }, w: 60 }] }) }), [seen(), adoptSeen()]).verdict === 'waiting');
   const hp = verdict(fixture({ rb: routes(SHA_X, { mapNotes: [{ ...NOTE, x: 10, y: 90 }] }), ra: routes(SHA_A, { mapNotes: [{ ...NOTE, x: 10, y: 90, handPlaced: 'in the title band' }] }) }));
-  check('a handPlaced reason added to a typed note needs no sighting, since it moves no ink', hp.verdict === 'accept' && /OA-437 adoption of a handPlaced reason/.test(hp.note), JSON.stringify(hp));
+  check('a handPlaced reason added to a typed note needs no sighting, since it moves no ink', hp.verdict === 'accept' && /differ only by a handPlaced reason or a fact tag \(neither moves ink\)/.test(hp.note), JSON.stringify(hp));
+  /* OA-648's fact tags are read by fact_notes.js --check and never by a generator. */
+  const TAGS = { fact: 'SF-011', factWords: 'keeps the pickup-area point' };
+  const tagged = verdict(fixture({ rb: routes(SHA_X, { mapNotes: [{ ...NOTE, x: 10, y: 90 }] }), ra: routes(SHA_A, { mapNotes: [{ ...NOTE, x: 10, y: 90, ...TAGS }] }) }));
+  check('a fact tag and its factWords added to a note need no sighting, since no generator reads them', tagged.verdict === 'accept' && /a fact tag \(neither moves ink\)/.test(tagged.note), JSON.stringify(tagged));
+  const thenTag = verdict(fixture({ rb: routes(SHA_X, { mapNotes: [{ ...NOTE, then: [{ text: 'Ring 01354 661234' }] }] }), ra: routes(SHA_A, { mapNotes: [{ ...NOTE, then: [{ text: 'Ring 01354 661234', fact: 'SF-011' }] }] }) }));
+  check('  and so does a fact tag on a then paragraph', thenTag.verdict === 'accept', JSON.stringify(thenTag));
+  check('  but a fact tag riding on a note whose words changed still waits', verdict(fixture({ rb: routes(SHA_X, { mapNotes: [{ ...NOTE, x: 10, y: 90 }] }), ra: routes(SHA_A, { mapNotes: [{ ...NOTE, text: 'Other words', x: 10, y: 90, ...TAGS }] }) })).verdict === 'waiting');
+  check('  and so does one on a then paragraph whose words changed', verdict(fixture({ rb: routes(SHA_X, { mapNotes: [{ ...NOTE, then: [{ text: 'Ring 01354 661234' }] }] }), ra: routes(SHA_A, { mapNotes: [{ ...NOTE, then: [{ text: 'Ring 01354 999999', fact: 'SF-011' }] }] }) })).verdict === 'waiting');
+  check('  and a fact tag beside a moved typed coordinate still waits', verdict(fixture({ rb: routes(SHA_X, { mapNotes: [{ ...NOTE, x: 10, y: 90 }] }), ra: routes(SHA_A, { mapNotes: [{ ...NOTE, x: 50, y: 90, ...TAGS }] }) })).verdict === 'waiting');
   const other = fixture({ rb: typedRoutes(), ra: adoptedRoutes() });
   const otherInputs = other.evidenceFor(other.entry, OLD, NEW);
   check('recordable writes the adoption onto the answer, so Peter\'s --answer accept becomes the sighting', JSON.stringify(recordable(otherInputs).commits.map((c) => c.sha)) === JSON.stringify([SHA_A, 'adopt:legendAt', 'adopt:mapNotes.near']), JSON.stringify(recordable(otherInputs)));
@@ -596,6 +605,22 @@ console.log('\n12. A ruling of Peter\'s covers the words it names, and a deliver
   check('a sheet that moved where no ruled word is, with no engine commit, is unexplained and waits', ext.verdict === 'waiting' && /external\.svg moved with no OA-437 adoption and no engine commit/.test(ext.reason), JSON.stringify(ext));
   const hand = ask(fx({ ra: routesOf(NEW31, { design: { strandedOnInk: false } }) }));
   check('a hand config change beside the ruled one still waits', hand.verdict === 'waiting' && /inputs changed — routes\.json \(design\)/.test(hand.reason), JSON.stringify(hand));
+
+  /* Godmanchester Co-op Cambridge Road on 2026-10-20 (buses-data 28b77796): a ruled note line, with handPlaced reasons and a fact tag added since Peter's last accept. */
+  const ENDS = 'Sat & Sun service whose registration ends 13 Sep 2026.', ENDED = 'Sat & Sun service that ended 13 Sep 2026.';
+  const KEPT = 'kept where it was typed (OA-437, Peter 2026-10-15)';
+  const DAR = { text: 'Dial-a-Ride (FACT): a pre-booked shopper bus.', x: 45, y: 156 };
+  const notesB = [DAR, { text: ENDS, x: 45, y: 172 }];
+  const notesA = (n0 = { ...DAR, handPlaced: KEPT, fact: 'SF-011', factWords: 'keeps the pickup-area point (OA-648)' }, t1 = ENDED) => [n0, { text: t1, x: 45, y: 172, handPlaced: KEPT }];
+  const NOTE_RULING = { by: 'peter', on: '2026-10-18', said: 'Reword it to say the service ended', where: 'buses-data 5c13869d', set: { 'mapNotes.1.text': ENDED } };
+  const cr = (o = {}) => ask(fx({ ruling: NOTE_RULING, rb: routesOf(OLD31, { mapNotes: notesB }), ra: routesOf(OLD31, { mapNotes: notesA() }), after: panel(LINES(OLD31, [ENDED])), ...o }));
+  const crOk = cr();
+  check('THE CAMBRIDGE ROAD CASE: a ruled note line composes with handPlaced reasons and a fact tag, and is accepted by rule', crOk.verdict === 'accept' && /differ only by a handPlaced reason or a fact tag \(neither moves ink\) and Peter's ruling of mapNotes\.1\.text/.test(crOk.note), JSON.stringify(crOk));
+  check('  and with no ruling it waits on the words', /text on internal\.svg changed: added "Sat & Sun service that ended/.test(cr({ ruling: null }).reason || ''), JSON.stringify(cr({ ruling: null })));
+  const crWords = cr({ ra: routesOf(OLD31, { mapNotes: notesA({ ...DAR, text: 'Dial-a-Ride: book ahead.', fact: 'SF-011' }) }) });
+  check('  and a fact-tagged note whose words also changed is not explained by the ruling of another line', crWords.verdict === 'waiting' && /inputs changed — routes\.json \(mapNotes\)/.test(crWords.reason), JSON.stringify(crWords));
+  const crSwitch = cr({ ra: routesOf(OLD31, { mapNotes: notesA(), design: { strandedOnInk: false } }) });
+  check('  and a per-map switch beside them still waits', crSwitch.verdict === 'waiting' && /routes\.json \(mapNotes, design\)/.test(crSwitch.reason), JSON.stringify(crSwitch));
 
   /* Asked from the build Peter last accepted on this map, not from the review's before. */
   const three = fx({ commits: { 'place:internal': [] } });

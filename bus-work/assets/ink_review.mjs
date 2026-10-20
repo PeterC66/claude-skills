@@ -128,8 +128,9 @@
  *   node ink_review.mjs ... --no-commit                     leave the record written and uncommitted
  *   node ink_review.mjs --scan <scan> --answer "<Town>" --verdict accept|hold --by <who> [--note "<why>"]
  *   node ink_review.mjs --scan <scan> --self-answer --by <who> [--apply] answer by rule what needs no person; print, or write with --apply
- *   node ink_review.mjs --rule "<map folder>" --s3 <S3 id> --path <path>[,<path>] --said "<Peter's words>" [--where "<ref>"] [--apply]
- *                                                            record a ruling of Peter's on that S3 run (OA-659)
+ *   node ink_review.mjs --rule "<map folder>" --s3 <S3 id> --path <path>[,<path>] --said "<Peter's words>" [--where "<ref>"] [--on <date>] [--apply]
+ *                                                            record a ruling of Peter's on that S3 run (OA-659);
+ *                                                            <date> is the day he gave it, e.g. 2026-10-18, defaulting to today
  *   node ink_review.mjs --scan <scan> --deliverable [--json] which maps a session may deliver NOW, asked of
  *                                                            each manifest and the live portal (OA-658)
  *   node ink_review.mjs --scan <scan> --staged --town "<Map>" --map <slug> --proposal <n> --by <who> [--at <date>] [--notify digest]

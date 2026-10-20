@@ -615,6 +615,8 @@ export async function fetchPortalMaps({ base = process.env.BUSMAPS_URL, token = 
  * them. A map rebuilt since collection is a re-collect, which is a session's job, and
  * gets its own rank-7 row rather than silence. A portal that was not read (`portal`
  * null or `{ error }`) keeps the record's answer: the row asks, it is never dropped.
+ * The worklist passes its portal only when it read the LIVE one: `--local` is the
+ * laptop's dev database, whose deliveries are not the customer's.
  */
 export function waitingItems(reviews, { busesDir = '', assets = '', daysSince = () => null, portal = null, manifestOf = null } = {}) {
   const out = [];

@@ -341,8 +341,7 @@ async function fromRemotePortal() {
       maps: (maps.maps || []).map((m) => ({
         id: m.id, slug: m.slug, name: m.name, kind: m.kind, subject: m.subject,
         built: !!m.currentVersion, customerName: m.customer && m.customer.name,
-        lastDeliveryAt: m.lastDeliveryAt, // undefined = a deploy older than the field (undelivered.mjs)
-        pendingUpdate: m.pendingUpdate, // an update waiting on its customer: the ink review's liveVerdict() (OA-658)
+        lastDeliveryAt: m.lastDeliveryAt, pendingUpdate: m.pendingUpdate, // undefined = a deploy older than the field (undelivered.mjs); pendingUpdate is for liveVerdict() (OA-658)
       })),
     };
   } catch (e) {
@@ -727,9 +726,6 @@ const tree = fromMapTree();
 const upcoming = fromUpcomingReport();
 for (const it of fromCorrespondence()) add(it);
 for (const it of fromCommitments()) add(it);
-// The row asks Peter only what the live verdict calls needsPeter (OA-658). Only the
-// LIVE portal may decide that: --local is the laptop's dev database, whose deliveries
-// are not the customer's, so it and an unread portal keep the record's list and ask.
 for (const it of waitingItems(readReviews(BUSES), { busesDir: BUSES, assets: HERE, daysSince, portal: REMOTE ? portal : null, manifestOf: BUSES ? manifestReader(BUSES) : null })) add(it);
 
 // A deploy pending is a CHORE, and since 2026-09-17 (buses-data OA-396) this is

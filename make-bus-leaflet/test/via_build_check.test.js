@@ -34,7 +34,7 @@ const config = desc => ({
 });
 
 // A map folder with `published` in ci-reference (or none) and `built` in an S4 run.
-function mapWith({ published, built }) {
+function mapWith({ published, built, full = { 9: { all: ['A1', 'A2', 'A3'] } } }) {
   const map = fs.mkdtempSync(path.join(os.tmpdir(), 'vbc-'));
   fs.writeFileSync(path.join(map, 'manifest.json'), '{}');
   if (published) {
@@ -44,7 +44,7 @@ function mapWith({ published, built }) {
   const dir = path.join(map, 'S4-generate', 'v1.0_2026-10-20_1200');
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify(built));
-  fs.writeFileSync(path.join(dir, 'routes_full_atco.json'), JSON.stringify({ 9: { all: ['A1', 'A2', 'A3'] } }));
+  fs.writeFileSync(path.join(dir, 'routes_full_atco.json'), JSON.stringify(full));
   return { map, dir, done: () => fs.rmSync(map, { recursive: true, force: true }) };
 }
 const severities = msgs => BUILDLOG.collect([{ source: 'via', stderr: msgs.join('\n'), ok: true }]).map(e => e.severity);
@@ -127,6 +127,59 @@ test('build_s4 files a new via as a BLOCKING entry from source via, even with no
   const mine = r.blockers.filter(e => e.source === 'via');
   assert.strictEqual(mine.length, 1, 'build_s4 did not file the via check as blocking');
   assert.match(mine[0].text, /Ramsey/);
+  m.done();
+});
+
+/* The spoke's end label (OA-650's second slice). Route 401's chain is all in area 050,
+ * as Huntingdon's is; Spaldwick is 400's village in the same area, Peterborough is
+ * wholly 059, past where S2 cut 904's chain. */
+const AREA_LOC = { '050A1': 'Brampton', '050A2': 'Leighton Bromswold', '050B1': 'Yaxley' };
+const AREAS = { brampton: ['050'], 'leighton bromswold': ['050'], spaldwick: ['050'], yaxley: ['050'], peterborough: ['059'] };
+const areaRegister = {
+  localitiesOf: a => (AREA_LOC[a] ? [AREA_LOC[a]] : []),
+  isLocality: n => String(n).toLowerCase() in AREAS,
+  areasOf: n => AREAS[String(n).toLowerCase()] || [],
+};
+const areaFull = { 401: { all: ['050A1', '050A2'] }, 904: { all: ['050B1'] } };
+const spokes = (label401, routes904 = ['904']) => ({
+  routeOrder: ['401', '904'],
+  external: [
+    { route: '401', label: label401, stops: ['Brampton', label401] },
+    { route: '904', routes: routes904, label: 'Peterborough', stops: ['Yaxley', 'Peterborough'] },
+  ],
+});
+
+test('a spoke label this build took from a village in its own area but off its chain is BLOCKING', () => {
+  const m = mapWith({ published: spokes('Leighton Bromswold'), built: spokes('Spaldwick'), full: areaFull });
+  const r = viaBuildCheck({ dir: m.dir, register: areaRegister });
+  assert.deepStrictEqual(r.fresh.map(o => o.name), ['Spaldwick']);
+  assert.match(r.messages[0], /labelled Spaldwick/);
+  assert.deepStrictEqual(severities(r.messages), ['BLOCKING']);
+  m.done();
+});
+
+test('the same label already on the published sheet is WARN', () => {
+  const m = mapWith({ published: spokes('Spaldwick'), built: spokes('Spaldwick'), full: areaFull });
+  const r = viaBuildCheck({ dir: m.dir, register: areaRegister });
+  assert.strictEqual(r.fresh.length, 0);
+  assert.deepStrictEqual(severities(r.messages), ['WARN']);
+  m.done();
+});
+
+test('a label wholly in another area, past where the chain was cut, says nothing and is counted', () => {
+  const m = mapWith({ published: null, built: spokes('Leighton Bromswold'), full: areaFull });
+  const r = viaBuildCheck({ dir: m.dir, register: areaRegister });
+  assert.deepStrictEqual(r.messages, [], 'the region-edge terminus went HARD at S4');
+  assert.deepStrictEqual(r.beyond.map(o => `${o.route} ${o.name}`), ['904 Peterborough']);
+  m.done();
+});
+
+test('a spoke one of whose routes has no chain is not judged', () => {
+  const built = spokes('Leighton Bromswold', ['904', 'X1']);
+  Object.assign(built.external[1], { label: 'Spaldwick', stops: ['Yaxley', 'Spaldwick'] });
+  const m = mapWith({ published: null, built, full: areaFull });
+  const r = viaBuildCheck({ dir: m.dir, register: areaRegister });
+  assert.deepStrictEqual(r.messages, [], 'X1 has no chain, so it may be the route that reaches the label');
   m.done();
 });
 

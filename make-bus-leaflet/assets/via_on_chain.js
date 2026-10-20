@@ -110,6 +110,7 @@ function openRegister(dbPath) {
     const known = new Set();
     for (const r of db.prepare('select distinct LocalityName from naptan').all()) if (r.LocalityName) known.add(normPlace(r.LocalityName));
     const cache = new Map();
+    let areas = null;                      // normalised locality -> Set of ATCO area codes, built on first ask
     return {
       localitiesOf(atco) {
         if (!cache.has(atco)) {
@@ -121,6 +122,24 @@ function openRegister(dbPath) {
       isLocality(name) {
         const a = normPlace(name);
         return known.has(a) || (a.length > 4 && a.endsWith('s') && known.has(a.slice(0, -1)));
+      },
+      // The ATCO area codes (the first three characters: 050 Cambridgeshire, 059
+      // Peterborough) of every stop filed under `name` or under a child of it. Read by
+      // via_build_check.js to tell a chain cut at an area edge from a borrowed terminus.
+      areasOf(name) {
+        if (!areas) {
+          areas = new Map();
+          for (const r of db.prepare('select ATCOCode, LocalityName, ParentLocalityName from naptan').all()) {
+            for (const l of [r.LocalityName, r.ParentLocalityName]) {
+              if (!l) continue;
+              const k = normPlace(l);
+              if (!areas.has(k)) areas.set(k, new Set());
+              areas.get(k).add(String(r.ATCOCode).slice(0, 3));
+            }
+          }
+        }
+        const a = normPlace(name);
+        return [...(areas.get(a) || (a.length > 4 && a.endsWith('s') && areas.get(a.slice(0, -1))) || [])];
       },
     };
   } catch { return null; }

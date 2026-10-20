@@ -2547,6 +2547,23 @@ const MUTATIONS = [
     find: "  said.push({ source: 'via', stderr:",
     to: "  if (false) said.push({ source: 'via', stderr:" },
 
+  // The spoke's end label (OA-650's second slice, 2026-10-21): new blocks, published
+  // warns, and a label wholly past the chain's area edge stays quiet.
+  { suite: 'via_build_check.test.js', file: 'via_build_check.js',
+    what: "every off-chain label counts as already published, so 401's borrowed Spaldwick ships with a WARN",
+    find: "    if (labelsBefore.has(keyOf(o))) {",
+    to: "    if (true) {" },
+
+  { suite: 'via_build_check.test.js', file: 'via_build_check.js',
+    what: "the area-edge test is dropped, so 904's Peterborough, past where S2 cut its chain, refuses Huntingdon's build",
+    find: "      (register.areasOf(name).some(a => mine.has(a)) ? offChain : beyond).push(o);",
+    to: "      offChain.push(o);" },
+
+  { suite: 'via_build_check.test.js', file: 'via_build_check.js',
+    what: 'a spoke with a chainless route is judged by its other chain alone, so the route that reaches the label is ignored',
+    find: "    if (chains.some(c => !c.length)) return;",
+    to: "    if (false) return;" },
+
   // wcag.js — the three colour questions, extracted 2026-09-03 (OA-232 Tier 3.1,
   // OA-135) from seven copies across five files. The danger this module creates is
   // that it makes the three look like one, and every "tidy-up" toward one formula

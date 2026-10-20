@@ -31,3 +31,8 @@ make-bus-leaflet/tools/.dark-paths-after.json
 # would tell the next machine it had already stamped files it has never seen.
 stamp-docs/.docstamp-state.json
 stamp-docs/docstamp.log
+
+# Session worktrees (EnterWorktree's convention, and the one command CLAUDE.md
+# gives). Added 2026-10-20: until then `git status` in the main checkout showed
+# `.claude/` untracked, and `git add -A` there would have swept every worktree in.
+.claude/worktrees/

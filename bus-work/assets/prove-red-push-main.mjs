@@ -24,7 +24,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pushMain, engineFastForward, STUCK_RUNS_FOR_HOLD } from './push_main.mjs';
+import { pushMain, engineFastForward, STUCK_RUNS_FOR_HOLD, LEASE_MIN, PREFLIGHT_TIMEOUT_MS } from './push_main.mjs';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pushmain-'));
 let bad = 0;
@@ -475,6 +475,10 @@ const busesLock = (w) => path.join(w.buses, 'loop', 'LOCK.d');
   ok(writes.length === 1 && writes[0] === "'merge', '--ff-only', 'origin/main'", '16q the engine step\'s one write is merge --ff-only origin/main', JSON.stringify(writes));
 }
 
+{
+  // 17 the job's lease outlives its preflight: a lease that expired first would let the next tick steal a lock a live run holds.
+  ok(LEASE_MIN * 60000 >= PREFLIGHT_TIMEOUT_MS + 10 * 60000, '17 LEASE_MIN leaves at least ten minutes beyond PREFLIGHT_TIMEOUT_MS for the rebase and the stamp', `lease ${LEASE_MIN} min, timeout ${PREFLIGHT_TIMEOUT_MS / 60000} min`);
+}
 fs.rmSync(root, { recursive: true, force: true });
 console.log(bad ? `\n${bad} case(s) FAILED` : '\nall cases passed');
 process.exitCode = bad ? 1 : 0;

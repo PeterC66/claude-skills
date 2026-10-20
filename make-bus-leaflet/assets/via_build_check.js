@@ -50,7 +50,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { viaOnChain, normPlace, openRegister } = require('./via_on_chain');
+const { viaOnChain, normPlace, samePlace, openRegister } = require('./via_on_chain');
 const { displayedRoutes } = require('./displayed_routes');
 const { normRoute } = require('./redteam_agree');
 
@@ -88,6 +88,56 @@ function chainOfFrom(full) {
   };
 }
 
+/*
+ * THE SPOKE'S END LABEL (OA-650's second slice, 2026-10-21). via_on_chain.js leaves
+ * `label` to S6's terminus check, and that check runs after the sheet ships. Two
+ * sheets shipped a terminus that was never their route's: Huntingdon's 401 "to
+ * Spaldwick", route 400's village, and High Wycombe's 33, named from a stop. So each
+ * place in a spoke's label is read against that spoke's own chain here too.
+ *
+ * A CHAIN CUT AT AN AREA EDGE STAYS QUIET, and the ATCO area code is how. S2 keeps a
+ * route's stops inside the feed's areas, so 904's chain ends at Yaxley (050) and its
+ * label, Peterborough, files every stop under 059; VL14's ends at Tilbrook and
+ * Felmersham is 020. A label whose locality has NO stop in any area the chain's own
+ * stops are in lies past the cut, where the chain cannot speak for it: that is S6's
+ * terminus check and the red team's. One with a stop in the chain's own area is a
+ * place the chain would have reached, so missing it means the label is wrong:
+ * Spaldwick is 050, and so is all of 401's chain. Measured 2026-10-21 over every
+ * committed ci-reference/: 904, VL14 and Wisbech 46's King's Lynn are cut; no
+ * published label is off its chain in its own area.
+ *
+ * A spoke any of whose routes has no chain is not judged (Huntingdon's RH3, the
+ * ZIP3 half of 303): the missing chain might be the one that reaches the label.
+ */
+function labelPlaces(label) {
+  return String(label || '').replace(/\([^)]*\)/g, ' ')
+    .split(/\s*(?:,|&|\/|\band\b)\s*/i)
+    .map(p => p.trim().replace(/^the\s+/i, ''))
+    .filter(p => p && /^[A-Z0-9]/.test(p));
+}
+const areaOf = atco => String(atco).slice(0, 3);
+
+function labelsOffChain({ routes, displayed, chainOf, register }) {
+  const offChain = [], beyond = [];
+  if (!register || typeof register.areasOf !== 'function') return { offChain, beyond };
+  (routes.external || []).forEach((sp, i) => {
+    const rs = (Array.isArray(sp.routes) && sp.routes.length ? sp.routes : [sp.route]).filter(Boolean).map(String);
+    if (!rs.some(r => displayed.has(normRoute(r)))) return;
+    const chains = rs.map(r => chainOf(r) || []);
+    if (chains.some(c => !c.length)) return;
+    const stops = chains.flat();
+    const locs = [...new Set(stops.flatMap(a => register.localitiesOf(a)))];
+    if (!locs.length) return;
+    const mine = new Set(stops.map(areaOf));
+    for (const name of labelPlaces(sp.label)) {
+      if (locs.some(l => samePlace(name, l)) || !register.isLocality(name)) continue;
+      const o = { route: String(sp.route || rs[0]), where: `external[${i}].label`, name, chainLocalities: locs.sort() };
+      (register.areasOf(name).some(a => mine.has(a)) ? offChain : beyond).push(o);
+    }
+  });
+  return { offChain, beyond };
+}
+
 const keyOf = o => normRoute(o.route) + '|' + normPlace(o.name);
 const few = xs => xs.length > 8 ? xs.slice(0, 8).join(', ') + `, and ${xs.length - 8} more` : xs.join(', ');
 
@@ -112,12 +162,29 @@ function viaBuildCheck({ dir, routesJson = null, mapDir, register } = {}) {
   const now = viaOnChain({ routes: rj, displayed, norm: normRoute, chainOf, register: reg });
   if (now.notRun) return none(now.notRun);
 
+  const labels = labelsOffChain({ routes: rj, displayed, chainOf, register: reg });
+
   const published = map ? readJSON(path.join(map, 'ci-reference', 'routes.json')) : null;
   const before = published
     ? new Set(viaOnChain({ routes: published, displayed, norm: normRoute, chainOf, register: reg }).offChain.map(keyOf))
     : new Set();
+  const labelsBefore = published
+    ? new Set(labelsOffChain({ routes: published, displayed, chainOf, register: reg }).offChain.map(keyOf))
+    : new Set();
 
   const fresh = [], shipped = [], messages = [];
+  for (const o of labels.offChain) {
+    const where = `${o.where}; its chain's localities are ${few(o.chainLocalities)}`;
+    if (labelsBefore.has(keyOf(o))) {
+      shipped.push(o);
+      messages.push(`via: route ${o.route}'s spoke is labelled ${o.name} (${where}), which is in its stops' own area and on none of them. `
+        + 'It is already on the published sheet, so it does not stop this build; S6 reports it as a terminus finding.');
+    } else {
+      fresh.push(o);
+      messages.push(`via: route ${o.route}'s spoke is labelled ${o.name} (${where}), a NaPTAN locality in its stops' own area that the bus never calls at. `
+        + 'This build introduced it (buses-data OA-650): fix the spoke label in routes.json, or its route list if another route reaches it.');
+    }
+  }
   for (const o of now.offChain) {
     const where = `${o.where}; its chain's localities are ${few(o.chainLocalities)}`;
     if (before.has(keyOf(o))) {
@@ -130,7 +197,7 @@ function viaBuildCheck({ dir, routesJson = null, mapDir, register } = {}) {
         + 'This build introduced it (buses-data OA-650): fix the spoke stops or the Services text in routes.json.');
     }
   }
-  return { messages, fresh, shipped, notRun: null };
+  return { messages, fresh, shipped, beyond: labels.beyond, notRun: null };
 }
 
 if (require.main === module) {
@@ -144,8 +211,9 @@ if (require.main === module) {
   const r = viaBuildCheck({ dir, mapDir: typeof args.map === 'string' ? path.resolve(args.map) : undefined });
   if (r.notRun) console.log(`via: not checked — ${r.notRun}`);
   for (const m of r.messages) console.log(m);
-  console.log(`via: ${r.fresh.length} new, ${r.shipped.length} already published`);
+  console.log(`via: ${r.fresh.length} new, ${r.shipped.length} already published`
+    + (r.beyond && r.beyond.length ? `; ${r.beyond.length} label(s) past an area edge, left to S6 (${r.beyond.map(o => `${o.route} ${o.name}`).join(', ')})` : ''));
   process.exit(r.fresh.length ? 1 : 0);
 }
 
-module.exports = { viaBuildCheck, mapDirOf, chainOfFrom };
+module.exports = { viaBuildCheck, labelsOffChain, labelPlaces, mapDirOf, chainOfFrom };

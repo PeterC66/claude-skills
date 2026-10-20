@@ -99,7 +99,7 @@ import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_
 import { readScanState, bodsScanItems, readGtfsDirt, gtfsUncommittedItems } from './bods_scan.mjs';
 import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh, nothingOwed, placeGradeOpts } from './refresh_grades.mjs';
 import { compareRows } from './refresh_deadline.mjs';
-import { waitingItems, readReviews } from './ink_review.mjs';
+import { waitingItems, readReviews, manifestReader } from './ink_review.mjs';
 import { parseUpcoming, parseDatasets, rebuiltFromScan, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { undeliveredRows, s5Row, s6Verdict, foldUnderHolds } from './undelivered.mjs';
@@ -341,7 +341,7 @@ async function fromRemotePortal() {
       maps: (maps.maps || []).map((m) => ({
         id: m.id, slug: m.slug, name: m.name, kind: m.kind, subject: m.subject,
         built: !!m.currentVersion, customerName: m.customer && m.customer.name,
-        lastDeliveryAt: m.lastDeliveryAt, // undefined = a deploy older than the field (undelivered.mjs)
+        lastDeliveryAt: m.lastDeliveryAt, pendingUpdate: m.pendingUpdate, // undefined = a deploy older than the field (undelivered.mjs); pendingUpdate is for liveVerdict() (OA-658)
       })),
     };
   } catch (e) {
@@ -726,7 +726,7 @@ const tree = fromMapTree();
 const upcoming = fromUpcomingReport();
 for (const it of fromCorrespondence()) add(it);
 for (const it of fromCommitments()) add(it);
-for (const it of waitingItems(readReviews(BUSES), { busesDir: BUSES, assets: HERE, daysSince })) add(it);
+for (const it of waitingItems(readReviews(BUSES), { busesDir: BUSES, assets: HERE, daysSince, portal: REMOTE ? portal : null, manifestOf: BUSES ? manifestReader(BUSES) : null })) add(it);
 
 // A deploy pending is a CHORE, and since 2026-09-17 (buses-data OA-396) this is
 // the row that carries it: the board prints a BEHIND deployment and no longer

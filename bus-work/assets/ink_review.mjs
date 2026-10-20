@@ -16,6 +16,20 @@
  * names only maps whose ink did not move or that Peter accepted. A held map, an
  * unanswered one and one this tool could not read are never deliverable.
  *
+ * AND `--deliverable` IS COMPUTED WHEN IT IS READ (buses-data OA-658). The record says
+ * what was true when it was last collected. On 2026-10-20 it still held accepts for
+ * Beaconsfield Simpson Centre v1.45 and Waitrose v1.39 after both were rebuilt, so the
+ * record-only gate named them `deliver`, and v1.46 and v1.40 went to the portal by
+ * hand (#186, #187) under an accept nobody gave. The same output named Chatteris,
+ * which the portal does not hold. So `liveVerdict()` asks each map's manifest whether
+ * the answered build is still the newest S4, and asks the portal (GET /api/maps)
+ * whether the map exists and whether an update is waiting or already received. It
+ * reports deliver / already staged / needs Peter / not on the portal / re-collect
+ * first / cannot tell. `stage_refresh.mjs` refuses anything but `deliver` from the
+ * same function, and the portal's `npm run deliver` asks the review for itself (its
+ * step 0e) and records `--staged` afterwards. `deliverable()` stays, as the record's
+ * own account, for the worklist's waiting row and the digest's plan.
+ *
  * WHAT "THE INK MOVED" MEANS HERE, EXACTLY. The newest S4 run dated on or after
  * the scan is compared, sheet by sheet, with the newest S4 run dated BEFORE the
  * scan — what the map was before this month, not merely the build before the last
@@ -110,7 +124,8 @@
  *   node ink_review.mjs ... --no-commit                     leave the record written and uncommitted
  *   node ink_review.mjs --scan <scan> --answer "<Town>" --verdict accept|hold --by <who> [--note "<why>"]
  *   node ink_review.mjs --scan <scan> --self-answer --by <who> [--apply] answer by rule what needs no person; print, or write with --apply
- *   node ink_review.mjs --scan <scan> --deliverable [--json] which maps a session may deliver
+ *   node ink_review.mjs --scan <scan> --deliverable [--json] which maps a session may deliver NOW, asked of
+ *                                                            each manifest and the live portal (OA-658)
  *   node ink_review.mjs --scan <scan> --staged --town "<Map>" --map <slug> --proposal <n> --by <who> [--at <date>] [--notify digest]
  *                                                            record a staging made by hand, not by stage_refresh.mjs
  *
@@ -127,7 +142,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { parseArgs, resolveBuses, assetsDir } from './engine.mjs';
+import { parseArgs, resolveBuses, resolvePortal, loadPortalEnv, assetsDir } from './engine.mjs';
 import { readGradeState, defaultReadGradeFiles } from './refresh_grades.mjs';
 import { gatherEvidence, recordable, registerFrom, selfAnswer, backfillEngine, engineEdge, diskInputs } from './ink_self_answer.mjs';
 
@@ -458,7 +473,11 @@ export function markNotified(review, towns, { by, at }) {
   return { ...review, maps };
 }
 
-/** The gate OA-428's delivery step asks. Only `deliver` may be delivered. */
+/**
+ * What the RECORD says, as it was last written. The worklist's waiting row and the
+ * digest's plan read this; whether a map may be delivered NOW is `liveVerdict()`'s,
+ * because the record does not know of a rebuild since it was collected, nor of the portal.
+ */
 export function deliverable(review) {
   const out = { deliver: [], staged: [], waiting: [], held: [], other: [] };
   for (const m of review.maps) {
@@ -470,6 +489,104 @@ export function deliverable(review) {
     else out.held.push(m.map);
   }
   return out;
+}
+
+/** The newest S4 build with a sheet in a manifest, by its own name rather than manifest order. */
+export function newestBuild(manifest) {
+  const runs = ((manifest && manifest.stages && manifest.stages.S4 && manifest.stages.S4.runs) || [])
+    .filter((r) => runKey(r.id) && (r.outputs || []).some((o) => o.endsWith('.svg')))
+    .sort((a, b) => (runKey(a.id) < runKey(b.id) ? -1 : runKey(a.id) > runKey(b.id) ? 1 : 0));
+  return runs.length ? runs[runs.length - 1] : null;
+}
+
+/**
+ * The portal map a review entry is, joined by name as the worklist joins a portal map to
+ * its folder (`localDirOf`): an area by its exact name, a place by its exact name or a
+ * portal name that contains it. `maps` is GET /api/maps's `maps`.
+ */
+export function portalMapFor(entry, maps) {
+  const kind = entry.kind === undefined ? 'area' : entry.kind, want = String(entry.map).toLowerCase();
+  const same = (maps || []).filter((m) => (m.kind || 'area') === kind);
+  return same.find((m) => String(m.name || '').toLowerCase() === want)
+    || (kind === 'place' ? same.find((m) => String(m.name || '').toLowerCase().includes(want)) : undefined) || null;
+}
+
+/* The portal's `YYYY-MM-DD HH:MM:SS` and the manifest's `YYYY-MM-DDTHH:MM` are both UTC without a zone. */
+const utcMs = (s) => { const t = Date.parse(`${String(s || '').trim().replace(' ', 'T')}${/[zZ]|[+-]\d\d:?\d\d$/.test(String(s)) ? '' : 'Z'}`); return Number.isNaN(t) ? null : t; };
+
+export const LIVE = ['deliver', 'staged', 'needsPeter', 'offPortal', 'recollect', 'cannotTell'];
+
+/**
+ * May this map be delivered NOW? (buses-data OA-658.) Asked at read time of the
+ * manifest on disk and the live portal, never trusted from the record alone. On
+ * 2026-10-20 the 1 October record still carried accepts for Beaconsfield Simpson
+ * Centre v1.45 and Waitrose v1.39 after both were rebuilt, `deliverable()` named them
+ * `deliver`, and v1.46 and v1.40 went to the portal by hand (#186, #187) under an
+ * accept nobody gave; the same output named Chatteris, which the portal does not hold.
+ *
+ * `manifest` is the map's manifest (null for none); `portal` is `{ maps }` from GET
+ * /api/maps or `{ error }`. Returns `{ verdict, why, build, render, portalMap }`, the
+ * verdict one of LIVE, checked in this order:
+ *   cannotTell  no manifest, no S4 build, or a portal that could not be read and a
+ *               record that does not already say this build is staged;
+ *   offPortal   no portal map by this name — a refresh has nothing to go to;
+ *   staged      the record staged THIS build, or the portal holds an update waiting on
+ *               its customer, or the portal last received the map after this build's
+ *               render was cut (the time join `undelivered.mjs` uses, because the host
+ *               records no render id);
+ *   recollect   the newest S4 is not the build the review compared: a rebuild since
+ *               collection. Re-collecting carries an answer forward when the ink is the
+ *               same (OA-584), so Peter is asked only if that cannot;
+ *   needsPeter  ink moved and his answer is missing, held, or for another build;
+ *   deliver     no ink moved, or he accepted this build — and it has its render.
+ * An unrendered build of an accepted or no-ink map is `cannotTell`: nothing to ship yet.
+ */
+export function liveVerdict(entry, { manifest, portal, scan }) {
+  const m = entry, out = (verdict, why, extra = {}) => ({ verdict, why, build: null, render: null, portalMap: null, ...extra });
+  if (!manifest) return out('cannotTell', m.status === 'unreadable' && m.detail ? m.detail : 'no manifest.json');
+  const build = newestBuild(manifest);
+  if (!build) return out('cannotTell', 'no S4 build with a sheet in its manifest');
+  const render = newestRender(manifest), rendered = isRenderOf(render, build.id);
+  const ctx = { build: build.id, render: render ? render.id : null };
+  const recorded = m.staged && m.staged.after === build.id;
+  const recWhy = recorded ? `the record says ${build.id} was staged by ${m.staged.by} at ${m.staged.at}${m.staged.proposal ? ` (proposed update #${m.staged.proposal})` : ''}` : null;
+  if (!portal || portal.error) return recorded ? out('staged', recWhy, ctx) : out('cannotTell', `${(portal && portal.error) || 'the portal was not asked'}, so whether ${m.map} is on it or already staged could not be read`, ctx);
+  const pm = portalMapFor(m, portal.maps);
+  if (!pm) return out('offPortal', `the portal has no ${m.kind === 'place' ? 'place' : 'area'} map named "${m.map}", so a refresh has nothing to go to${m.answer && m.answer.after === build.id ? ` (Peter's answer for ${build.id} is ${m.answer.verdict})` : ''}`, ctx);
+  const at = { ...ctx, portalMap: pm.slug };
+  if (recorded) return out('staged', recWhy, at);
+  if (pm.pendingUpdate) return out('staged', `the portal holds an update to "${pm.name}" waiting on its customer that the record does not show — if it is ${build.id}, record it with ink_review.mjs --staged`, at);
+  const sent = utcMs(pm.lastDeliveryAt), cut = rendered ? utcMs(render.at) : null;
+  if (sent != null && cut != null && sent >= cut) return out('staged', `the portal last received "${pm.name}" at ${pm.lastDeliveryAt} UTC, after ${render.id} was rendered at ${render.at} UTC — record it with ink_review.mjs --staged if the record should say so`, at);
+  if (m.after !== build.id) return out('recollect', `rebuilt as ${build.id} since the review compared ${m.after || 'nothing'}${m.answer ? `, and the ${m.answer.verdict} was for ${m.answer.after}` : ''} — re-collect with ink_review.mjs --scan ${scan || '<scan>'}, which carries the answer forward if the ink is unchanged`, at);
+  const unrendered = () => out('cannotTell', `${build.id} has no S5 render yet${render ? ` (the newest is ${render.id})` : ''}, so there is nothing to deliver`, at);
+  if (m.status === 'no-ink') return rendered ? out('deliver', `no ink moved since ${m.before}`, at) : unrendered();
+  if (m.status !== 'ink-moved') return out('cannotTell', `the review could not read it (${m.status}${m.detail ? `: ${m.detail}` : ''})`, at);
+  if (!m.answer || m.answer.after !== build.id) return out('needsPeter', `its ink moved and Peter has not answered for ${build.id}`, at);
+  if (m.answer.verdict !== 'accept') return out('needsPeter', `Peter held ${build.id}${m.answer.note ? ` (${m.answer.note})` : ''}`, at);
+  return rendered ? out('deliver', `Peter accepted ${build.id}${m.answer.self ? ' (by rule)' : ''}`, at) : unrendered();
+}
+
+/** `liveVerdict()` for every map in a review: `{ <verdict>: [{ map, why, ... }] }`. `manifestOf(entry)` may throw Refused for a file that will not parse. */
+export function liveDeliverable(review, { manifestOf, portal }) {
+  const out = Object.fromEntries(LIVE.map((k) => [k, []]));
+  for (const m of (review && review.maps) || []) {
+    let v;
+    try { v = liveVerdict(m, { manifest: manifestOf(m), portal, scan: review.scan }); } catch (e) { if (!(e instanceof Refused)) throw e; v = { verdict: 'cannotTell', why: e.message }; }
+    out[v.verdict].push({ map: m.map, ...v });
+  }
+  return out;
+}
+
+/** GET /api/maps, as `{ maps }` or `{ error }`; never throws. Needs BUSMAPS_URL and BUSMAPS_TOKEN (the portal's .env). */
+export async function fetchPortalMaps({ base = process.env.BUSMAPS_URL, token = process.env.BUSMAPS_TOKEN, fetchFn = fetch } = {}) {
+  if (!base || !token) return { error: 'BUSMAPS_URL and BUSMAPS_TOKEN are not both set' };
+  try {
+    const res = await fetchFn(`${String(base).replace(/\/$/, '')}/api/maps`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) });
+    if (!res.ok) return { error: `the portal could not be read (/api/maps -> ${res.status})` };
+    const j = await res.json();
+    return Array.isArray(j && j.maps) ? { maps: j.maps } : { error: 'the portal\'s /api/maps carried no maps list' };
+  } catch (e) { return { error: `the portal could not be read (${e.message})` }; }
 }
 
 /**
@@ -648,7 +765,7 @@ function evidenceSource(busesDir) {
   return (m, before, after) => gatherEvidence({ busesDir, entry: m, before, after, io, engine });
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   const busesDir = resolveBuses(args);
   const scan = typeof args.scan === 'string' ? args.scan : null;
@@ -707,9 +824,18 @@ function main() {
   }
   if (args.deliverable) {
     if (!prev) throw new Refused(`there is no review for ${scan} (${file}), so nothing is deliverable.`);
-    const d = deliverable(prev);
-    if (args.json) { console.log(JSON.stringify({ scan, ...d })); return; }
-    for (const k of ['deliver', 'staged', 'waiting', 'held', 'other']) console.log(`${k.padEnd(8)} ${d[k].join(', ') || '—'}`);
+    /* Asked at read time of the disk and the portal, never of the record alone (OA-658). */
+    loadPortalEnv(resolvePortal(args));
+    const portal = await fetchPortalMaps();
+    const manifestOf = (m) => readJson(path.join(busesDir, m.dir === undefined ? path.join('Areas', m.map) : m.dir, 'manifest.json'));
+    const d = liveDeliverable(prev, { manifestOf, portal });
+    if (args.json) { console.log(JSON.stringify({ scan, ...(portal.error ? { portalError: portal.error } : {}), ...d })); return; }
+    const LABEL = { deliver: 'deliver', staged: 'already staged', needsPeter: 'needs Peter', offPortal: 'not on the portal', recollect: 're-collect first', cannotTell: 'cannot tell' };
+    if (portal.error) console.log(`ink_review: ${portal.error} — nothing is called deliverable without it.`);
+    for (const k of LIVE) {
+      console.log(`${LABEL[k].padEnd(17)} ${d[k].length ? '' : '—'}`);
+      for (const x of d[k]) console.log(`  ${x.map}${x.build ? ` ${x.build}` : ''} — ${x.why}`);
+    }
     return;
   }
   const list = (v) => (typeof v === 'string' ? v.split(',').map((t) => t.trim()).filter(Boolean) : []);
@@ -731,8 +857,8 @@ function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { main(); } catch (e) {
+  main().catch((e) => {
     if (e instanceof Refused) { console.error(`ink_review: ${e.message}`); process.exit(2); }
-    throw e;
-  }
+    console.error(e); process.exit(1);
+  });
 }

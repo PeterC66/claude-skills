@@ -24,7 +24,13 @@
  *     refuses, and so does a portal that cannot be read (buses-data OA-573);
  *   - the deliver script's own step 0 is asked first, in the dry run too: an S6 that
  *     is not a fresh pass refuses here unless the portal's waiver file defers it
- *     (buses-data OA-615, `s6Clear()` below).
+ *     (buses-data OA-615, `s6Clear()` below);
+ *   - and the review's build must be the NEWEST S4 in the manifest, and
+ *     `ink_review.mjs`'s `liveVerdict()` — the same read-time answer `--deliverable`
+ *     prints, asked of the manifest and the portal's GET /api/maps — must say
+ *     `deliver` (buses-data OA-658): a rebuild since the record was collected, a
+ *     map the portal does not hold and one the portal received after this render
+ *     was cut all refuse, by name.
  *
  * ONE EMAIL PER CUSTOMER PER SCAN (buses-data OA-152). The loop stages one town a
  * tick, and `propose-update` would email each map's customer as it went — one
@@ -76,7 +82,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs, resolveBuses, resolvePortal, loadPortalEnv } from './engine.mjs';
-import { deliverable, markStaged, markNotified, Refused, commitRecord, reportCommit, newestRender, isRenderOf, readJsonFile } from './ink_review.mjs';
+import { deliverable, markStaged, markNotified, Refused, commitRecord, reportCommit, newestRender, newestBuild, isRenderOf, readJsonFile, liveVerdict } from './ink_review.mjs';
 
 /* The portal's `deliver` npm script, run as its own command line rather than
  * through npm, because npm on Windows is a .cmd that Node will not spawn without
@@ -98,6 +104,12 @@ export function mapLocation(m) {
   const dir = m.dir === undefined ? `Areas/${m.map}` : String(m.dir).replace(/\\/g, '/');
   if (!/^(Areas|Places)\//.test(dir) || dir.split('/').some((seg) => seg === '..' || seg === '.' || seg === '')) throw new Refused(`${m.map}'s folder in the review is ${JSON.stringify(m.dir)}, which is not a folder under Areas/ or Places/.`);
   return { kind, dir };
+}
+
+/** True when `review` already records `plan`'s build as staged and owed the digest — written by the deliver command (OA-658). */
+export function byDeliver(review, plan) {
+  const m = findMap(review, plan.town);
+  return !!(m && m.after === plan.after && m.staged && m.staged.after === plan.after && m.staged.notify === 'digest');
 }
 
 /** The review's entry for a map, by name as the review spells it, ignoring case. */
@@ -122,6 +134,10 @@ export function planStage({ review, town, slug, manifest }) {
         : `the review could not read it (${m.status}${m.detail ? `: ${m.detail}` : ''})`;
     throw new Refused(`${m.map} is not deliverable: ${why}.`);
   }
+  /* The record's build must still be the newest, or an accept of it says nothing about what is on disk (OA-658). */
+  const build = newestBuild(manifest);
+  if (!build) throw new Refused(`${m.map} has no S4 build in its manifest, so which build the review's answer is about cannot be checked.`);
+  if (build.id !== m.after) throw new Refused(`${m.map} was rebuilt as ${build.id} after the review compared ${m.after}, so its answer is not about the build on disk — re-run ink_review.mjs --scan ${review.scan}, which carries the answer forward if the ink is unchanged.`);
   const render = newestRender(manifest);
   if (!render) throw new Refused(`${m.map} has no S5 render in its manifest, so there is nothing to stage.`);
   if (!isRenderOf(render, m.after)) throw new Refused(`${m.map}'s newest render is ${render.id} and the review looked at ${m.after}, so the sheet that would be staged is not the one that was compared — re-run ink_review.mjs --scan ${review.scan}.`);
@@ -296,7 +312,13 @@ async function main() {
    * unknown town or a bad folder falls through to planStage, which refuses it by name. */
   const entry = findMap(review, town);
   const mapDir = path.join(busesDir, entry ? mapLocation(entry).dir : path.join('Areas', town));
-  const plan = planStage({ review, town, slug: args.map, manifest: readJson(path.join(mapDir, 'manifest.json')) });
+  const manifest = readJson(path.join(mapDir, 'manifest.json'));
+  const plan = planStage({ review, town, slug: args.map, manifest });
+  /* The read-time verdict `--deliverable` prints, so the two cannot disagree (OA-658). */
+  const portalNow = await fetchPortal();
+  const live = liveVerdict(findMap(review, plan.town), { manifest, portal: portalNow.error ? { error: portalNow.error } : { maps: portalNow.maps }, scan: review.scan });
+  if (live.verdict !== 'deliver') throw new Refused(`${plan.town} is not deliverable now (${live.verdict}): ${live.why}.`);
+  if (live.portalMap !== plan.slug) throw new Refused(`--map ${plan.slug} is not the portal map the review's ${plan.town} is, which is ${live.portalMap}.`);
   const src = path.join(mapDir, plan.srcRel).replace(/\\/g, '/');
   if (!existsSync(src)) throw new Refused(`${plan.town}'s render folder ${src} is in its manifest and not on disk.`);
   const pkg = readJson(path.join(portal, 'package.json'));
@@ -309,7 +331,7 @@ async function main() {
   console.log(`  npm run deliver -- ${deliverArgs.map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ')}`);
   console.log(`  ${s6.said}`);
   /* Asked in a dry run too, so the tick that reads the dry run sees the refusal its --apply would get. */
-  const clear = portalClear({ ...(await fetchPortal()), slug: plan.slug });
+  const clear = portalClear({ ...portalNow, slug: plan.slug });
   if (!clear.ok) throw new Refused(`${plan.town} is not staged: ${clear.why}.`);
   console.log(`  the portal has no update to "${clear.name}" waiting on its customer.`);
   if (!args.apply) {
@@ -323,10 +345,16 @@ async function main() {
   const [node, ...rest] = DELIVER_SCRIPT.split(' ');
   const res = spawnSync(node === 'node' ? process.execPath : node, [...rest, ...deliverArgs], { cwd: portal, stdio: 'inherit' });
   if (res.status !== 0) throw new Refused(`the deliver command exited ${res.status ?? res.error}, so nothing was recorded. This is a HOLD naming ${plan.town}, never a retry: the deliver script leaves the portal stopped after an import failure, and a staging may have landed that this record does not show.`);
-  const staged = markStaged(review, plan.town, { slug: plan.slug, by, at: new Date().toISOString(), notify: 'digest' });
-  writeFileSync(file, JSON.stringify(staged, null, 2) + '\n');
-  console.log(`stage_refresh: ${plan.town} ${plan.after} staged without an email and recorded in ${file}`);
-  commitOwn(busesDir, file, `ink-review: ${plan.town} ${plan.after} staged`);
+  /* The deliver command records the staging itself since OA-658, with its proposal
+   * number; this tool's own record is the fallback for a deliver that could not. */
+  let staged = readJson(file);
+  if (byDeliver(staged, plan)) console.log(`stage_refresh: ${plan.town} ${plan.after} staged without an email; the deliver command recorded it in ${file}`);
+  else {
+    staged = markStaged(review, plan.town, { slug: plan.slug, by, at: new Date().toISOString(), notify: 'digest' });
+    writeFileSync(file, JSON.stringify(staged, null, 2) + '\n');
+    console.log(`stage_refresh: ${plan.town} ${plan.after} staged without an email and recorded in ${file}`);
+    commitOwn(busesDir, file, `ink-review: ${plan.town} ${plan.after} staged`);
+  }
   const rb = await fetchReadBack(plan.slug);
   if (!rb.ok) throw new Refused(`staged by the deliver command's own account, and NOT read back: ${rb.why}. Its customer has NOT been emailed. Look at /app/admin → Refreshes before anything else; do not stage it again.`);
   console.log(`stage_refresh: read back — "${rb.name}" is waiting on its customer (${rb.key}). Publishing it is their Accept.`);

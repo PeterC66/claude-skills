@@ -2564,6 +2564,48 @@ const MUTATIONS = [
     find: "    if (chains.some(c => !c.length)) return;",
     to: "    if (false) return;" },
 
+  // s1_drawn_check.js — every S1 service has a home on the sheet, asked at S4
+  // (buses-data OA-655). A gap this build made blocks; one already published warns.
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: 'every gap counts as already published, so a route S1 gained and S3 forgot ships with a WARN, as Huntingdon\'s X1 did',
+    find: "    if (wasShipped) {",
+    to: "    if (true) {" },
+
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: 'the published build is ignored, so the thirteen maps that already ship a gap have their monthly refresh refused',
+    find: "    if (wasShipped) {",
+    to: "    if (false) {" },
+
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: 'the published S1 is not consulted, so a route S1 gained since the published build reads as already shipped',
+    find: "(!listedBefore || listedBefore.has(idOf(s)))",
+    to: "true" },
+
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: 'hasGtfsShape:false is exempted, which silences Huntingdon\'s X1, RH3 and VL14, the case this check exists for',
+    find: "const needsHome = s => s && s.servesTown !== false && s.drawn !== false;",
+    to: "const needsHome = s => s && s.servesTown !== false && s.drawn !== false && s.hasGtfsShape !== false;" },
+
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: 'notOnLeaflet[] is no longer a home, so every route a town ruled off refuses its build',
+    find: "  for (const src of [verified, routes]) for (const r of knownOff(src || {}).found.keys()) set.add(normRoute(r));",
+    to: "" },
+
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: "a service's key is ignored, so the second service sharing a route number hides behind the first",
+    find: "const idOf = s => normRoute(String(s.key || s.route || ''));",
+    to: "const idOf = s => normRoute(String(s.route || ''));" },
+
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: "a rollout's map folder is ignored, so its scratch dry run never asks the question",
+    find: "  const map = mapDir === undefined ? mapDirOf(dir) : mapDir;",
+    to: "  const map = mapDirOf(dir);" },
+
+  { suite: 's1_drawn_check.test.js', file: 'build_s4.js',
+    what: 'build_s4 stops asking the S1 check, so a decided route S3 forgot is found only by S6',
+    find: "  said.push({ source: 's1', stderr:",
+    to: "  if (false) said.push({ source: 's1', stderr:" },
+
   // wcag.js — the three colour questions, extracted 2026-09-03 (OA-232 Tier 3.1,
   // OA-135) from seven copies across five files. The danger this module creates is
   // that it makes the three look like one, and every "tidy-up" toward one formula

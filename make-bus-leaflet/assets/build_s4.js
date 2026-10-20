@@ -61,6 +61,7 @@ const { SHEETS } = require('./sheet_registry');
 const { crossingWarnings } = require('./schematic_crossings');
 const { externalConfigWarnings } = require('./external_config_check');
 const { viaBuildCheck } = require('./via_build_check');
+const { s1DrawnCheck } = require('./s1_drawn_check');
 
 const SK = __dirname;                                                   // …/make-bus-leaflet/assets
 const PSK = path.join(SK, '..', '..', 'make-place-bus-leaflet', 'assets');
@@ -270,6 +271,9 @@ function buildSheets({ dir, level, routesJson, sheets = null, has = {}, buildMet
   // dry run is drawn in a scratch folder outside the map. Asked once per build, after
   // the sheets, so it is in the log even when a sheet failed. `register` is for tests.
   said.push({ source: 'via', stderr: viaBuildCheck({ dir, routesJson: rj, mapDir, register }).messages.join('\n'), ok: true });
+  // Every service S1 decided in has a home on the sheet (buses-data OA-655): the same
+  // split, a gap this build made blocks and one already published warns.
+  said.push({ source: 's1', stderr: s1DrawnCheck({ dir, routesJson: rj, mapDir }).messages.join('\n'), ok: true });
 
   const warnings = BUILDLOG.collect(said);
   const blockers = BUILDLOG.blocking(warnings);

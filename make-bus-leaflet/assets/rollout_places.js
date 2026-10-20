@@ -470,7 +470,7 @@ function rolloutOnePlace(p) {
    * OVERRIDES_FILE on the schematic and deliberately not on the diagram, the boarding
    * sheet's own generator, the crossings check — is stated once in that file's RECIPE. */
   const hooks = { boarding: REFRESH_INDEX ? refreshBoardingHook : null };
-  const dry = buildSheets({ dir: s4, level: 'place', routesJson, write: false, hooks,
+  const dry = buildSheets({ dir: s4, level: 'place', routesJson, write: false, hooks, mapDir: p.dir,
                             has: { internal: hadInternal, external: hasExternalGen } });
   if (!dry.ok) {
     fs.rmSync(scratch, { recursive: true, force: true });
@@ -587,7 +587,7 @@ function rolloutOnePlace(p) {
     console.log(`  ${p.name}: ${seeded.sidecars.length} unplaced-label sidecar(s) in the previous S4 were NOT carried forward — ${seeded.sidecars.join(', ')}. Each is an OUTPUT; the generator that draws that sheet writes its own, or unlinks it when nothing dropped. A sheet this build no longer draws therefore leaves none behind.`);
   }
   // The real run, through the same entry point as the dry run above (OA-310).
-  const real = buildSheets({ dir: s4Dir, level: 'place', routesJson, hooks,
+  const real = buildSheets({ dir: s4Dir, level: 'place', routesJson, hooks, mapDir: p.dir,
                              has: { internal: hadInternal, external: hasExternalGen } });
   if (!real.ok) {
     fs.rmSync(scratch, { recursive: true, force: true });

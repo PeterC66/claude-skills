@@ -55,6 +55,9 @@ const CASES = [
   ['a missing vendored file',
    'gen_internal_place: gen_internal.js is not vendored beside the payload',
    'gen_internal_place: gen_internal.js resolved beside the payload'],
+  ['a via this build introduced (OA-650)',
+   'via: route 9 is sent through Ramsey (internalDesc["9"]), a NaPTAN locality the bus never calls at.',
+   'via: route B is sent through Fenstanton (external[4].stops), which is on none of its own chain\'s stops. It is already on the published sheet, so it is owed by buses-data OA-636 and does not stop this build.'],
 ];
 
 // Messages a real build produces every day. NONE may block, or the gate is red
@@ -94,7 +97,7 @@ const both = BL.collect([{ source: 'gen_internal.js', stderr: 'feature: river no
 say(BL.blocking(both).length === 1, 'a run that both refused and died is ONE blocking entry, not two');
 
 console.log('\nthe harness has not quietly shrunk:');
-say(CASES.length === 9, `9 rules under test (found ${CASES.length})`);
+say(CASES.length === 10, `10 rules under test (found ${CASES.length})`);
 say(REAL_WARNINGS.length === 9, `9 real warnings under test (found ${REAL_WARNINGS.length})`);
 
 console.log(bad ? `\n${bad} FAILED` : '\nall green: every rule fires, every near-miss and every real warning does not');

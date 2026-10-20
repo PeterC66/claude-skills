@@ -1307,7 +1307,8 @@ export function needsOf(item) {
   // row is a person deciding whether leftover files are wanted — no shared tree.
   // The due/record rows offer `node worktree_sweep.mjs --apply`, which writes
   // loop/worktree-sweep.json into the buses tree.
-  if (key.startsWith('worktree-sweep-kept-') || key.startsWith('worktree-sweep-stray-')) return [];
+  // A misplaced-worktree row (2026-10-20) is the same: a person deciding where unfinished work goes.
+  if (key.startsWith('worktree-sweep-kept-') || key.startsWith('worktree-sweep-stray-') || key.startsWith('worktree-sweep-misplaced-')) return [];
   if (key === 'worktree-sweep-due' || key === 'worktree-sweep-record') return ['buses-tree'];
   // OA-308 (2026-09-11): the directory rows. NOT empty, and answered explicitly
   // rather than left to fall through the default — the row's own action WRITES to

@@ -26,7 +26,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
-  classifyWorktree, classifyBranch, proveMerged, parseWorktreeList, worktreeSweepItems, sweepRepo, findLinks, IDLE_HOURS, CADENCE_DAYS,
+  classifyWorktree, classifyBranch, proveMerged, parseWorktreeList, worktreeSweepItems, sweepRepo, findLinks, outsideHome, IDLE_HOURS, CADENCE_DAYS,
 } from './worktree_sweep.mjs';
 import { needsOf } from './concurrency.mjs';
 
@@ -102,6 +102,28 @@ check('unmerged → NO row, a note instead', !r3.items.some((i) => i.key.include
 check('stray with files → a row; removed empty stray → none', r3.items.filter((i) => i.key.startsWith('worktree-sweep-stray')).length === 1);
 check(`cadence: ${CADENCE_DAYS - 1} days → no due row`, !worktreeSweepItems({ state: st(rec), now: NOW + (CADENCE_DAYS - 1) * 24 * H }).items.some((i) => i.key === 'worktree-sweep-due'));
 check(`cadence: ${CADENCE_DAYS} days → a due row`, worktreeSweepItems({ state: st(rec), now: NOW + CADENCE_DAYS * 24 * H }).items.some((i) => i.key === 'worktree-sweep-due'));
+{
+  // OUTSIDE ITS HOME — the two real cases of 2026-10-20, against a control at home.
+  const R = 'C:/Buses/claude-skills';
+  check('outsideHome: .claude/worktrees/<name> → home', !outsideHome(`${R}/.claude/worktrees/oa561`, R));
+  check('outsideHome: case and backslashes do not matter', !outsideHome('c:\\buses\\CLAUDE-SKILLS\\.claude\\worktrees\\x', R));
+  check('outsideHome: the old sibling folder → outside', outsideHome('C:/Buses/claude-skills-wt/x', R));
+  check('outsideHome: a prefix-sharing sibling repo → outside', outsideHome('C:/Buses/claude-skills2/.claude/worktrees/x', R));
+  check('outsideHome: .claude/worktrees itself → outside', outsideHome(`${R}/.claude/worktrees`, R));
+  const TMP = 'C:/Users/P/AppData/Local/Temp';
+  check('outsideHome: a tool\'s scratch under an allowed root → home', !outsideHome(`${TMP}/preflight-pin-x/skills`, R, [TMP]));
+  check('outsideHome: control — the same path with no allowed root → outside', outsideHome(`${TMP}/preflight-pin-x/skills`, R));
+  const recM = { checkedAt: new Date(NOW).toISOString(), repos: [{ key: 'engine', name: 'claude-skills', dir: R, kept: [
+    { path: 'C:/u3a St Ives/.claude/skills-oa559', branch: null, reason: 'not merged', mergedButKept: false, misplaced: true },
+    { path: 'C:/u3a St Ives/.claude/skills-wt/oa302-own-badge-cost', branch: 'oa302/own-badge-cost', reason: 'not merged', mergedButKept: false, misplaced: true },
+    { path: `${R}/.claude/worktrees/oa561`, branch: 'work/oa561', reason: 'not merged', mergedButKept: false, misplaced: false },
+  ], strays: [], removed: [] }] };
+  const rm = worktreeSweepItems({ state: st(recM), now: NOW }).items.filter((i) => i.key.startsWith('worktree-sweep-misplaced-'));
+  check('misplaced: one row per worktree outside home, none for the one at home', rm.length === 2, rm.map((i) => i.key).join());
+  check('misplaced: the row names the path', rm.some((i) => i.title.includes('skills-oa559')) && rm.some((i) => i.title.includes('oa302-own-badge-cost')));
+  check('misplaced: a record written before the field existed raises nothing', worktreeSweepItems({ state: st(rec), now: NOW }).items.every((i) => !i.key.startsWith('worktree-sweep-misplaced-')));
+  check('misplaced rows are decisions: needsOf is empty', needsOf({ key: rm[0].key, type: 'worktree-sweep' }).length === 0);
+}
 check('kept rows are decisions: needsOf is empty', needsOf({ key: 'worktree-sweep-kept-engine-a', type: 'worktree-sweep' }).length === 0);
 check('due row writes loop/: needsOf is buses-tree', needsOf({ key: 'worktree-sweep-due', type: 'worktree-sweep' }).join() === 'buses-tree');
 
@@ -133,13 +155,16 @@ try {
   g(main, 'push', '-q', 'origin', 'HEAD:refs/heads/remote-done');   // remote, on main → deleted
   g(main, 'push', '-q', 'origin', 'ahead:refs/heads/remote-ahead'); // remote, NOT on main → kept
   g(main, 'fetch', '-q', 'origin');
+  const away = path.join(T, 'elsewhere', 'away'); // unmerged, outside .claude/worktrees/ → kept, misplaced
+  g(main, 'worktree', 'add', '-q', away, '-b', 'away');
+  fs.writeFileSync(path.join(away, 'h.txt'), 'x\n'); g(away, 'add', '.'); g(away, 'commit', '-q', '-m', 'unpushed too');
   fs.mkdirSync(path.join(wts, 'empty-stray', 'sub'), { recursive: true });
   fs.mkdirSync(path.join(wts, 'full-stray')); fs.writeFileSync(path.join(wts, 'full-stray', 'work.txt'), 'x\n');
 
   check('findLinks sees the junction', findLinks(linked).includes('node_modules'));
   const repo = { key: 't', name: 'test', dir: main, prPerChange: false };
   const later = Date.now() + 48 * H;
-  const opts = { repo, now: later, idleHours: IDLE_HOURS, strayRoots: [wts], log: () => {} };
+  const opts = { repo, now: later, idleHours: IDLE_HOURS, strayRoots: [wts], scratchRoots: [], log: () => {} }; // T is itself under the temp folder
 
   const look = sweepRepo({ ...opts, apply: false });
   check('report mode: says it would remove "done"', look.removed.map((r) => r.branch).join() === 'done', JSON.stringify(look.removed));
@@ -167,6 +192,8 @@ try {
   check('apply: merged remote branch is deleted ON THE REMOTE', !g(origin, 'branch', '--list', 'remote-done').trim());
   check('apply: unmerged remote branch is KEPT on the remote', !!g(origin, 'branch', '--list', 'remote-ahead').trim());
   check('apply: main survives, locally and on the remote', !!g(main, 'branch', '--list', 'main').trim() && !!g(origin, 'branch', '--list', 'main').trim());
+  check('apply: "away" kept and marked outside its home', fs.existsSync(away) && res.kept.some((k) => k.branch === 'away' && k.misplaced === true));
+  check('apply: no worktree under .claude/worktrees/ is marked outside', res.kept.filter((k) => k.branch !== 'away').every((k) => k.misplaced === false));
   check('apply: git no longer lists "done"', !parseWorktreeList(g(main, 'worktree', 'list', '--porcelain')).some((w) => w.branch === 'done'));
 } finally {
   // Remove the junction first so the cleanup cannot follow it.

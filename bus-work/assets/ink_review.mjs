@@ -474,8 +474,8 @@ export function markNotified(review, towns, { by, at }) {
 }
 
 /**
- * What the RECORD says, as it was last written. The worklist's waiting row and the
- * digest's plan read this; whether a map may be delivered NOW is `liveVerdict()`'s,
+ * What the RECORD says, as it was last written. The digest's plan reads this, and the
+ * worklist's waiting row takes its candidates from it; whether a map may be delivered NOW is `liveVerdict()`'s,
  * because the record does not know of a rebuild since it was collected, nor of the portal.
  */
 export function deliverable(review) {
@@ -578,6 +578,9 @@ export function liveDeliverable(review, { manifestOf, portal }) {
   return out;
 }
 
+/** `manifestOf` for `liveDeliverable()` and `waitingItems()`: an entry's manifest.json under `busesDir`, null for none, Refused for one that will not parse. */
+export const manifestReader = (busesDir) => (m) => readJson(path.join(busesDir, m.dir === undefined ? path.join('Areas', m.map) : m.dir, 'manifest.json'));
+
 /** GET /api/maps, as `{ maps }` or `{ error }`; never throws. Needs BUSMAPS_URL and BUSMAPS_TOKEN (the portal's .env). */
 export async function fetchPortalMaps({ base = process.env.BUSMAPS_URL, token = process.env.BUSMAPS_TOKEN, fetchFn = fetch } = {}) {
   if (!base || !token) return { error: 'BUSMAPS_URL and BUSMAPS_TOKEN are not both set' };
@@ -603,9 +606,21 @@ export async function fetchPortalMaps({ base = process.env.BUSMAPS_URL, token = 
  * holds is that review's to ask about, so it is not asked twice. A record that will not
  * parse is a rank-0 row, because nothing is deliverable from it and silence is the
  * failure this row exists to end.
+ *
+ * Since OA-658 the record's `waiting` is only the CANDIDATE list: given `portal`
+ * (`{ maps }` from GET /api/maps) and `manifestOf(entry)`, a map stays on Peter's row
+ * only while `liveVerdict()` calls it `needsPeter`, or cannot tell. On 2026-10-20 the
+ * 1 October record still called Beaconsfield, Cambridge Road and Ermine Street
+ * waiting after the portal had received all three, and the row asked Peter about
+ * them. A map rebuilt since collection is a re-collect, which is a session's job, and
+ * gets its own rank-7 row rather than silence. A portal that was not read (`portal`
+ * null or `{ error }`) keeps the record's answer: the row asks, it is never dropped.
  */
-export function waitingItems(reviews, { busesDir = '', assets = '', daysSince = () => null } = {}) {
+export function waitingItems(reviews, { busesDir = '', assets = '', daysSince = () => null, portal = null, manifestOf = null } = {}) {
   const out = [];
+  const live = !!(portal && !portal.error && Array.isArray(portal.maps) && manifestOf);
+  /* The live verdict of one entry; a manifest that will not parse is cannotTell, which asks. */
+  const verdictOf = (review, e) => { try { return liveVerdict(e, { manifest: manifestOf(e), portal, scan: review.scan }).verdict; } catch (err) { if (err instanceof Refused) return 'cannotTell'; throw err; } };
   const later = (i) => new Set(reviews.slice(i + 1).flatMap((r) => (r.review && Array.isArray(r.review.maps) ? r.review.maps.map((m) => m.map.toLowerCase()) : [])));
   reviews.forEach((r, i) => {
     const rel = `_gtfs/ink-review_${r.scan}.json`;
@@ -620,14 +635,26 @@ export function waitingItems(reviews, { busesDir = '', assets = '', daysSince = 
       return;
     }
     const newer = later(i);
-    const waiting = deliverable(r.review).waiting.filter((m) => !newer.has(m.toLowerCase()));
+    const candidates = deliverable(r.review).waiting.filter((m) => !newer.has(m.toLowerCase()));
+    const byMap = new Map(r.review.maps.map((m) => [m.map, m]));
+    const verdicts = new Map(candidates.map((m) => [m, live ? verdictOf(r.review, byMap.get(m)) : 'needsPeter']));
+    const waiting = candidates.filter((m) => verdicts.get(m) === 'needsPeter' || verdicts.get(m) === 'cannotTell');
+    const recollect = candidates.filter((m) => verdicts.get(m) === 'recollect');
+    if (recollect.length) {
+      out.push({
+        key: `ink-recollect-${r.scan}`, rank: 7, type: 'ink-review',
+        title: `Ink review ${r.scan}: re-collect ${recollect.length} rebuilt map${recollect.length === 1 ? '' : 's'}`,
+        why: `${recollect.join(', ')} — rebuilt since the ${r.scan} review compared ${recollect.length === 1 ? 'it' : 'them'}, so the record asks about a build that is no longer the newest. Re-collecting carries an answer forward when the ink is unchanged (OA-584); Peter is asked only about what it cannot.`,
+        who: 'any session or tick', runbook: 'R9', ageDays: daysSince(r.scan),
+        do: [{ kind: 'shell', cwd: assets, cmd: `node ink_review.mjs --scan ${r.scan}`, note: 're-collects the record against each map\'s newest build and commits it' }],
+      });
+    }
     if (!waiting.length) return;
     const pageRel = `loop/ink-review/${r.scan}/index.html`;
     const steps = [r.page
       ? { kind: 'chat', what: `Open ${busesDir ? path.join(busesDir, pageRel) : pageRel} in a browser (gitignored, so reach it through File Explorer in the main checkout) and look at the before-and-after of ${waiting.join(', ')}.` }
       : { kind: 'shell', cwd: assets, cmd: `node ink_review.mjs --scan ${r.scan}`, note: `the page is not on disk; this re-collects the record, commits it and rebuilds ${pageRel} with its crops` }];
     /* A map no session has yet tried by rule is offered to the rule first: Peter is asked only what it refuses. */
-    const byMap = new Map(r.review.maps.map((m) => [m.map, m]));
     const untried = waiting.filter((m) => { const e = byMap.get(m); return !(e && e.selfCheck && e.selfCheck.after === e.after); });
     if (untried.length) steps.splice(r.page ? 0 : 1, 0, { kind: 'shell', cwd: assets, cmd: `node ink_review.mjs --scan ${r.scan} --self-answer --by <session> --apply`, note: `answers by rule what needs no person (${untried.join(', ')} not yet tried); <session> is the answering session's name` });
     steps.push({ kind: 'chat', what: 'Tell Claude "accept <map>" or "hold <map>, <why>" for each one; it records the answer with ink_review.mjs --answer, which commits the record itself.' });
@@ -635,7 +662,7 @@ export function waitingItems(reviews, { busesDir = '', assets = '', daysSince = 
     out.push({
       key: `ink-waiting-${r.scan}`, rank: 5, type: 'ink-review',
       title: `Ink review ${r.scan}: ${waiting.length} map${waiting.length === 1 ? '' : 's'} waiting for your accept or hold`,
-      why: `${waiting.join(', ')} — a sheet's ink moved in the ${r.scan} refresh, and nothing reaches its customer until you have looked. An unanswered map is never delivered, and its before-build can be pruned from under it (OA-639).${reasons.length ? ` Not answerable by rule — ${reasons.join(' · ')}.` : ''}`,
+      why: `${waiting.join(', ')} — a sheet's ink moved in the ${r.scan} refresh, and nothing reaches its customer until you have looked. An unanswered map is never delivered, and its before-build can be pruned from under it (OA-639).${live ? '' : " The portal was not read, so this is the record's list, and a map already delivered may be on it."}${reasons.length ? ` Not answerable by rule — ${reasons.join(' · ')}.` : ''}`,
       who: 'Peter', runbook: 'R9', ageDays: daysSince(r.scan),
       do: steps,
     });
@@ -827,8 +854,7 @@ async function main() {
     /* Asked at read time of the disk and the portal, never of the record alone (OA-658). */
     loadPortalEnv(resolvePortal(args));
     const portal = await fetchPortalMaps();
-    const manifestOf = (m) => readJson(path.join(busesDir, m.dir === undefined ? path.join('Areas', m.map) : m.dir, 'manifest.json'));
-    const d = liveDeliverable(prev, { manifestOf, portal });
+    const d = liveDeliverable(prev, { manifestOf: manifestReader(busesDir), portal });
     if (args.json) { console.log(JSON.stringify({ scan, ...(portal.error ? { portalError: portal.error } : {}), ...d })); return; }
     const LABEL = { deliver: 'deliver', staged: 'already staged', needsPeter: 'needs Peter', offPortal: 'not on the portal', recollect: 're-collect first', cannotTell: 'cannot tell' };
     if (portal.error) console.log(`ink_review: ${portal.error} — nothing is called deliverable without it.`);

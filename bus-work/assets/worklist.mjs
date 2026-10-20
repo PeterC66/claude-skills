@@ -99,7 +99,7 @@ import { readDeployState, deployPendingItems, DEFAULT_LIVE_URL } from './deploy_
 import { readScanState, bodsScanItems, readGtfsDirt, gtfsUncommittedItems } from './bods_scan.mjs';
 import { readGradeState, gradeFor, gradeSentence, gradeWarnings, unattendedRefresh, nothingOwed, placeGradeOpts } from './refresh_grades.mjs';
 import { compareRows } from './refresh_deadline.mjs';
-import { waitingItems, readReviews } from './ink_review.mjs';
+import { waitingItems, readReviews, manifestReader } from './ink_review.mjs';
 import { parseUpcoming, parseDatasets, rebuiltFromScan, sectionMaps, changesPhrase } from './upcoming_sections.mjs';
 import { portalClicks, formatPortalClicks } from './portal_clicks.mjs';
 import { undeliveredRows, s5Row, s6Verdict, foldUnderHolds } from './undelivered.mjs';
@@ -342,6 +342,7 @@ async function fromRemotePortal() {
         id: m.id, slug: m.slug, name: m.name, kind: m.kind, subject: m.subject,
         built: !!m.currentVersion, customerName: m.customer && m.customer.name,
         lastDeliveryAt: m.lastDeliveryAt, // undefined = a deploy older than the field (undelivered.mjs)
+        pendingUpdate: m.pendingUpdate, // an update waiting on its customer: the ink review's liveVerdict() (OA-658)
       })),
     };
   } catch (e) {
@@ -726,7 +727,10 @@ const tree = fromMapTree();
 const upcoming = fromUpcomingReport();
 for (const it of fromCorrespondence()) add(it);
 for (const it of fromCommitments()) add(it);
-for (const it of waitingItems(readReviews(BUSES), { busesDir: BUSES, assets: HERE, daysSince })) add(it);
+// The row asks Peter only what the live verdict calls needsPeter (OA-658). Only the
+// LIVE portal may decide that: --local is the laptop's dev database, whose deliveries
+// are not the customer's, so it and an unread portal keep the record's list and ask.
+for (const it of waitingItems(readReviews(BUSES), { busesDir: BUSES, assets: HERE, daysSince, portal: REMOTE ? portal : null, manifestOf: BUSES ? manifestReader(BUSES) : null })) add(it);
 
 // A deploy pending is a CHORE, and since 2026-09-17 (buses-data OA-396) this is
 // the row that carries it: the board prints a BEHIND deployment and no longer

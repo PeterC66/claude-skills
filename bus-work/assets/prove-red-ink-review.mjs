@@ -350,6 +350,36 @@ console.log('\n9. A map waiting on an answer is a worklist row, and nothing else
   check('no page on disk: the first step is the collect that rebuilds it, from the bus-work folder', noPage[0].do[0].kind === 'shell' && noPage[0].do[0].cmd === 'node ink_review.mjs --scan 2026-10-01' && noPage[0].do[0].cwd === 'X:/assets', JSON.stringify(noPage[0].do[0]));
   const broken = waitingItems([{ scan: '2026-10-01', review: null, page: false }]);
   check('a record that will not parse is rank 0, not silence', broken.length === 1 && broken[0].rank === 0 && broken[0].key === 'ink-review-unreadable-2026-10-01', JSON.stringify(broken));
+
+  /* OA-658: the row asks only what the live verdict calls needsPeter. On 2026-10-20 the
+     record called Beaconsfield, Cambridge Road and Ermine Street waiting after the portal
+     had received all three. NEW renders at 2026-10-02 03:00 UTC. */
+  const REB = 'v2.61_2026-10-10_0900';
+  const mfOf = (builds) => ({ stages: {
+    S4: { runs: builds.map((id) => ({ id, dir: `S4-generate/${id}`, outputs: ['internal.svg'] })) },
+    S5: { runs: builds.map((id) => ({ id, dir: `S5-render/${id}`, version: id.slice(1).split('_')[0], at: `${runDate(id)}T${id.slice(-4, -2)}:${id.slice(-2)}` })) } } });
+  const onPortal = (name, extra = {}) => ({ slug: name.toLowerCase().replace(/ /g, '-'), name, kind: 'area', pendingUpdate: false, lastDeliveryAt: '2026-09-06 00:00:00', ...extra });
+  const oct20 = rv('2026-10-01', [m('Beaconsfield'), m('Cambridge Road'), m('Ermine Street'), m('March'), m('Ely', { answer: ok })]);
+  const portal20 = { maps: [onPortal('Beaconsfield', { lastDeliveryAt: '2026-10-17 21:50:53' }), onPortal('Cambridge Road', { pendingUpdate: true }), onPortal('Ermine Street', { lastDeliveryAt: '2026-10-02 03:00:00' }), onPortal('March'), onPortal('Ely')] };
+  const every = () => mfOf([NEW]);
+  const live20 = waitingItems([oct20], { assets: 'X:/assets', portal: portal20, manifestOf: every });
+  const peter20 = live20.filter((r) => r.key === 'ink-waiting-2026-10-01');
+  check('THE 2026-10-20 CASE: with the portal read, the row names only the map that needs Peter', peter20.length === 1 && /^March — /.test(peter20[0].why) && /1 map waiting/.test(peter20[0].title) && live20.length === 1, JSON.stringify(live20.map((r) => [r.key, r.why.split(' — ')[0]])));
+  const rec20 = waitingItems([oct20], { assets: 'X:/assets', manifestOf: every });
+  check('  and with no portal the same record names all four, as before OA-658 — the portal is what turned it', rec20.length === 1 && /^Beaconsfield, Cambridge Road, Ermine Street, March — /.test(rec20[0].why), JSON.stringify(rec20.map((r) => r.why.split(' — ')[0])));
+  const down20 = waitingItems([oct20], { assets: 'X:/assets', portal: { error: 'the portal could not be read (/api/maps -> 503)' }, manifestOf: every });
+  check('a portal that could not be read keeps the record\'s list and says so, never silence', down20.length === 1 && /^Beaconsfield, Cambridge Road, Ermine Street, March — /.test(down20[0].why) && /portal was not read/.test(down20[0].why), JSON.stringify(down20.map((r) => r.why)));
+  check('  and a read portal does not carry that warning', !/portal was not read/.test(peter20[0].why));
+  const allSent = waitingItems([rv('2026-10-01', [m('Beaconsfield'), m('Ermine Street')])], { portal: portal20, manifestOf: every });
+  check('a review whose every waiting map was delivered raises no row for Peter', !allSent.length, JSON.stringify(allSent));
+  const rebuilt = waitingItems([rv('2026-10-01', [m('March'), m('Ely Co-op')])], { assets: 'X:/assets', portal: { maps: [onPortal('March'), onPortal('Ely Co-op')] }, manifestOf: (e) => mfOf(e.map === 'March' ? [NEW, REB] : [NEW]) });
+  const recRow = rebuilt.find((r) => r.key === 'ink-recollect-2026-10-01'), askRow = rebuilt.find((r) => r.key === 'ink-waiting-2026-10-01');
+  check('a map rebuilt since collection is a re-collect row for a session, rank 7, not Peter\'s', recRow && recRow.rank === 7 && /^March — /.test(recRow.why) && recRow.do[0].cmd === 'node ink_review.mjs --scan 2026-10-01' && recRow.who !== 'Peter', JSON.stringify(recRow));
+  check('  and is off Peter\'s row, which keeps the unanswered one', askRow && /^Ely Co-op — /.test(askRow.why), JSON.stringify(askRow));
+  const unsure = waitingItems([rv('2026-10-01', [m('March'), m('Ramsey')])], { portal: { maps: [onPortal('March'), onPortal('Ramsey')] }, manifestOf: (e) => { if (e.map === 'Ramsey') throw new Refused('Areas/Ramsey/manifest.json is there and is not valid JSON'); return null; } });
+  check('a map whose verdict cannot be told stays on Peter\'s row (no manifest, or one that will not parse)', unsure.length === 1 && /^March, Ramsey — /.test(unsure[0].why), JSON.stringify(unsure.map((r) => r.why.split(' — ')[0])));
+  const off = waitingItems([rv('2026-10-01', [m('Chatteris'), m('March')])], { portal: { maps: [onPortal('March')] }, manifestOf: every });
+  check('a map the portal does not hold is not asked about — its accept would deliver nothing', off.length === 1 && /^March — /.test(off[0].why), JSON.stringify(off.map((r) => r.why.split(' — ')[0])));
 }
 
 console.log('\n10. A session answers by rule only when the words are the same and every engine commit was accepted elsewhere (2026-10-14)');

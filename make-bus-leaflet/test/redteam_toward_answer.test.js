@@ -101,3 +101,30 @@ test('a decided include in our file is still our reply, not a move (OA-332 under
   const r = run(freshRun(e.build), ['--dry-run', '--build', e.build]);
   assert.strictEqual(r.code, 0, `a decided include bought an answer (exit ${r.code}):\n${r.out}`);
 });
+
+/* MARCH'S SHAPE (buses-data OA-484 follow-up). No era carries a feed file, so
+ * there is nothing for OA-332 to inherit and the comparison is over our own file
+ * on both sides. The register is then what says the arrival is our reply. */
+const DECIDED = { id: 'SF-900', route: 'DIAL-A-RIDE', aliases: [], scope: ['Testton'], status: 'decided', outcome: 'include' };
+
+test('a decided include arriving in our file with no feed file anywhere is our reply (OA-484)', () => {
+  const e = estate({ now: null, thenVerified: TWO, nowVerified: TWO_PLUS_DECIDED, answer: ANSWER, register: [DECIDED] });
+  const r = run(freshRun(e.build), ['--dry-run', '--build', e.build]);
+  assert.strictEqual(r.code, 0, `a register-decided include bought an answer (exit ${r.code}):\n${r.out}`);
+  assert.match(r.out, /service facts\s+: verified-services\.json/, 'the case must compare our own file:\n' + r.out);
+  assert.match(r.out, /our reply\s+: DIAL-A-RIDE .* SF-900/);
+});
+
+test('an arrival the register has not decided include FOR THIS MAP still buys (OA-484 prove-red)', () => {
+  for (const reg of [
+    [{ ...DECIDED, status: 'queued' }],
+    [{ ...DECIDED, outcome: 'off' }],
+    [{ ...DECIDED, scope: ['Elsewhere'] }],
+    null,
+  ]) {
+    const e = estate({ now: null, thenVerified: TWO, nowVerified: TWO_PLUS_DECIDED, answer: ANSWER, register: reg });
+    const r = run(freshRun(e.build), ['--dry-run', '--build', e.build]);
+    assert.strictEqual(r.code, 10, `register ${JSON.stringify(reg)} excused an arrival (exit ${r.code}):\n${r.out}`);
+    assert.match(r.out, /not toward it\s+: DIAL-A-RIDE .* is only in the newer file/);
+  }
+});

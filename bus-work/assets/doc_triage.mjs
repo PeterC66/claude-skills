@@ -66,10 +66,16 @@
  *
  *   node doc_triage.mjs                 run all three, stamp, draft if needed
  *   node doc_triage.mjs --dry-run       report only; write neither file
+ *   node doc_triage.mjs --help          print this usage and exit 0
  *
  * `--buses <dir>` points at a different buses tree; `--out <file>` and
  * `--your-move <dir>` relocate the two outputs, and exist for
  * prove-red-doc-triage.mjs.
+ *
+ * AN UNKNOWN FLAG IS REFUSED BY NAME, EXIT 2 (buses-data Conventions). Until
+ * 2026-10-20 this script ignored every flag it did not know, so `--help` ran
+ * the real pass and re-stamped `loop/doc-triage.json` (ad-hoc run
+ * 2026-10-17_2102) — a stamp the loop reads as "the weekly triage is done".
  *
  * Falsified by prove-red-doc-triage.mjs beside this file.
  */
@@ -82,6 +88,37 @@ import { parseArgs, resolveBuses } from './engine.mjs';
 
 const DRAFT_NAME = 'doc-triage.md';
 const STAMP_NAME = 'doc-triage.json';
+
+const KNOWN = ['buses', 'dry-run', 'out', 'your-move', 'help'];
+const USAGE = `usage: node doc_triage.mjs [--dry-run] [--buses <dir>] [--out <file>] [--your-move <dir>]
+  run from this script's own folder, claude-skills/bus-work/assets
+  (no flag)          run all three checkers, write loop/doc-triage.json, and draft loop/your-move/doc-triage.md if anything was found
+  --dry-run          report only; write neither file
+  --buses <dir>      the buses-data tree to check (default: BUSES_DIR, then engine.mjs's resolveBuses default)
+  --out <file>       write the stamp here instead of loop/doc-triage.json
+  --your-move <dir>  write the draft into this folder instead of loop/your-move/
+  --help, -h         print this and exit 0, running nothing
+`;
+
+/**
+ * Refuse what the script does not know BEFORE anything runs: an ignored flag is
+ * how `--help` once re-stamped the weekly triage. `-h` and any bare word land in
+ * the engine parser's `_`; the local fallback parser drops them, so `-h` there is
+ * simply no flag at all and the default pass would run — `--help` is the spelling
+ * that works under both.
+ */
+function checkArgs(args) {
+  const bare = args._ ?? [];
+  if (args.help || bare.includes('-h')) { process.stdout.write(USAGE); process.exit(0); }
+  const unknown = [
+    ...Object.keys(args).filter((k) => k !== '_' && !KNOWN.includes(k)).map((k) => `--${k}`),
+    ...bare,
+  ];
+  if (unknown.length) {
+    console.error(`doc_triage: unknown argument ${unknown.join(' ')} — nothing was run\n  known flags: ${KNOWN.map((k) => `--${k}`).join(' ')}`);
+    process.exit(2);
+  }
+}
 
 /**
  * Run one checker and hand back its parsed JSON, or the reason there is none.
@@ -168,6 +205,7 @@ export function draftBody(result, today) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  checkArgs(args);
   const buses = resolveBuses(args);
   const dryRun = !!args['dry-run'];
 

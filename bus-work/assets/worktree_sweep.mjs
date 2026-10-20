@@ -69,10 +69,17 @@
  * with "Restore branch" on the pull request. `main` is never a candidate.
  *
  * STRAY FOLDERS. Under each `<repo>/.claude/worktrees/` and the engine's sibling
- * `skills-wt/`, a folder no worktree is registered at is removed when it holds
+ * `claude-skills-wt/` (the folder docs named until 2026-10-20), a folder no worktree is registered at is removed when it holds
  * no FILE at all (empty directories only), and reported otherwise — never
  * deleted, because an unregistered folder with files in it is somebody's work
  * whose history git has already lost.
+ *
+ * OUTSIDE ITS HOME (added 2026-10-20). Every worktree lives at `<repo>/.claude/worktrees/<name>`
+ * (EnterWorktree's convention, and the one command claude-skills' CLAUDE.md gives). A worktree the
+ * sweep KEEPS whose folder is anywhere else is a board row, never a fault: it is somebody's work in a
+ * place nobody looks, and moving it is a person's call. On 2026-10-20 two claude-skills worktrees sat
+ * under `C:\u3a St Ives\.claude\`, made there by docs that still named a sibling folder after the
+ * engine moved to C:\Buses (OA-611). A merged one is removed wherever it is, so only kept ones raise it.
  *
  * TEMP FOLDER (added 2026-10-14). After the repositories, main() calls temp_sweep.mjs to
  * clear the portal tests' idle scratch folders from the temp folder; its header holds the
@@ -195,6 +202,18 @@ export function parseWorktreeList(text) {
   return out;
 }
 
+/**
+ * Is this worktree somewhere other than `<repoDir>/.claude/worktrees/<name>`? Pure; case- and
+ * slash-blind, as Windows is. `alsoAllowed` are roots whose worktrees are a TOOL's own scratch —
+ * the temp folder, where the push preflight's pin and the engine-commit helper make and reap theirs.
+ */
+export function outsideHome(wtPath, repoDir, alsoAllowed = []) {
+  const norm = (p) => path.resolve(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const p = norm(wtPath);
+  const under = (root) => { const r = `${norm(root)}/`; return p.startsWith(r) && p.length > r.length; };
+  return !under(path.join(repoDir, '.claude', 'worktrees')) && !alsoAllowed.some(under);
+}
+
 /* ─────────────────────────── the board's half ─────────────────────────── */
 
 /** Read the record. Never throws; `loopPresent` is the trigger, as in pr_sweep.mjs. */
@@ -260,6 +279,20 @@ export function worktreeSweepItems({ state, now = Date.now(), cadenceDays = CADE
         do: [
           { kind: 'shell', cwd: k.path, cmd: 'git status --short', note: 'see what the sweep saw' },
           { kind: 'chat', what: 'If it is debris, ask a session to discard it and remove the worktree; the next sweep will not raise it again.' },
+        ],
+      });
+    }
+    for (const k of kept.filter((x) => x.misplaced && !x.mergedButKept)) {
+      const home = `${String(repo.dir || '<repo>').replace(/\\/g, '/')}/.claude/worktrees/`;
+      items.push({
+        key: `worktree-sweep-misplaced-${repo.key}-${slug(k.path)}`, rank: 8, type: 'worktree-sweep',
+        title: `${repo.name}: worktree ${k.branch || '(detached)'} is outside ${home} — ${k.path}`,
+        why: `Every worktree of this repository belongs under ${home}, where sessions, the sweep and the board look for it. This one is somebody's unfinished work (${k.reason}), so it is kept, but in a place nobody looks.`,
+        detail: `${k.path}\nswept ${on}`,
+        who: 'Peter', runbook: 'git', repo: repo.name,
+        do: [
+          { kind: 'shell', cwd: k.path, cmd: 'git status --short', note: 'see whether it holds work' },
+          { kind: 'chat', what: `If its work is wanted, ask a session to finish it or move it with \`git -C "${repo.dir}" worktree move "${k.path}" "${home}<name>"\` when nobody is working in it; if it is debris, ask a session to remove it with remove_worktree.mjs.` },
         ],
       });
     }
@@ -420,7 +453,7 @@ export function sweepBranches({ repo, apply, now, idleHours, log }) {
   return res;
 }
 
-export function sweepRepo({ repo, apply, now, idleHours, strayRoots, log }) {
+export function sweepRepo({ repo, apply, now, idleHours, strayRoots, log, scratchRoots = [os.tmpdir()] }) {
   const out = { key: repo.key, name: repo.name, dir: repo.dir, error: null, removed: [], kept: [], strays: [], failed: [] };
   const fetched = git(repo.dir, 'fetch', '-q', '--prune', 'origin');
   if (!fetched.ok) { out.error = `git fetch failed — ${fetched.err}`; return out; }
@@ -451,9 +484,9 @@ export function sweepRepo({ repo, apply, now, idleHours, strayRoots, log }) {
       }
     }
     const v = classifyWorktree(facts, { now, idleHours });
-    const entry = { path: w.path, branch: w.branch, reason: v.reason, mergedButKept: v.mergedButKept };
+    const entry = { path: w.path, branch: w.branch, reason: v.reason, mergedButKept: v.mergedButKept, misplaced: outsideHome(w.path, repo.dir, scratchRoots) };
     const label = w.branch || `(detached) ${w.path}`;
-    if (!v.remove) { out.kept.push(entry); log(`  keep    ${label} — ${v.reason}`); continue; }
+    if (!v.remove) { out.kept.push(entry); log(`  keep    ${label} — ${v.reason}${entry.misplaced ? ` — OUTSIDE .claude/worktrees/: ${w.path}` : ''}`); continue; }
     if (!apply) { out.removed.push({ ...entry, wouldRemove: true }); log(`  REMOVE  ${label} — ${v.reason}`); continue; }
     const rm = git(repo.dir, 'worktree', 'remove', w.path);
     if (!rm.ok) { out.failed.push({ ...entry, reason: `git worktree remove refused — ${rm.err}` }); out.kept.push({ ...entry, reason: `git worktree remove refused — ${rm.err}`, mergedButKept: true }); log(`  FAILED  ${w.branch} — ${rm.err}`); continue; }
@@ -499,7 +532,9 @@ async function main() {
   })();
   const repos = [
     { key: 'buses', name: 'buses-data', dir: buses, prPerChange: false },
-    { key: 'engine', name: 'claude-skills', dir: engine, prPerChange: true, extraStrayRoots: engine ? [path.join(path.dirname(engine), 'skills-wt')] : [] },
+    // The sibling folder older docs named for engine worktrees (until 2026-10-20). It was
+    // `skills-wt` here until then, a name left from before the move to C:\Buses that matched no folder.
+    { key: 'engine', name: 'claude-skills', dir: engine, prPerChange: true, extraStrayRoots: engine ? [path.join(path.dirname(engine), 'claude-skills-wt')] : [] },
     { key: 'portal', name: 'community-bus-maps', dir: portal, prPerChange: true },
   ].filter((r) => r.dir && fs.existsSync(r.dir));
 

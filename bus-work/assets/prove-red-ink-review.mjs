@@ -25,6 +25,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import {
   commitRecord, reportCommit, neutralise, inkChange, runDate, pickRuns, collect, mergeAnswers, answer, deliverable, page, resolvePlaces, carriedNames, withCarried, sameInkAsAnswered, Refused, SCHEMA,
   recordStaged, markStaged, newestRender, waitingItems,
+  liveVerdict, liveDeliverable, newestBuild, fetchPortalMaps, LIVE,
 } from './ink_review.mjs';
 import { svgText, textChange, gatherEvidence, decide, registerFrom, selfAnswer, backfillEngine, recordable, sheetKind } from './ink_self_answer.mjs';
 
@@ -464,6 +465,59 @@ console.log('\n10. A session answers by rule only when the words are the same an
   const otherInputs = other.evidenceFor(other.entry, OLD, NEW);
   check('recordable writes the adoption onto the answer, so Peter\'s --answer accept becomes the sighting', JSON.stringify(recordable(otherInputs).commits.map((c) => c.sha)) === JSON.stringify([SHA_A, 'adopt:legendAt', 'adopt:mapNotes.near']), JSON.stringify(recordable(otherInputs)));
 }
+
+console.log('\n11. The deliverable verdict is asked of the manifest and the portal at read time (OA-658)');
+await (async () => {
+  const B1 = 'v1.45_2026-10-13_1950', B2 = 'v1.46_2026-10-19_2006';
+  const mf = (builds, renders = builds) => ({ stages: {
+    S4: { runs: builds.map((id) => ({ id, dir: `S4-generate/${id}`, outputs: ['internal.svg'] })) },
+    S5: { runs: renders.map((id) => ({ id, dir: `S5-render/${id}`, version: id.slice(1).split('_')[0], at: `${runDate(id)}T${id.slice(-4, -2)}:${id.slice(-2)}` })) } } });
+  const ent = (extra = {}) => ({ map: 'Beaconsfield Simpson Centre', kind: 'place', dir: 'Areas/Beaconsfield/Places/Beaconsfield Simpson Centre', why: 'named', status: 'ink-moved', before: 'v1.30_2026-09-20_1000', after: B2, sheets: [], answer: { verdict: 'accept', by: 'peter', at: 'T', after: B2 }, ...extra });
+  const pm = (extra = {}) => ({ slug: 'beaconsfield-simpson-centre', name: 'Beaconsfield Simpson Centre', kind: 'place', pendingUpdate: false, lastDeliveryAt: '2026-10-13 20:00:00', ...extra });
+  const v = (e, { manifest = mf([B1, B2]), maps = [pm()], portal } = {}) => liveVerdict(e, { manifest, portal: portal || { maps }, scan: SCAN });
+
+  check('an accept of the newest build, rendered, on the portal and not yet sent there, is deliver', v(ent()).verdict === 'deliver' && v(ent()).portalMap === 'beaconsfield-simpson-centre', JSON.stringify(v(ent())));
+  /* The case itself: the record's accept and after are v1.45, the disk's newest build is v1.46. */
+  const stale = ent({ after: B1, answer: { verdict: 'accept', by: 'peter', at: 'T', after: B1 } });
+  check('THE 2026-10-20 CASE: an accept of v1.45 with v1.46 on disk is re-collect, not deliver', v(stale).verdict === 'recollect' && /rebuilt as v1\.46.*accept was for v1\.45/.test(v(stale).why), JSON.stringify(v(stale)));
+  check('  and the record-only gate called it deliver — the read of the manifest is what changed the answer', deliverable({ maps: [stale] }).deliver.join() === 'Beaconsfield Simpson Centre');
+  check('  and with v1.45 still the newest build it IS deliverable', v(stale, { manifest: mf([B1]), maps: [pm({ lastDeliveryAt: '2026-10-01 00:00:00' })] }).verdict === 'deliver');
+  check('an accept for an older build than the record\'s is needs Peter, with the build named', v(ent({ answer: { verdict: 'accept', by: 'p', at: 'T', after: B1 } })).verdict === 'needsPeter' && /not answered for v1\.46/.test(v(ent({ answer: { verdict: 'accept', by: 'p', at: 'T', after: B1 } })).why));
+  check('an unanswered ink-moved map is needs Peter', v(ent({ answer: null })).verdict === 'needsPeter');
+  check('a held one is needs Peter, with his reason', /held v1\.46_2026-10-19_2006 \(the icon is doubled\)/.test(v(ent({ answer: { verdict: 'hold', by: 'p', at: 'T', after: B2, note: 'the icon is doubled' } })).why));
+  check('no ink moved and the newest build is deliver', v(ent({ status: 'no-ink', answer: null })).verdict === 'deliver');
+  check('  and no ink moved on an OLDER build is re-collect, not deliver', v(ent({ status: 'no-ink', answer: null, after: B1 })).verdict === 'recollect');
+  /* Chatteris on 2026-10-20: in the review, not on the portal. */
+  const chat = { map: 'Chatteris', dir: 'Areas/Chatteris', status: 'no-ink', before: B1, after: B2, sheets: [], answer: null };
+  check('THE CHATTERIS CASE: a map the portal does not hold is not on the portal, never deliver', v(chat, { maps: [pm()] }).verdict === 'offPortal' && /no area map named "Chatteris"/.test(v(chat, { maps: [pm()] }).why));
+  check('  and with a Chatteris on the portal the same entry IS deliver — the portal\'s list is what refused it', v(chat, { maps: [{ ...pm(), slug: 'chatteris', name: 'Chatteris', kind: 'area' }] }).verdict === 'deliver');
+  check('an area is joined by its exact name only — "Ely" is not "Ely Co-op"', v({ ...chat, map: 'Ely', dir: 'Areas/Ely' }, { maps: [{ ...pm(), slug: 'ely-co-op', name: 'Ely Co-op', kind: 'area' }] }).verdict === 'offPortal');
+  check('a place is joined by a portal name that contains it, as the worklist joins them', v(ent({ map: 'Simpson Centre' })).portalMap === 'beaconsfield-simpson-centre');
+  check('  but never across kinds: an area of that name is not the place', v(ent(), { maps: [pm({ kind: 'area' })] }).verdict === 'offPortal');
+  check('an update already waiting on its customer is already staged, though the record does not say so', v(ent(), { maps: [pm({ pendingUpdate: true })] }).verdict === 'staged' && /record it with ink_review\.mjs --staged/.test(v(ent(), { maps: [pm({ pendingUpdate: true })] }).why));
+  /* The 01:02 hand delivery: v1.46 rendered 19:06 UTC on the 19th, the portal received it 00:04 UTC on the 20th. */
+  check('a portal that received the map after this render was cut is already staged', v(ent(), { maps: [pm({ lastDeliveryAt: '2026-10-20 00:04:19' })] }).verdict === 'staged');
+  check('  and one that received it before the render is not — the time join is what turned it', v(ent(), { maps: [pm({ lastDeliveryAt: '2026-10-19 19:05:59' })] }).verdict === 'deliver');
+  check('  at the same minute the delivery is taken to carry the render', v(ent(), { maps: [pm({ lastDeliveryAt: '2026-10-19 20:06:00' })] }).verdict === 'staged');
+  check('  and a map never delivered is not staged by time', v(ent(), { maps: [pm({ lastDeliveryAt: null })] }).verdict === 'deliver');
+  check('the record\'s own staging of this build is already staged', v(ent({ staged: { after: B2, by: 'x', at: 'T', proposal: 186 } })).verdict === 'staged');
+  check('  and its staging of an older build is not', v(ent({ staged: { after: B1, by: 'x', at: 'T' } })).verdict === 'deliver');
+  const down = { error: 'the portal could not be read (/api/maps -> 503)' };
+  check('a portal that cannot be read is cannot tell, never deliver', v(ent(), { portal: down }).verdict === 'cannotTell' && /503/.test(v(ent(), { portal: down }).why));
+  check('  unless the record already says this build is staged', v(ent({ staged: { after: B2, by: 'x', at: 'T' } }), { portal: down }).verdict === 'staged');
+  check('an accepted build with no render of it is cannot tell', v(ent(), { manifest: mf([B1, B2], [B1]) }).verdict === 'cannotTell' && /no S5 render yet/.test(v(ent(), { manifest: mf([B1, B2], [B1]) }).why));
+  check('no manifest is cannot tell', v(ent(), { manifest: null }).verdict === 'cannotTell');
+  check('a manifest with no sheet-bearing S4 is cannot tell', v(ent(), { manifest: { stages: { S4: { runs: [{ id: B2, outputs: ['x.jpg'] }] } } } }).verdict === 'cannotTell');
+  check('newestBuild sorts by name, not manifest order', newestBuild(mf([B2, B1])).id === B2);
+  const all = liveDeliverable({ scan: SCAN, maps: [ent(), chat, { ...ent(), map: 'Broken' }] }, { manifestOf: (m) => { if (m.map === 'Broken') throw new Refused('Broken/manifest.json is there and is not valid JSON'); return mf([B1, B2]); }, portal: { maps: [pm()] } });
+  check('liveDeliverable sorts every map, and one broken manifest is that map\'s cannot tell', all.deliver.map((x) => x.map).join() === 'Beaconsfield Simpson Centre' && all.offPortal.map((x) => x.map).join() === 'Chatteris' && all.cannotTell.map((x) => x.map).join() === 'Broken', JSON.stringify(all));
+  check('  and every bucket is present, empty or not', LIVE.every((k) => Array.isArray(all[k])));
+  const fake = (status, body) => async () => ({ ok: status === 200, status, json: async () => body });
+  check('fetchPortalMaps with no URL or token is an error, never an empty list', !!(await fetchPortalMaps({ base: '', token: '' })).error);
+  check('  and a non-200 is an error naming it', /-> 401/.test((await fetchPortalMaps({ base: 'https://x', token: 't', fetchFn: fake(401, {}) })).error || ''));
+  check('  and a body with no maps list is an error', !!(await fetchPortalMaps({ base: 'https://x', token: 't', fetchFn: fake(200, {}) })).error);
+  check('  and a good one is its maps', (await fetchPortalMaps({ base: 'https://x/', token: 't', fetchFn: fake(200, { maps: [pm()] }) })).maps[0].slug === 'beaconsfield-simpson-centre');
+})();
 
 console.log(`\n${ran - bad} of ${ran} passed`);
 process.exit(bad ? 1 : 0);

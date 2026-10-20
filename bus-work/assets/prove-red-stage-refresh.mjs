@@ -14,7 +14,7 @@
  * answer would flip if the rule were gone, shown beside it, so each rule is
  * load-bearing rather than merely present. No disk, no portal, no clock.
  */
-import { planStage, mapLocation, readBack, portalClear, newestRender, planFlush, flushArgs, s6Clear, DELIVER_SCRIPT } from './stage_refresh.mjs';
+import { planStage, mapLocation, readBack, portalClear, newestRender, planFlush, flushArgs, s6Clear, byDeliver, DELIVER_SCRIPT } from './stage_refresh.mjs';
 import { deliverable, markStaged, markNotified, mergeAnswers, answer, Refused, readJsonFile } from './ink_review.mjs';
 
 let bad = 0, ran = 0;
@@ -24,7 +24,10 @@ const refusal = (fn) => { try { fn(); return null; } catch (e) { return e instan
 const SCAN = '2026-10-01', OLD = 'v2.59_2026-09-05_1025', NEW = 'v2.60_2026-10-02_0300', NEWER = 'v2.61_2026-10-03_0300';
 const map = (name, status, extra = {}) => ({ map: name, dir: `Areas/${name}`, why: 'SAFE', status, before: OLD, after: NEW, sheets: [], answer: null, ...extra });
 const review = (...maps) => ({ schema: 1, tool: 'ink_review.mjs', scan: SCAN, maps });
-const manifest = (...ids) => ({ stages: { S5: { runs: ids.map((id) => ({ id, dir: `S5-render/${id}`, outputs: ['internal.jpg'] })) } } });
+/* S4 holds the reviewed build as its newest unless a case says otherwise, so the S5 cases test the render alone. */
+const s4 = (ids) => ({ runs: ids.map((id) => ({ id, dir: `S4-generate/${id}`, outputs: ['internal.svg'] })) });
+const manifest = (...ids) => ({ stages: { S4: s4([OLD, NEW]), S5: { runs: ids.map((id) => ({ id, dir: `S5-render/${id}`, outputs: ['internal.jpg'] })) } } });
+const built = (builds, ...renders) => ({ ...manifest(...renders), stages: { ...manifest(...renders).stages, S4: s4(builds) } });
 const plan = (r, town, m = manifest(OLD, NEW), slug = 'march') => refusal(() => planStage({ review: r, town, slug, manifest: m }));
 
 console.log('\n1. Only what the review let through');
@@ -82,7 +85,7 @@ console.log('\n2. The render staged is the build that was compared');
   const skew = manifest(OLD, 'v2.60_2026-10-02_0301');
   check('a render named a minute after its build is still that build\'s render', plan(r, 'March', skew) === null, plan(r, 'March', skew));
   check('  and an id comparison WOULD have refused it — the version join is load-bearing', skew.stages.S5.runs[1].id !== NEW);
-  const declared = (s4) => ({ stages: { S5: { runs: [{ id: 'v2.60_2026-10-02_0301', dir: 'S5-render/x', basedOn: { S4: s4 } }] } } });
+  const declared = (id) => ({ stages: { S4: s4([OLD, NEW]), S5: { runs: [{ id: 'v2.60_2026-10-02_0301', dir: 'S5-render/x', basedOn: { S4: id } }] } } });
   check('a render that DECLARES its build is taken at its word', plan(r, 'March', declared(NEW)) === null);
   check('  and refused when it declares another build, whatever its version says', /newest render/.test(plan(r, 'March', declared('v2.60_2026-10-02_0259')) || ''));
 }
@@ -184,9 +187,26 @@ console.log('\n8. A manifest that will not parse is refused by name, not read as
   const broken = refusal(() => readJsonFile('A/manifest.json', io));
   check('a file that is there and does not parse refuses, naming the file', /A\/manifest\.json is there and is not valid JSON/.test(broken || ''), broken);
   check('  and it is a refusal, never the null that read as "no S5 render"', broken !== null && !/NOT A REFUSAL/.test(broken), broken);
-  check('a missing file is still null, which planStage refuses as having no render', readJsonFile('C/manifest.json', io) === null
-    && /no S5 render/.test(plan(review(map('March', 'no-ink')), 'March', readJsonFile('C/manifest.json', io)) || ''));
+  check('a missing file is still null, which planStage refuses as having no build', readJsonFile('C/manifest.json', io) === null
+    && /no S4 build/.test(plan(review(map('March', 'no-ink')), 'March', readJsonFile('C/manifest.json', io)) || ''));
   check('a good file is read', newestRender(readJsonFile('B/manifest.json', io)).id === NEW);
+}
+
+console.log('\n9. The record\'s build must be the newest S4 on disk, and the deliver command\'s record is not overwritten (OA-658)');
+{
+  /* Beaconsfield Simpson Centre on 2026-10-20: accepted as v1.45, rebuilt as v1.46, the record never re-collected. */
+  const r = answer(review(map('March', 'ink-moved')), 'March', 'accept', { by: 'peter', at: 'T1' });
+  const rebuilt = built([OLD, NEW, NEWER], OLD, NEW);
+  check('an accepted map rebuilt since the record was collected is refused, naming both builds', /rebuilt as v2\.61.*compared v2\.60/.test(plan(r, 'March', rebuilt) || ''), plan(r, 'March', rebuilt));
+  check('  and with the reviewed build still newest it is planned — the newest S4 is what the refusal turned on', plan(r, 'March', built([OLD, NEW], OLD, NEW)) === null);
+  check('  and the render rule alone would NOT have caught it: the newest render is still the reviewed build', newestRender(rebuilt).id === NEW);
+  check('a manifest with no S4 build is refused, not passed', /no S4 build/.test(plan(r, 'March', { stages: { S5: manifest(OLD, NEW).stages.S5 } }) || ''));
+  const p = { town: 'March', after: NEW };
+  const byIt = markStaged(r, 'March', { slug: 'march', by: 'deliver-map', at: 'T2', notify: 'digest' });
+  check('a record the deliver command already wrote for this build is recognised, so it is not overwritten', byDeliver(byIt, p));
+  check('  and a record without it is not, so this tool writes its own', !byDeliver(r, p));
+  check('  and one for an older build is not this staging', !byDeliver(byIt, { town: 'March', after: NEWER }));
+  check('  and one that owes no digest is not the deliver command\'s --no-notify staging', !byDeliver(markStaged(r, 'March', { slug: 'march', by: 'x', at: 'T2' }), p));
 }
 
 console.log(`\n${ran - bad} of ${ran} passed`);

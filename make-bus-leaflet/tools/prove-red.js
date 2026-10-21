@@ -2516,9 +2516,26 @@ const MUTATIONS = [
     to: "    const last = stops[0];" },
 
   { suite: 'external_config_check.test.js', file: 'build_s4.js',
-    what: 'build_s4 stops asking the config check, so build-warnings.txt never names either mistake',
+    what: 'build_s4 stops asking the config check, so build-warnings.txt never names the mistake',
     find: "    if (key === 'external') said.push({ source: 'config',",
     to: "    if (false) said.push({ source: 'config'," },
+
+  // design_key_check.js — a design key no engine file reads (buses-data OA-652).
+  // Outside the hash like the check above, so these are its suite's only proof.
+  { suite: 'design_key_check.test.js', file: 'design_key_check.js',
+    what: 'the read set is emptied, so every committed design key warns as unread',
+    find: "    for (const k of s.raw.keys()) read.add(k);",
+    to: "    for (const k of [].keys()) read.add(k);" },
+
+  { suite: 'design_key_check.test.js', file: 'design_key_check.js',
+    what: 'a top-level key under design is told it is a typo, not to move it up',
+    find: "    if (top.has(k)) {",
+    to: "    if (false) {" },
+
+  { suite: 'design_key_check.test.js', file: 'build_s4.js',
+    what: 'build_s4 stops asking the design-key check, so build-warnings.txt never names an unread key',
+    find: "  said.push({ source: 'design',",
+    to: "  if (false) said.push({ source: 'design'," },
 
   // via_build_check.js — S6's via-on-chain check asked at S4 (buses-data OA-650). A via
   // this build introduced blocks; one already published warns, so OA-636's maps refresh.

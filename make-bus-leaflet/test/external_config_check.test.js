@@ -1,10 +1,11 @@
 /*
- * external_config_check.test.js — the two external-config mistakes of buses-data OA-632.
+ * external_config_check.test.js — the spoke-stops mistake of buses-data OA-632. Its
+ * other mistake, legendAt under design, is design_key_check.test.js's since OA-652.
  *
  * Each case is asked of a REAL committed config from the fixture estate, once as it
  * stands and once with the mistake put into it, so the check is seen red on a fixture
- * and quiet on the same fixture without it. March and St Ives are clear of both
- * mistakes; the Beaconsfield fixture is not (its route 31 ends at Hazlemere under the
+ * and quiet on the same fixture without it. March and St Ives are clear of the
+ * mistake; the Beaconsfield fixture is not (its route 31 ends at Hazlemere under the
  * label "High Wycombe", so Hazlemere is missing from its sheet), and the last case
  * pins that the check says so.
  */
@@ -52,24 +53,14 @@ test('an empty stops list warns', () => {
   assert.match(w[0], /empty stops list/);
 });
 
-test('legendAt written under design warns, and at the top level does not', () => {
-  const D = config('March');
-  D.legendAt = { x: 12, y: 40 };
-  assert.deepStrictEqual(externalConfigWarnings(D), [], 'a top-level legendAt is the correct form');
-  D.design = Object.assign({}, D.design, { legendAt: { x: 12, y: 40 } });
-  const w = externalConfigWarnings(D).filter(m => m.startsWith('legend:'));
-  assert.strictEqual(w.length, 1, 'design.legendAt was not reported');
-});
-
 test('every message files as a WARN entry of its own, never BLOCKING', () => {
   const D = config('March');
   D.external[0].stops = [];
   D.external[1].stops.pop();
-  D.design = Object.assign({}, D.design, { legendAt: {} });
   const msgs = externalConfigWarnings(D);
-  assert.strictEqual(msgs.length, 3);
+  assert.strictEqual(msgs.length, 2);
   const entries = BUILDLOG.collect([{ source: 'config', stderr: msgs.join('\n'), ok: true }]);
-  assert.strictEqual(entries.length, 3, 'build_log.js glued two messages into one entry');
+  assert.strictEqual(entries.length, 2, 'build_log.js glued two messages into one entry');
   for (const e of entries) assert.strictEqual(e.severity, 'WARN', `classified ${e.severity}: ${e.text}`);
 });
 

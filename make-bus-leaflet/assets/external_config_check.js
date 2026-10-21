@@ -1,25 +1,26 @@
 #!/usr/bin/env node
 /*
- * external_config_check.js — two routes.json mistakes that draw a wrong external
+ * external_config_check.js — a routes.json mistake that draws a wrong external
  * sheet and that neither external generator says a word about.
  *
  *   node assets/external_config_check.js "<path to a routes.json>"
  *
  * Run from `make-bus-leaflet/`. The one argument is the routes.json to read; there
- * are no other parameters. Exit 0 when the config is clear, 1 when it carries either
+ * are no other parameters. Exit 0 when the config is clear, 1 when it carries the
  * mistake, 2 on a usage error. stdout carries the messages, one per line.
  *
  * WHY THIS EXISTS (buses-data OA-632, from Huntingdon v7.0 under OA-328, 2026-10-12).
- * Each of these cost that build a rebuild cycle, and the engine warned about neither:
+ * It cost that build a rebuild cycle, and the engine did not warn: a spoke's `stops[]`
+ * ENDS WITH ITS TERMINUS. `gen_external_radial.js` makes the list's last name the
+ * terminus node and ticks only the names before it; the terminus box prints `label`,
+ * so the last name itself is never printed. A list written as intermediates only
+ * draws one village fewer than it names, `[]` draws no spoke at all, and a wrong last
+ * name cannot be seen on the sheet.
  *
- *   1. A spoke's `stops[]` ENDS WITH ITS TERMINUS. `gen_external_radial.js` makes the
- *      list's last name the terminus node and ticks only the names before it; the
- *      terminus box prints `label`, so the last name itself is never printed. A list
- *      written as intermediates only draws one village fewer than it names, `[]`
- *      draws no spoke at all, and a wrong last name cannot be seen on the sheet.
- *   2. `legendAt` is a TOP-LEVEL routes.json key. Both external generators read
- *      `D.legendAt`; written under `design` it is ignored and the legend stays where
- *      `legendPlace` puts it.
+ * OA-632's second mistake, `legendAt` written under `design` rather than at the top
+ * level, was a rule of its own here until buses-data OA-652 replaced it with the
+ * general one in design_key_check.js, which asks every `design` key against
+ * everything the engine reads and says "move it up" for a top-level key.
  *
  * WHY HERE AND NOT IN THE GENERATOR. `gen_external_radial.js` is hashed and vendored,
  * so one stderr line in it re-stamps every map in the estate and owes the portal a
@@ -68,12 +69,6 @@ function namesTheTerminus(last, label) {
 function externalConfigWarnings(D) {
   const out = [];
   const d = D || {};
-  if (d.design && Object.prototype.hasOwnProperty.call(d.design, 'legendAt')) {
-    // Worded "legendAt under design" on purpose: check-design-keys.js scans this
-    // folder's raw text for the dotted form and would register it as a design key.
-    out.push('legend: legendAt under design is ignored. legendAt is a top-level routes.json key; '
-      + 'move it up out of design, or the legend stays where legendPlace puts it.');
-  }
   const ext = Array.isArray(d.external) ? d.external : [];
   ext.forEach((b, i) => {
     const who = `spoke ${i + 1} (route ${b && b.route}, "${b && b.label}")`;

@@ -54,24 +54,13 @@ const arg = (name, dflt) => {
 const ASSETS = path.resolve(arg('assets', path.join(SK, 'assets')));
 const DOC = path.resolve(arg('doc', path.join(SK, 'references/design-quality.md')));
 
-const KEY_RE = /\b(?:design|DESIGN)\.([A-Za-z][A-Za-z0-9]*)/g;
-const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+// The scan lives in the engine, because S4 asks the same question of every
+// config (buses-data OA-652): one scan, so the register and the build warning
+// cannot disagree about what the engine reads.
+const { scanDesignReads } = require('../assets/design_key_check');
 
 /* ---- what the engine reads ------------------------------------------- */
-function scanEngine() {
-  const raw = new Map();          // key -> Set of files
-  const code = new Set();
-  const files = fs.readdirSync(ASSETS).filter((f) => f.endsWith('.js')).sort();
-  for (const f of files) {
-    const src = fs.readFileSync(path.join(ASSETS, f), 'utf8');
-    for (const m of src.matchAll(KEY_RE)) {
-      if (!raw.has(m[1])) raw.set(m[1], new Set());
-      raw.get(m[1]).add(f);
-    }
-    for (const m of stripComments(src).matchAll(KEY_RE)) code.add(m[1]);
-  }
-  return { raw, code, files: files.length };
-}
+const scanEngine = () => scanDesignReads(ASSETS);
 
 /* ---- what the register documents ------------------------------------- */
 function scanRegister() {

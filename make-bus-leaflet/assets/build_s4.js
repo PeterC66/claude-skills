@@ -60,6 +60,7 @@ const BUILDLOG = require('./build_log');
 const { SHEETS } = require('./sheet_registry');
 const { crossingWarnings } = require('./schematic_crossings');
 const { externalConfigWarnings } = require('./external_config_check');
+const { designKeyWarnings } = require('./design_key_check');
 const { viaBuildCheck } = require('./via_build_check');
 const { s1DrawnCheck } = require('./s1_drawn_check');
 
@@ -244,7 +245,7 @@ function buildSheets({ dir, level, routesJson, sheets = null, has = {}, buildMet
     const res = runNode(script, dir, env);
     said.push({ source: key, stderr: res.stderr, ok: res.ok });
     if (r.crossings) said.push({ source: 'crossings', stderr: crossingWarnings(dir).join('\n'), ok: true });
-    // Two config mistakes the external generators draw wrong in silence (buses-data
+    // A spoke config the external generators draw wrong in silence (buses-data
     // OA-632). Asked here rather than in the generator, which is hashed and vendored;
     // keyed on the sheet rather than flagged in RECIPE, whose lines two prove-red
     // harnesses edit by their exact text.
@@ -274,6 +275,9 @@ function buildSheets({ dir, level, routesJson, sheets = null, has = {}, buildMet
   // Every service S1 decided in has a home on the sheet (buses-data OA-655): the same
   // split, a gap this build made blocks and one already published warns.
   said.push({ source: 's1', stderr: s1DrawnCheck({ dir, routesJson: rj, mapDir }).messages.join('\n'), ok: true });
+  // A design key no engine file reads draws the default in silence (buses-data OA-652).
+  // Asked against every engine file's reads, the place engine's too for a place.
+  said.push({ source: 'design', stderr: designKeyWarnings(rj, { place: level === 'place' }).join('\n'), ok: true });
 
   const warnings = BUILDLOG.collect(said);
   const blockers = BUILDLOG.blocking(warnings);

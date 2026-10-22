@@ -812,6 +812,56 @@ console.log('\n6. redteamRejected — an adjudicated red-team claim is recorded,
   check('a rejection for a route the sheet does not carry is reported stale', 'soft redteam-rejected on ZZ9',
     has(stale2.v, 'soft', 'redteam-rejected', 'ZZ9'),
     stale2.v ? JSON.stringify(stale2.v.findings.filter(f => f.category === 'redteam-rejected').map(f => f.severity + '/' + f.route)) : 'no report');
+
+  /*
+   * A TERMINUS CLAIM (buses-data OA-654). Until then an entry was keyed by route and
+   * honoured only in the serves-town arm, so a red team wrong about where a route
+   * ends could be cleared only by buying a new one. The wrong termini are INJECTED
+   * into route 65's entry, so the HARD exists by construction rather than by
+   * borrowing whatever the estate is wrong about today.
+   */
+  const WRONG = ['Nowhere In Particular', 'Elsewhere Entirely'];
+  const injectTermini = (d) => {
+    const rt = readJ(d, 'redteam.json');
+    const e = (rt.services || []).find(sv => String(sv.route) === '65');
+    if (!e) throw new Error('fixture assumption broken: St Neots\' red team no longer lists route 65, so the terminus case has no claim to inject into');
+    e.termini = WRONG.slice();
+    writeJ(d, 'redteam.json', rt);
+  };
+  const TERM = { route: '65', claim: 'terminus', termini: WRONG, decidedOn: '2026-10-22', decidedBy: 'Peter',
+    why: 'INJECTED BY prove-s6-checks.js — route 65 runs St Neots to Buckden; the injected termini are nowhere.' };
+  const termHard = (o) => o.v ? JSON.stringify(o.v.findings.filter(f => f.route === '65' && /terminus|redteam-rejected/.test(f.category)).map(f => f.severity + '/' + f.category)) : 'no report';
+
+  const t0 = withDecl('rtr-term-base', [], injectTermini);
+  check('the terminus artefact is real before the declaration', 'hard terminus on 65 with nothing declared',
+    has(t0.v, 'hard', 'terminus', '65'), termHard(t0));
+
+  const tOk = withDecl('rtr-term-quiet', [TERM], injectTermini);
+  check('a rejected terminus claim no longer blocks', 'no hard terminus on 65',
+    tOk.v && !has(tOk.v, 'hard', 'terminus', '65'), termHard(tOk));
+  check('and it is reported in full, not silently dropped', 'a soft redteam-rejected on 65',
+    has(tOk.v, 'soft', 'redteam-rejected', '65'), termHard(tOk));
+
+  const tOther = withDecl('rtr-term-other', [{ ...TERM, termini: ['Somewhere Else'] }], injectTermini);
+  check('an entry naming OTHER termini answers a different claim', 'hard terminus on 65 still fires, and the entry is called stale',
+    has(tOther.v, 'hard', 'terminus', '65') && has(tOther.v, 'soft', 'redteam-rejected', '65'), termHard(tOther));
+
+  const tExp = withDecl('rtr-term-expired', [{ ...TERM, recheckBy: '2026-08-01' }], injectTermini);
+  check('a terminus rejection past its recheckBy stops silencing', 'hard terminus on 65 returns',
+    has(tExp.v, 'hard', 'terminus', '65'), termHard(tExp));
+
+  const tBare = withDecl('rtr-term-no-termini', [{ ...TERM, termini: undefined }], injectTermini);
+  check('a terminus entry that names no termini silences NOTHING', 'hard terminus on 65 still fires',
+    has(tBare.v, 'hard', 'terminus', '65'), termHard(tBare));
+
+  const tCross = withDecl('rtr-term-cross', [{ ...GOOD, route: '65' }], injectTermini);
+  check('a serves-town rejection does not clear a terminus claim', 'hard terminus on 65 still fires',
+    has(tCross.v, 'hard', 'terminus', '65'), termHard(tCross));
+
+  const sCross = withDecl('rtr-serves-cross', [{ ...TERM, route: '69' }]);
+  check('and a terminus rejection does not clear a serves-town claim', 'hard serves-town on 69 still fires',
+    has(sCross.v, 'hard', 'serves-town', '69'),
+    sCross.v ? JSON.stringify(sCross.v.findings.filter(f => f.route === '69').map(f => f.severity + '/' + f.category)) : 'no report');
 }
 
 /* ------------------------------------------- 9. borrowed red team (OA-141) */

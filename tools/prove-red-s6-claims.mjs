@@ -169,6 +169,10 @@ console.log('\n3. Each of the three own-map homes covers, and the deprecated spe
     const r = run(repo(`own-${by}-${cases.findIndex(c => c[0] === name)}`, [town('Fixture', s1, s3, [claim('77', by === 'own-rejection' ? 'serves-town' : 'missing-service')])], EMPTY));
     check(`${name} → ${by}, exit 0`, r.code === 0 && r.out.includes(`${by} 1`), `exit ${r.code}: ${r.out.split('\n').find(l => l.includes('claim(s) on'))}`);
   }
+  /* buses-data OA-654: a rejection of where a route ENDS says nothing about whether
+   * it serves the town, so it is no home for a serves-town claim. */
+  const rTerm = run(repo('own-terminus-is-no-home', [town('Fixture', { services: [{ route: '1' }] }, { routeOrder: ['1'], redteamRejected: [{ route: '77', claim: 'terminus', termini: ['Nowhere'], decidedOn: '2026-09-01', decidedBy: 'Peter', why: 'checked' }] }, [claim('77', 'serves-town')])], EMPTY));
+  check('a TERMINUS rejection does not cover a serves-town claim — UNCOVERED', /UNCOVERED/.test(rTerm.out) && !rTerm.out.includes('own-rejection 1'), rTerm.out.split('\n').find(l => l.includes('claim(s) on')));
 }
 
 console.log('\n4. THE LOAD-BEARING CASE — a place\'s claim is covered by its PARENT TOWN\'s file (decision 4 as a mechanism)');

@@ -2537,6 +2537,28 @@ const MUTATIONS = [
     find: "  said.push({ source: 'design',",
     to: "  if (false) said.push({ source: 'design'," },
 
+  // redteam_rejected.js — redteamRejected[] read by claim (buses-data OA-654). Case 6
+  // of prove-s6-checks.js is the S6 end; these are the rules.
+  { suite: 'redteam_rejected.test.js', file: 'redteam_rejected.js',
+    what: 'entries are keyed by route alone, so a terminus rejection clears a serves-town HARD',
+    find: "const claimKey = (route, claim = DEFAULT_CLAIM) => `${claim}|${normRoute(route)}`;",
+    to: "const claimKey = (route, claim = DEFAULT_CLAIM) => normRoute(route);" },
+
+  { suite: 'redteam_rejected.test.js', file: 'redteam_rejected.js',
+    what: 'a terminus entry need not name the termini, so it answers any terminus claim at all',
+    find: "    if (claim === 'terminus' && !(Array.isArray(e.termini) && e.termini.length)) missing.push('termini');",
+    to: "" },
+
+  { suite: 'redteam_rejected.test.js', file: 'redteam_rejected.js',
+    what: 'one named terminus covers the claim, so a new wrong terminus is silenced unread',
+    find: "  return asked.length > 0 && asked.every(t => named.has(t));",
+    to: "  return asked.length > 0 && asked.some(t => named.has(t));" },
+
+  { suite: 'redteam_rejected.test.js', file: 'redteam_rejected.js',
+    what: 'an expired terminus rejection still turns the HARD into a SOFT',
+    find: "    return { key: rej.key, severity: null, category: 'terminus', rejection: { ...e, expired: true },",
+    to: "    return { key: rej.key, severity: 'soft', category: 'terminus', rejection: { ...e, expired: true }," },
+
   // via_build_check.js — S6's via-on-chain check asked at S4 (buses-data OA-650). A via
   // this build introduced blocks; one already published warns, so OA-636's maps refresh.
   { suite: 'via_build_check.test.js', file: 'via_build_check.js',

@@ -83,6 +83,7 @@ import { gatherCiState, ciRows } from './ci_state.mjs';
 import { landmarkAnswerItems } from './landmark_answers.mjs';
 import { freshPullItems, readCurrentQuery, readRecordedQuery, s2Row } from './fresh_pull.mjs';
 import { knobAdoptItems, readKnobInputs } from './knob_adopt.mjs';
+import { s1UnhousedItems, readS1Check } from './s1_unhoused.mjs';
 import { localDecisionItems } from './local_decisions.mjs';
 import { readYourMoveDir, loopHoldItems, loopDraftItems, applyHolds, foldHeldRows, groupUnmatched, holdBanner, staleBlocksWarning } from './loop_your_move.mjs';
 import { readRuns, loopHealth, loopRunItems, loopSilentItems, readSchedule } from './loop_runs.mjs';
@@ -364,7 +365,7 @@ function fromMapTree() {
   const towns = findTowns(BUSES).map((t) => {
     const m = readJson(path.join(t.dir, 'manifest.json'));
     const s4 = latestRunDir(m, t.dir, 'S4');
-    const row = { name: t.name, dir: t.dir, version: s4 ? s4.rec.version : null, built: !!s4 };
+    const row = { name: t.name, dir: t.dir, version: s4 ? s4.rec.version : null, built: !!s4, s4Dir: s4 ? s4.dir : null }; // s4Dir: s1_unhoused.mjs reads its routes.json
     if (s4) {
       let routes = {};
       try { routes = readJson(path.join(s4.dir, 'routes.json')); } catch { /* older build */ }
@@ -407,7 +408,7 @@ function fromMapTree() {
   const places = findPlaces(findTowns(BUSES), BUSES).map((p) => {
     const m = readJson(path.join(p.dir, 'manifest.json'));
     const s4 = latestRunDir(m, p.dir, 'S4');
-    const row = { name: p.name, town: p.town, dir: p.dir, built: !!s4, version: s4 ? s4.rec.version : null };
+    const row = { name: p.name, town: p.town, dir: p.dir, built: !!s4, version: s4 ? s4.rec.version : null, s4Dir: s4 ? s4.dir : null };
     const s6 = latestRunDir(m, p.dir, 'S6');
     const dataRuns = ['S1', 'S2', 'S3']
       .map((k) => m.stages && m.stages[k] && m.stages[k].runs.find((r) => r.id === m.stages[k].latest))
@@ -1094,6 +1095,7 @@ const freshPull = freshPullItems({ towns: tree.towns, places: tree.places || [],
 if (freshPull.warning) warnings.push(freshPull.warning);
 for (const it of freshPull.items) add(it);
 { const k = knobAdoptItems({ towns: tree.towns, places: tree.places || [], ...readKnobInputs(SK || '', BUSES) }); if (k.warning) warnings.push(k.warning); for (const it of k.items) add(it); } // OA-437: adopt-knobs-<map>, a typed layout the engine now places
+{ const s = readS1Check(SK || ''); if (s.warning) warnings.push(s.warning); for (const it of s1UnhousedItems({ towns: tree.towns, places: tree.places || [], check: s.check, sk: SK || '' })) add(it); } // OA-655: s1-unhoused-<map>, an S1 service the sheet ships with no home
 /*
  * ONE REBUILD ROW PER MAP, NOT ONE ROW FOR THE ESTATE (buses-data OA-430, R9 item 6).
  * This was a single `engine-stale` row naming every behind town in its `why`, with

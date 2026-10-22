@@ -29,6 +29,7 @@ export const GROUPED = {
   'engine-rebuild-': (n, places) => `${n} ${places ? 'place maps' : 'maps'} were drawn by an older engine`,
   'fresh-pull-': (n, places) => `${n} ${places ? 'place maps\'' : 'maps\''} landmark pulls do not ask today's landmark question`,
   'adopt-knobs-': (n, places) => `${n} ${places ? 'place maps' : 'maps'} still type a layout the engine now places itself (OA-437)`,
+  's1-unhoused-': (n) => `${n} maps ship an S1 service with no home on the sheet (OA-655)`,
 };
 
 const VERDICT_ORDER = [SAFE, CHECK, DELAY];

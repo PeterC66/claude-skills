@@ -372,6 +372,16 @@ node rollout.js --town "<Town>" --apply --commit --note "OA-437 adoption"
 
 A place takes `--place "<Place>"` and `rollout_places.js`. Before accepting, put the previous and new S4 sheets side by side with `node crop_compare.js <previous S4 svg> <new S4 svg> <out-prefix> --diff 3` for each sheet, then enrol the map in the month's ink review with `ink_review.mjs --scan <scan date> --town "<Town>"`, the gate before delivery.
 
+### Give an S1 service a home — one `s1-unhoused-<map>` row per town or place since 2026-10-22
+
+The map's newest S4 ships a service its newest S1 decided in with no home on the sheet: it is in none of `routeOrder`, `panelOrder` or `notShown`, and not in `notOnLeaflet[]` (buses-data OA-655). Since claude-skills #402 S4 refuses a build that makes such a gap, and only warns about one the published sheet already shipped, so the warning ends in a build log nobody reads; this row is where it stays visible. The verdict is `make-bus-leaflet/assets/s1_drawn_check.js`'s own, called by `assets/s1_unhoused.mjs`, so a map that check cannot read (a place whose S1 holds `place.json` and no services file) raises no row, and an engine file that cannot be loaded prints a warning instead. `npm run test:prove-red-s1-unhoused`, run from `bus-work/`, holds every branch, the real check and the wire.
+
+It RIDES WITH THE MAP'S NEXT REBUILD, and it is not a tick's: a home is written in an S3, and an S3 for this alone re-arms the map's S6 limit. In that S3 add the service to `routeOrder` if the sheet should draw it, declare it `notShown` for a Services row with no line, or record it in `notOnLeaflet[]` with a reason; a Dial-a-Ride or Tiger on Demand that a `mapNotes` line already carries takes a `notOnLeaflet[]` entry saying the note carries it. To see the services and their remedies, run this from `C:\Buses\claude-skills\make-bus-leaflet\assets`, where `<S4 folder>` is the absolute path the row's why names:
+
+```powershell
+node s1_drawn_check.js --dir "<S4 folder>"
+```
+
 ### S6 missing or stale
 
 S6 is the independent, antagonistic verification pass — a cross-model red-team that re-derives the services from scratch and is diffed against ours. It is what catches the worst class of error: a route we still draw that no longer runs.

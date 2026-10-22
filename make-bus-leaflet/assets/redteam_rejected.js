@@ -67,4 +67,33 @@ function terminiCovered(entry, redteamTermini) {
   return asked.length > 0 && asked.every(t => named.has(t));
 }
 
-module.exports = { CLAIMS, DEFAULT_CLAIM, claimOf, claimKey, readRejections, rejectionFor, terminiCovered };
+/*
+ * What a terminus finding becomes under a rejection, or null to leave it as it
+ * was. The same discipline as the serves-town arm: honoured, it is a SOFT naming
+ * the date, the decider and the reason, never silence; past its recheckBy, the
+ * finding keeps its own severity (`severity: null`) and names the expiry. An entry
+ * naming other termini answers a different claim, so it is not used here and the
+ * stale check calls it stale.
+ */
+function terminusVerdict(byKey, route, redteamTermini, msg, todayIso) {
+  const rej = rejectionFor(byKey, route, 'terminus', todayIso);
+  if (!rej || !terminiCovered(rej.entry, redteamTermini)) return null;
+  const e = rej.entry;
+  if (rej.expired) {
+    return { key: rej.key, severity: null, category: 'terminus', rejection: { ...e, expired: true },
+      text: `${msg} routes.json rejected this claim on ${e.decidedOn} (${e.decidedBy}), but that rejection asked to be re-checked by ${e.recheckBy} and the date has passed — it no longer silences anything. Re-check, then move the date or drop the entry.` };
+  }
+  return { key: rej.key, severity: 'soft', category: 'redteam-rejected', rejection: e,
+    text: `${msg} This claim was checked and REJECTED on ${e.decidedOn} by ${e.decidedBy}: ${e.why}${e.evidence ? ' Evidence: ' + e.evidence + '.' : ''}${e.recheckBy ? ' Re-check by ' + e.recheckBy + '.' : ' The entry carries no re-check date, so it is reported in full on every run rather than fading out.'}` };
+}
+
+/** S6's words for an entry this run's red team did not contradict, on a route the sheet carries. */
+function uncontestedText(e) {
+  const r = normRoute(e.route);
+  const what = claimOf(e) === 'terminus'
+    ? [`that route ${r} ends at ${(e.termini || []).join(', ')}`, 'its termini for the route match our chain, or are not the ones the entry names']
+    : [`that route ${r} does not serve the town`, 'it either lists the route as serving the town or does not mention it'];
+  return `routes.json rejects the red team's claim ${what[0]} (${e.decidedOn}, ${e.decidedBy}), but THIS red-team answer makes no such claim — ${what[1]}. The rejection is silencing nothing in this run and may be stale; confirm before carrying it forward.`;
+}
+
+module.exports = { CLAIMS, DEFAULT_CLAIM, claimOf, claimKey, readRejections, rejectionFor, terminiCovered, terminusVerdict, uncontestedText };

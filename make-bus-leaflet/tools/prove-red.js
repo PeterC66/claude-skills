@@ -2554,6 +2554,11 @@ const MUTATIONS = [
     find: "  return asked.length > 0 && asked.every(t => named.has(t));",
     to: "  return asked.length > 0 && asked.some(t => named.has(t));" },
 
+  { suite: 'redteam_rejected.test.js', file: 'redteam_rejected.js',
+    what: 'an expired terminus rejection still turns the HARD into a SOFT',
+    find: "    return { key: rej.key, severity: null, category: 'terminus', rejection: { ...e, expired: true },",
+    to: "    return { key: rej.key, severity: 'soft', category: 'terminus', rejection: { ...e, expired: true }," },
+
   // via_build_check.js — S6's via-on-chain check asked at S4 (buses-data OA-650). A via
   // this build introduced blocks; one already published warns, so OA-636's maps refresh.
   { suite: 'via_build_check.test.js', file: 'via_build_check.js',

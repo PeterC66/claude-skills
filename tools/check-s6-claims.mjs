@@ -318,7 +318,9 @@ function loadDeclarations(m) {
     if (r && r.__unreadable) d.unreadable.push(p);
     else if (r) {
       for (const k of (r.routeOrder || [])) for (const key of keysOf(k)) d.routeOrder.add(key);
-      for (const e of (Array.isArray(r.redteamRejected) ? r.redteamRejected : [])) if (e && e.route != null) for (const key of keysOf(e.route)) if (!d.rejected.has(key)) d.rejected.set(key, { where: p, entry: e });
+      // Only a serves-town rejection (the default claim) answers a SERVICE claim; a
+      // terminus rejection is about where a route ends (buses-data OA-654).
+      for (const e of (Array.isArray(r.redteamRejected) ? r.redteamRejected : [])) if (e && e.route != null && (e.claim == null || e.claim === '' || e.claim === 'serves-town')) for (const key of keysOf(e.route)) if (!d.rejected.has(key)) d.rejected.set(key, { where: p, entry: e });
       // Both spellings, from the map's own S3 — see badgeAliasIndex above. Towns carry
       // one as readily as places: St Neots and Wisbech are towns.
       d.badge = badgeAliasIndex(r, p);

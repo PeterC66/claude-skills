@@ -161,6 +161,7 @@ const hard = () => findings.filter(f => f.severity === 'hard');
 const soft = () => findings.filter(f => f.severity === 'soft');
 
 const { normRoute } = require('./redteam_agree');
+const { readRejections, rejectionFor: rejectionOf, terminiCovered, claimOf } = require('./redteam_rejected');
 /*
  * A route NUMBER is not a unique key, and two different things were indexed on it
  * as if it were.
@@ -471,23 +472,40 @@ const KNOWN_OFF_SKIPPED = [];
  *     may have become right and the entry would be silencing it; a rejection
  *     this red team does not contradict, or one for a route the sheet does not
  *     carry, is a stale leftover and is reported.
+ *
+ * Since buses-data OA-654 an entry names its `claim`, `serves-town` (the default)
+ * or `terminus`, and is keyed by route and claim; the parsing and the terminus
+ * match live in redteam_rejected.js, which says why.
  */
 const TODAY_ISO = new Date().toISOString().slice(0, 10);
-const REDTEAM_REJECTED = new Map();       // normRoute -> entry
-const REDTEAM_REJECTED_BAD = [];          // entries that will not silence anything
-for (const e of (routes.redteamRejected || [])) {
-  const r = normRoute(e && e.route);
-  if (!r) { REDTEAM_REJECTED_BAD.push({ route: String((e && e.route) || '?'), missing: ['route'] }); continue; }
-  const missing = ['decidedOn', 'decidedBy', 'why'].filter(k => !e[k]);
-  if (missing.length) { REDTEAM_REJECTED_BAD.push({ route: r, missing }); continue; }
-  REDTEAM_REJECTED.set(r, e);
+const { byKey: REDTEAM_REJECTED, bad: REDTEAM_REJECTED_BAD } = readRejections(routes.redteamRejected);
+const REDTEAM_REJECTION_USED = new Set();   // claimKeys this run's red team did contradict
+/** The live rejection of this claim about a route, or null. An `expired` one does not silence. */
+function rejectionFor(r, claim = 'serves-town') {
+  return rejectionOf(REDTEAM_REJECTED, r, claim, TODAY_ISO);
 }
-const REDTEAM_REJECTION_USED = new Set();
-/** The live rejection for a route, or null. An `expired` one does not silence. */
-function rejectionFor(r) {
-  const e = REDTEAM_REJECTED.get(normRoute(r));
-  if (!e) return null;
-  return { entry: e, expired: !!(e.recheckBy && String(e.recheckBy) < TODAY_ISO) };
+/*
+ * A terminus finding, unless the S3 has rejected exactly this claim (OA-654). The
+ * same discipline as the serves-town arm: honoured, it is a SOFT naming the date,
+ * the decider and the reason, never silence; past its recheckBy, the finding comes
+ * back at its own severity and names the expiry. An entry naming other termini
+ * answers a different claim, so it is left for R-1b to call stale.
+ */
+function terminusFinding(sev, r, rtTermini, msg, evidence) {
+  const rej = rejectionFor(r, 'terminus');
+  if (!rej || !terminiCovered(rej.entry, rtTermini)) {
+    add(sev, 'terminus', msg, evidence, r, 'redteam');
+    return;
+  }
+  REDTEAM_REJECTION_USED.add(rej.key);
+  const e = rej.entry;
+  if (rej.expired) {
+    add(sev, 'terminus', `${msg} routes.json rejected this claim on ${e.decidedOn} (${e.decidedBy}), but that rejection asked to be re-checked by ${e.recheckBy} and the date has passed — it no longer silences anything. Re-check, then move the date or drop the entry.`,
+      { ...evidence, rejection: { ...e, expired: true } }, r, 'redteam');
+    return;
+  }
+  add('soft', 'redteam-rejected', `${msg} This claim was checked and REJECTED on ${e.decidedOn} by ${e.decidedBy}: ${e.why}${e.evidence ? ' Evidence: ' + e.evidence + '.' : ''}${e.recheckBy ? ' Re-check by ' + e.recheckBy + '.' : ' The entry carries no re-check date, so it is reported in full on every run rather than fading out.'}`,
+    { ...evidence, rejection: e }, r, 'redteam');
 }
 
 // =====================================================================
@@ -568,8 +586,10 @@ for (const s of KNOWN_OFF_SKIPPED) {
  */
 for (const bad of REDTEAM_REJECTED_BAD) {
   add('soft', 'redteam-rejected',
-    `routes.json has a redteamRejected entry for route ${bad.route} missing ${bad.missing.join(', ')} — it silences nothing. A rejection needs a date, a decider and a reason, or it is a mute button with a respectable name.`,
-    { route: bad.route, missing: bad.missing }, bad.route);
+    bad.unknownClaim
+      ? `routes.json has a redteamRejected entry for route ${bad.route} rejecting a "${bad.claim}" claim, which S6 does not know (serves-town or terminus) — it silences nothing.`
+      : `routes.json has a redteamRejected entry for route ${bad.route} missing ${bad.missing.join(', ')} — it silences nothing. A rejection needs a date, a decider and a reason${bad.claim === 'terminus' ? ', and a terminus rejection the termini it rejects' : ''}, or it is a mute button with a respectable name.`,
+    { route: bad.route, claim: bad.claim, missing: bad.missing, unknownClaim: !!bad.unknownClaim }, bad.route);
 }
 
 // S-2: every drawn ATCO has a coordinate (orphan stop check)
@@ -1216,7 +1236,7 @@ if (redteam) {
         // the dangerous arm below emitted a HARD ("your own data no longer
         // supports this") beside a SOFT saying the red team makes no such claim
         // -- two findings contradicting each other about one entry.
-        if (rej) REDTEAM_REJECTION_USED.add(normRoute(r));
+        if (rej) REDTEAM_REJECTION_USED.add(rej.key);
         const drawnStops = (intownByNorm(r) || []).length;
         /*
          * `servesTown` IS A FACT ABOUT THE WORLD; `displayed` IS A DECISION ABOUT A
@@ -1332,9 +1352,9 @@ if (redteam) {
             // A comparison DID run here: at least one chain end carried a locality
             // code and none of the red team's termini matched it. Partial evidence
             // (some ends untokenised) still softens it, as before.
-            add(untok ? 'soft' : 'hard', 'terminus',
+            terminusFinding(untok ? 'soft' : 'hard', r, rt.termini,
               `Route ${r}: NEITHER red-team terminus (${rt.termini.join(', ')}) is a locality at the ends of our drawn chain (chain ends: ${[...ends].join(', ')}${untok ? `, plus ${untok} end(s) with no NaPTAN locality code` : ''}).`,
-              { route: r, redteam: rt.termini, chainEndTokens: [...ends], untokenisedEnds: untok, ours: vs.termini, terminiSource: vs.terminiSource, results: res }, r, 'redteam');
+              { route: r, redteam: rt.termini, chainEndTokens: [...ends], untokenisedEnds: untok, ours: vs.termini, terminiSource: vs.terminiSource, results: res });
           } else if (nM < rt.termini.length) {
             add('soft', 'terminus',
               `Route ${r}: red-team terminus ${unmatched.join(', ')} is not a locality at either end of our drawn chain (chain ends: ${[...ends].join(', ')}).`,
@@ -1351,11 +1371,16 @@ if (redteam) {
           // both sides read the same `termini` field. Five of Ramsey's twelve came
           // from here, and counting them as a second opinion is what made the
           // draft's noise look like agreement between two checks.
-          add(UNCURATED ? 'soft' : 'hard', 'terminus',
-            UNCURATED
-              ? `Route ${r}: terminus not comparable - our termini (${vs.termini.join(', ')}) are GTFS stop names from an unreviewed S1 draft, so they cannot match the red team's settlements (${rt.termini.join(', ')}). This reads the same field S-4 does, so it is not a second opinion. Do the S1 pass.`
-              : `Route ${r}: our termini (${vs.termini.join(', ')}) match NEITHER red-team terminus (${rt.termini.join(', ')}).`,
-            { route: r, ours: vs.termini, redteam: rt.termini, uncuratedS1: !!UNCURATED }, r, 'redteam');
+          // An uncurated S1 is "not comparable", not a claim, so no rejection answers it.
+          if (UNCURATED) {
+            add('soft', 'terminus',
+              `Route ${r}: terminus not comparable - our termini (${vs.termini.join(', ')}) are GTFS stop names from an unreviewed S1 draft, so they cannot match the red team's settlements (${rt.termini.join(', ')}). This reads the same field S-4 does, so it is not a second opinion. Do the S1 pass.`,
+              { route: r, ours: vs.termini, redteam: rt.termini, uncuratedS1: true }, r, 'redteam');
+          } else {
+            terminusFinding('hard', r, rt.termini,
+              `Route ${r}: our termini (${vs.termini.join(', ')}) match NEITHER red-team terminus (${rt.termini.join(', ')}).`,
+              { route: r, ours: vs.termini, redteam: rt.termini, uncuratedS1: false });
+          }
         } else if (nM < vs.termini.length) {
           add('soft', 'terminus',
             `Route ${r}: a terminus differs from the red-team — ours (${vs.termini.join(', ')}) vs red-team (${rt.termini.join(', ')}).`,
@@ -1512,18 +1537,26 @@ if (redteam) {
    * adjudication and stops asking. SOFT rather than HARD in both arms below,
    * matching notShown's stale arm: it hides nothing, it just is not true now.
    */
-  for (const [r, e] of REDTEAM_REJECTED) {
-    if (REDTEAM_REJECTION_USED.has(r)) continue;
-    if (e.recheckBy && String(e.recheckBy) < TODAY_ISO) continue;   // already HARD above
+  for (const [key, e] of REDTEAM_REJECTED) {
+    if (REDTEAM_REJECTION_USED.has(key)) continue;
+    const r = normRoute(e.route);
+    const terminus = claimOf(e) === 'terminus';
+    // An expired serves-town entry is already HARD above. An expired terminus entry
+    // reaches there only if this red team still makes the claim, so it falls through.
+    if (!terminus && e.recheckBy && String(e.recheckBy) < TODAY_ISO) continue;
     const carried = displayed.has(r) || (verified.services || []).some(v => normRoute(ourKey(v)) === r);
     if (!carried) {
       add('soft', 'redteam-rejected',
         `routes.json rejects a red-team claim about route ${r} (${e.decidedOn}, ${e.decidedBy}), but the sheet does not carry that route at all — no panel row and nothing in our verified set. The entry is stale.`,
-        { route: r, rejection: e, inDisplayed: false }, r, 'redteam');
+        { route: r, claim: claimOf(e), rejection: e, inDisplayed: false }, r, 'redteam');
+    } else if (terminus) {
+      add('soft', 'redteam-rejected',
+        `routes.json rejects the red team's claim that route ${r} ends at ${e.termini.join(', ')} (${e.decidedOn}, ${e.decidedBy}), but THIS red-team answer makes no such claim — its termini for the route match our chain, or are not the ones the entry names. The rejection is silencing nothing in this run and may be stale; confirm before carrying it forward.`,
+        { route: r, claim: 'terminus', rejection: e, redteamClaimPresent: false }, r, 'redteam');
     } else {
       add('soft', 'redteam-rejected',
         `routes.json rejects the red team's claim that route ${r} does not serve the town (${e.decidedOn}, ${e.decidedBy}), but THIS red-team answer makes no such claim — it either lists the route as serving the town or does not mention it. The rejection is silencing nothing in this run and may be stale; confirm before carrying it forward.`,
-        { route: r, rejection: e, redteamClaimPresent: false }, r, 'redteam');
+        { route: r, claim: 'serves-town', rejection: e, redteamClaimPresent: false }, r, 'redteam');
     }
   }
 }

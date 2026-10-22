@@ -169,7 +169,15 @@ Peter adjudicated it on 2026-08-22, wrote the evidence into S1's `verified-servi
 ]
 ```
 
-`route`, `decidedOn`, `decidedBy` and `why` are required; `evidence` and `recheckBy` are optional. `claim` is currently documentation — `serves-town` is the only claim honoured.
+`route`, `decidedOn`, `decidedBy` and `why` are required; `evidence` and `recheckBy` are optional. `claim` says which claim the entry rejects, `serves-town` when it is absent, and an entry answers only its own claim: a serves-town rejection never clears a terminus finding, and the other way round.
+
+**A terminus claim (since 2026-10-22, buses-data OA-654).** When the red team is wrong about where a route ENDS, the `terminus` HARD used to come back on every reuse of that answer, because the entry was keyed by route and read only in the serves-town arm, so the only way to clear it was to buy a new red team. Write `"claim": "terminus"` and name the red team's wrong termini in `termini`, as it spelled them (case and punctuation are folded):
+
+```json
+{ "route": "<route>", "claim": "terminus", "termini": ["<red-team terminus 1>", "<red-team terminus 2>"], "decidedOn": "<YYYY-MM-DD>", "decidedBy": "<who>", "why": "<what was checked, and where the route really ends>", "recheckBy": "<YYYY-MM-DD>" }
+```
+
+The entry answers a terminus claim only if it names **every** terminus the red team gives for that route: a red team that later gives a different wrong terminus has made a new claim nobody has looked at, so the HARD returns and the entry is called stale. A terminus entry with no `termini` silences nothing. Everything in the table below applies to it as well, except the row about in-town stops, which is a serves-town question. `check-s6-claims.mjs` ignores terminus entries, because a terminus is not a claim about a service: it is never the home of a `serves-town` or `missing-service` claim. The rules are in `assets/redteam_rejected.js` and `test/redteam_rejected.test.js`.
 
 **It never goes silent, and it is checked in every direction that could make it a mute button.**
 
@@ -182,7 +190,7 @@ Peter adjudicated it on 2026-08-22, wrote the evidence into S1's `verified-servi
 | This red team makes no such claim about the route | **SOFT** stale — it is silencing nothing this run |
 | The sheet does not carry the route at all | **SOFT** stale |
 
-All of these are in `npm run test:prove-s6` (case 6, ten checks), and the harness **undeclares the key itself** before asserting the artefact is real — because `stage()` seeds from the town's latest S3, which is exactly where the fix lands, so a case that merely read the config would be testing the fixed state against itself from the day it shipped. That is the failure shape *the fix invalidates its own control*, and it cost this harness four consecutive red pushes the last time.
+All of these are in `npm run test:prove-s6` (case 6, the serves-town arm on route 69 and the terminus arm on route 65, whose wrong termini the case injects), and the harness **undeclares the key itself** before asserting the artefact is real — because `stage()` seeds from the town's latest S3, which is exactly where the fix lands, so a case that merely read the config would be testing the fixed state against itself from the day it shipped. That is the failure shape *the fix invalidates its own control*, and it cost this harness four consecutive red pushes the last time.
 
 **It changes no bytes.** No generator reads the key. St Neots adopted it as a new dated **S3** run with no S4/S5 rebuild, and all four of its byte gates still PASS against a `ci-reference` built from the previous S3; `rollout.js` reports the town UP-TO-DATE. If you do rebuild, note that the `build N.N · date` stamp is written by `rollout.js` on the way out and **not** by the generators — a hand-run `node gen_internal.js` comes out 137 bytes short on every sheet, with no stamp at all.
 

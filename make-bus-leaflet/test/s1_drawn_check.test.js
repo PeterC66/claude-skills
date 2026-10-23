@@ -17,7 +17,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { load } = require('./_engine');
 
-const { s1DrawnCheck, publishedS1Id } = load('s1_drawn_check.js');
+const { s1DrawnCheck, publishedS1Id, publishedS2Id } = load('s1_drawn_check.js');
 const BUILDLOG = load('build_log.js');
 const { buildSheets } = load('build_s4.js');
 
@@ -50,6 +50,37 @@ function mapWith({ old = null, now, published, built, file = 'verified-services.
   fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify(built));
   return { map, dir, done: () => fs.rmSync(map, { recursive: true, force: true }) };
 }
+// A place map: S1 holds only place.json, its services are in two S2 runs (`old`, then
+// `now`), the published S4 names `old`, and the build under test is `built` in a run
+// folder the manifest holds, naming `builtS2`, unless `listed` is false (OA-660).
+function placeWith({ old, now, published, built, builtS2 = 's2-now', listed = true }) {
+  const map = fs.mkdtempSync(path.join(os.tmpdir(), 's1dc-place-'));
+  fs.mkdirSync(path.join(map, 'S1-services', 's1a'), { recursive: true });
+  fs.writeFileSync(path.join(map, 'S1-services', 's1a', 'place.json'), JSON.stringify({ name: 'A Co-op' }));
+  const s2runs = [];
+  for (const [id, body] of [['s2-old', old], ['s2-now', now]]) {
+    fs.mkdirSync(path.join(map, 'S2-geometry', id), { recursive: true });
+    fs.writeFileSync(path.join(map, 'S2-geometry', id, 'gtfs-services.json'), JSON.stringify(body));
+    s2runs.push({ id, dir: `S2-geometry/${id}` });
+  }
+  const s4runs = [{ id: 'v1.0', dir: 'S4-generate/v1.0', basedOn: { S2: 's2-old', S3: 's3a' } }];
+  if (listed) s4runs.push({ id: 'v1.1', dir: 'S4-generate/v1.1', basedOn: { S2: builtS2, S3: 's3a' } });
+  fs.writeFileSync(path.join(map, 'manifest.json'), JSON.stringify({ stages: {
+    S1: { latest: 's1a', runs: [{ id: 's1a', dir: 'S1-services/s1a' }] },
+    S2: { latest: 's2-now', runs: s2runs },
+    S3: { latest: 's3a', runs: [{ id: 's3a', dir: 'S3-config/s3a' }] },
+    S4: { latest: 'v1.0', runs: s4runs },
+  } }));
+  if (published) {
+    fs.mkdirSync(path.join(map, 'ci-reference'));
+    fs.writeFileSync(path.join(map, 'ci-reference', 'routes.json'), JSON.stringify(published));
+  }
+  const dir = path.join(map, 'S4-generate', 'v1.1');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify(built));
+  return { map, dir, done: () => fs.rmSync(map, { recursive: true, force: true }) };
+}
+
 const severities = msgs => BUILDLOG.collect([{ source: 's1', stderr: msgs.join('\n'), ok: true }]).map(e => e.severity);
 
 test('a config that gives every S1 service a home says nothing', () => {
@@ -159,6 +190,76 @@ test('the published S1 is found through S4 latest, its S3, and that S3\'s S1', (
   const manifest = JSON.parse(fs.readFileSync(path.join(m.map, 'manifest.json'), 'utf8'));
   assert.strictEqual(publishedS1Id(manifest), '2026-10-01_0900');
   assert.strictEqual(publishedS1Id({ stages: {} }), null);
+  m.done();
+});
+
+test('a place with no services file in S1 reads the S2 run its S4 names — OA-660', () => {
+  const rj = { routeOrder: ['A'] };
+  const m = placeWith({ old: { services: [svc('A')] }, now: { services: [svc('A'), svc('604')] },
+    published: null, built: rj, builtS2: 's2-old' });
+  const r = s1DrawnCheck({ dir: m.dir });
+  assert.strictEqual(r.notRun, null, r.notRun);
+  assert.deepStrictEqual(r.fresh, [], 'read S2 latest, not the S2 this build names');
+  m.done();
+});
+
+test('before the manifest holds the S4 run, a place reads S2\'s latest', () => {
+  const m = placeWith({ old: { services: [svc('A')] }, now: { services: [svc('A'), svc('604')] },
+    published: null, built: { routeOrder: ['A'] }, listed: false });
+  const r = s1DrawnCheck({ dir: m.dir });
+  assert.deepStrictEqual(r.fresh.map(s => s.route), ['604']);
+  assert.deepStrictEqual(severities(r.messages), ['BLOCKING']);
+  m.done();
+});
+
+test('a service a place\'s S2 gained since the published build is BLOCKING; one it already listed is WARN', () => {
+  const rj = { routeOrder: ['A'] };
+  const m = placeWith({ old: { services: [svc('A'), svc('101')] }, now: { services: [svc('A'), svc('101'), svc('604')] },
+    published: rj, built: rj });
+  const r = s1DrawnCheck({ dir: m.dir });
+  assert.deepStrictEqual(r.fresh.map(s => s.route), ['604']);
+  assert.deepStrictEqual(r.shipped.map(s => s.route), ['101']);
+  m.done();
+});
+
+test('a map whose services are in S1 never takes S2\'s list as its published baseline — St Neots Tesco Extra', () => {
+  const rj = { routeOrder: ['A'] };
+  const m = placeWith({ old: { services: [svc('A')] }, now: { services: [svc('A')] }, published: rj, built: rj });
+  fs.writeFileSync(path.join(m.map, 'S1-services', 's1a', 'gtfs-services.json'), JSON.stringify({ services: [svc('A'), svc('18A')] }));
+  const r = s1DrawnCheck({ dir: m.dir });
+  assert.deepStrictEqual(r.fresh, [], 'an S1 service was judged against S2\'s published list');
+  assert.deepStrictEqual(r.shipped.map(s => s.route), ['18A']);
+  m.done();
+});
+
+test('a boarding sheet houses the routes its index lists and those it excludes, and no others', () => {
+  const rj = { boardingPlan: { excludeRoutes: ['1S'] } };
+  const m = placeWith({ old: { services: [svc('A')] }, now: { services: [svc('A'), svc('1S'), svc('604'), svc('18A')] },
+    published: null, built: rj });
+  fs.writeFileSync(path.join(m.dir, 'boarding_index.json'), JSON.stringify({ stands: [{ routes: ['A'] }, { routes: ['604'] }] }));
+  const r = s1DrawnCheck({ dir: m.dir });
+  assert.deepStrictEqual(r.fresh.map(s => s.route), ['18A']);
+  m.done();
+});
+
+test('the published boarding index is read from ci-reference', () => {
+  const rj = { boardingPlan: {} };
+  const m = placeWith({ old: { services: [svc('A'), svc('604')] }, now: { services: [svc('A'), svc('604')] },
+    published: rj, built: { boardingPlan: {}, routeOrder: ['A'] } });
+  fs.writeFileSync(path.join(m.map, 'ci-reference', 'boarding_index.json'), JSON.stringify({ stands: [{ routes: ['A', '604'] }] }));
+  const r = s1DrawnCheck({ dir: m.dir });
+  assert.deepStrictEqual(r.fresh.map(s => s.route), ['604'], 'a route the published boarding sheet carried and this build dropped went unseen');
+  m.done();
+});
+
+test('the published S2 is S4 latest\'s basedOn.S2, else its S3\'s', () => {
+  const m = placeWith({ old: { services: [] }, now: { services: [] }, published: null, built: {} });
+  const manifest = JSON.parse(fs.readFileSync(path.join(m.map, 'manifest.json'), 'utf8'));
+  assert.strictEqual(publishedS2Id(manifest), 's2-old');
+  delete manifest.stages.S4.runs[0].basedOn.S2;
+  manifest.stages.S3.runs[0].basedOn = { S2: 's2-now' };
+  assert.strictEqual(publishedS2Id(manifest), 's2-now');
+  assert.strictEqual(publishedS2Id({ stages: {} }), null);
   m.done();
 });
 

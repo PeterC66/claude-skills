@@ -2656,6 +2656,41 @@ const MUTATIONS = [
     find: "  const map = mapDir === undefined ? mapDirOf(dir) : mapDir;",
     to: "  const map = mapDirOf(dir);" },
 
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: 'no S2 fallback, so the five place maps whose services live in S2 read "not checked" again (OA-660)',
+    find: "  return servicesOf(map, manifest, 'S1', id) || servicesOf(map, manifest, 'S2', s2Id);",
+    to: "  return servicesOf(map, manifest, 'S1', id);" },
+
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: "the S2 a place's S4 run names is ignored, so a rebuild from an older S2 is judged against the newest pull (OA-660)",
+    find: "  return (s4 && s4.basedOn && s4.basedOn.S2) || (st.S2 && st.S2.latest) || null;",
+    to: "  return (st.S2 && st.S2.latest) || null;" },
+
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: "a place's published S2 is not consulted, so a service its S2 gained since the published build reads as already shipped (OA-660)",
+    find: "  return (s4 && s4.basedOn && s4.basedOn.S2) || (s3 && s3.basedOn && s3.basedOn.S2) || null;",
+    to: "  return null;" },
+
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: "S2's list is the published baseline even for a build that read S1's, so St Neots Tesco Extra's shipped 18A refuses its build (OA-660)",
+    find: "  const pubS2 = now.stage === 'S2' ? publishedS2Id(manifest) : null;",
+    to: "  const pubS2 = publishedS2Id(manifest);" },
+
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: 'the boarding index is no home, so High Wycombe High Street reads every route on its sheet as a gap (OA-660)',
+    find: "    for (const st of (ix && ix.stands) || []) for (const r of st.routes || []) set.add(normRoute(String(r)));",
+    to: "" },
+
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: 'boardingPlan.excludeRoutes is no home, so a service a boarding sheet declares off reads as forgotten (OA-660)',
+    find: "    for (const r of bp.excludeRoutes || []) set.add(normRoute(String(r)));",
+    to: "" },
+
+  { suite: 's1_drawn_check.test.js', file: 's1_drawn_check.js',
+    what: 'the published boarding index is not read, so a route the published boarding sheet carried and this build dropped reads as already shipped (OA-660)',
+    find: "homes(published, pubS1 ? pubS1.verified : now.verified, path.join(map, 'ci-reference'))",
+    to: "homes(published, pubS1 ? pubS1.verified : now.verified, null)" },
+
   { suite: 's1_drawn_check.test.js', file: 'build_s4.js',
     what: 'build_s4 stops asking the S1 check, so a decided route S3 forgot is found only by S6',
     find: "  said.push({ source: 's1', stderr:",

@@ -22,9 +22,12 @@
  * A HOME IS ONE OF FOUR, and each is a declaration somebody wrote: `routeOrder` (a
  * line), `panelOrder` (a Services row), `notShown` (a row with no line), or the
  * known-off set read through known_off.js — `notOnLeaflet[]` in the S1 file for a
- * town, in S3's routes.json for a place. A service is matched by its `key` where it
- * has one and by its route number otherwise (index_guard.js: one number can be two
- * services). Two S1 entries need no home: `servesTown: false`, which S6 pairs with
+ * town, in S3's routes.json for a place. Where routes.json has a `boardingPlan`, the
+ * routes its boarding_index.json stands list and its `excludeRoutes` are homes too
+ * (OA-660). Not the whole pull: the index leaves off services by its own rule, and
+ * St Neots Town Centre's 18A is on no part of its sheets. A service is matched by its
+ * `key` where it has one and by its route number otherwise (index_guard.js: one
+ * number can be two services). Two S1 entries need no home: `servesTown: false`, which S6 pairs with
  * the red team, and `drawn: false`, S1 saying so itself.
  *
  * NOT `hasGtfsShape: false`, though a demand-responsive zone carries it and has no line
@@ -49,6 +52,12 @@
  * chain is broken the published routes.json alone is the baseline. A map with no
  * `ci-reference/` has published nothing, so every gap is new.
  *
+ * A PLACE'S SERVICES ARE IN S2. Five place maps keep only place.json in S1 and pull
+ * gtfs-services.json into S2, so where an S1 run has no services file the S2 run of
+ * the same build answers: for this build, the S2 its S4 run names (S2's latest before
+ * the manifest holds it); for the published one, the newest S4's `basedOn.S2`
+ * (buses-data OA-660).
+ *
  * NO MANIFEST, NO FINDING. CI's fixtures carry no S1 runs, so there the check says
  * nothing rather than change every log build_s4.test.js compares.
  *
@@ -70,33 +79,68 @@ function readJSON(p) {
 
 const S1_FILES = ['verified-services.json', 'gtfs-services.json'];
 
-// One S1 run's services file, by run id; null when the run or the file is missing.
-function s1Of(map, manifest, id) {
-  const s1 = manifest && manifest.stages && manifest.stages.S1;
-  const run = s1 && id && (s1.runs || []).find(r => r.id === id);
+const runOf = (manifest, stage, id) => {
+  const s = manifest && manifest.stages && manifest.stages[stage];
+  return (s && id && (s.runs || []).find(r => r.id === id)) || null;
+};
+
+// One stage run's services file, by run id; null when the run or the file is missing.
+function servicesOf(map, manifest, stage, id) {
+  const run = runOf(manifest, stage, id);
   if (!run) return null;
   for (const name of S1_FILES) {
     const v = readJSON(path.join(map, run.dir, name));
-    if (v) return { id, name, verified: v };
+    if (v) return { id, stage, name, verified: v };
   }
   return null;
+}
+
+// The services S1 decided, by S1 run id. A place map keeps only place.json in S1 and
+// pulls its services into S2, so where the S1 run has none the S2 run `s2Id` answers
+// (buses-data OA-660: five place maps read "not checked" until this fallback).
+function s1Of(map, manifest, id, s2Id = null) {
+  return servicesOf(map, manifest, 'S1', id) || servicesOf(map, manifest, 'S2', s2Id);
 }
 
 // The S1 run the published build came from: S4 latest -> basedOn.S3 -> basedOn.S1.
 function publishedS1Id(manifest) {
   const st = (manifest && manifest.stages) || {};
-  const run = (s, id) => s && id && (s.runs || []).find(r => r.id === id);
-  const s4 = run(st.S4, st.S4 && st.S4.latest);
-  const s3 = run(st.S3, s4 && s4.basedOn && s4.basedOn.S3);
+  const s4 = runOf(manifest, 'S4', st.S4 && st.S4.latest);
+  const s3 = runOf(manifest, 'S3', s4 && s4.basedOn && s4.basedOn.S3);
   return (s3 && s3.basedOn && s3.basedOn.S1) || null;
+}
+
+// The S2 run the published build came from: S4 latest -> basedOn.S2, else its S3's.
+function publishedS2Id(manifest) {
+  const st = (manifest && manifest.stages) || {};
+  const s4 = runOf(manifest, 'S4', st.S4 && st.S4.latest);
+  const s3 = runOf(manifest, 'S3', s4 && s4.basedOn && s4.basedOn.S3);
+  return (s4 && s4.basedOn && s4.basedOn.S2) || (s3 && s3.basedOn && s3.basedOn.S2) || null;
+}
+
+// The S2 run this build is drawn from: the one its own S4 run names once the manifest
+// holds it, else S2's latest, which is what stage.js pulls into a new S4.
+function currentS2Id(manifest, dir) {
+  const st = (manifest && manifest.stages) || {};
+  const s4 = runOf(manifest, 'S4', path.basename(dir));
+  return (s4 && s4.basedOn && s4.basedOn.S2) || (st.S2 && st.S2.latest) || null;
 }
 
 const needsHome = s => s && s.servesTown !== false && s.drawn !== false;
 const idOf = s => normRoute(String(s.key || s.route || ''));
 
 // Every route or key routes.json gives a home, plus the known-off set of both files.
-function homes(routes, verified) {
+// A boarding sheet is a home too: the routes its stands list in `folder`'s
+// boarding_index.json, and the ones boardingPlan.excludeRoutes declares off it. High
+// Wycombe High Street has no routeOrder at all, only a boarding sheet (OA-660).
+function homes(routes, verified, folder) {
   const set = new Set();
+  const bp = routes && routes.boardingPlan;
+  if (bp) {
+    const ix = folder ? readJSON(path.join(folder, 'boarding_index.json')) : null;
+    for (const r of bp.excludeRoutes || []) set.add(normRoute(String(r)));
+    for (const st of (ix && ix.stands) || []) for (const r of st.routes || []) set.add(normRoute(String(r)));
+  }
   for (const f of ['routeOrder', 'panelOrder', 'notShown']) for (const r of (routes && routes[f]) || []) set.add(normRoute(String(r)));
   for (const src of [verified, routes]) for (const r of knownOff(src || {}).found.keys()) set.add(normRoute(r));
   return set;
@@ -116,13 +160,17 @@ function s1DrawnCheck({ dir, routesJson = null, mapDir } = {}) {
   if (!map) return none('no map folder above the run folder');
   const manifest = readJSON(path.join(map, 'manifest.json'));
   const s1 = manifest && manifest.stages && manifest.stages.S1;
-  const now = s1Of(map, manifest, s1 && s1.latest);
-  if (!now) return none('no S1 services file in the map\'s newest S1 run');
+  const now = s1Of(map, manifest, s1 && s1.latest, currentS2Id(manifest, dir));
+  if (!now) return none('no services file in the map\'s newest S1 run, nor in the S2 run this build is drawn from');
 
-  const here = homes(rj, now.verified);
+  const here = homes(rj, now.verified, dir);
   const published = readJSON(path.join(map, 'ci-reference', 'routes.json'));
-  const pubS1 = published ? s1Of(map, manifest, publishedS1Id(manifest)) : null;
-  const before = published ? homes(published, pubS1 ? pubS1.verified : now.verified) : null;
+  // Like for like: S2's list is a baseline only for a build that read S2's list, since a
+  // map with services in S1 and a broken chain has a different list in S2 (St Neots
+  // Tesco Extra's 18A read as new until this test).
+  const pubS2 = now.stage === 'S2' ? publishedS2Id(manifest) : null;
+  const pubS1 = published ? s1Of(map, manifest, publishedS1Id(manifest), pubS2) : null;
+  const before = published ? homes(published, pubS1 ? pubS1.verified : now.verified, path.join(map, 'ci-reference')) : null;
   const listedBefore = pubS1 ? new Set((pubS1.verified.services || []).filter(needsHome).map(idOf)) : null;
 
   const fresh = [], shipped = [], messages = [];
@@ -159,4 +207,4 @@ if (require.main === module) {
   process.exit(r.fresh.length ? 1 : 0);
 }
 
-module.exports = { s1DrawnCheck, publishedS1Id };
+module.exports = { s1DrawnCheck, publishedS1Id, publishedS2Id };

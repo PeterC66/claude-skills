@@ -2344,14 +2344,14 @@ const MUTATIONS = [
     to: "          try { const j = JSON.parse(t); return JSON.stringify(j); } catch (e) { return t; } };" },
 
   /* buses-data 60358500. The S6 stale-S4 guard, the three ways it can be undone. */
-  { suite: 'stage_s6_stale_s4.test.js', file: 'stage.js',
+  { suite: 'stage_s6_stale_s4.test.js', file: 's6_stale_s4.js',
     what: 'an S6 verifying an S2 the latest S4 was not drawn from commits, and stale_inputs.test.js goes red on the push (St Ives, 60358500)',
-    find: "      if (moved.length) {\n        const s4Id = m.stages.S4.latest;",
-    to: "      if (false) {\n        const s4Id = m.stages.S4.latest;" },
+    find: "  if (!moved.length) return null;\n",
+    to: "  return null;\n" },
 
-  { suite: 'stage_s6_stale_s4.test.js', file: 'stage.js',
+  { suite: 'stage_s6_stale_s4.test.js', file: 's6_stale_s4.js',
     what: 'the S6\'s own --based-on is ignored, so an S6 that names the S4\'s inputs is refused for a newer S2 it never verified',
-    find: "      for (const s of ['S2', 'S3']) if (basedOn[s] && view.stages[s]) view.stages[s] = { ...view.stages[s], latest: basedOn[s] };\n",
+    find: "  for (const s of ['S2', 'S3']) if (basedOn[s] && view.stages[s]) view.stages[s] = { ...view.stages[s], latest: basedOn[s] };\n",
     to: "" },
 
   { suite: 'stage_s6_stale_s4.test.js', file: 'stage.js',

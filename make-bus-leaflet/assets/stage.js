@@ -738,7 +738,6 @@ function main() {
       if (problem) console.log(`  WARNING: committing an S6 whose red-team answer has no decision (--force-decision): ${problem}`);
     }
 
-    const staleS4 = st === 'S6' ? require('./s6_stale_s4').guard({ m, basedOn, id, force: f['force-stale-s4'], die }) : null;
 
     /* Guard (buses-data OA-318 item 3): an S5 must carry the CONFIG of the S4 it
      * renders. The portal stores a payload's routes.json and re-draws from it, so an
@@ -1075,7 +1074,7 @@ function main() {
       }
     }
     if (Object.keys(basedOn).length) rec.basedOn = basedOn;
-    if (staleS4) rec.staleS4 = staleS4;
+    const staleS4 = st === 'S6' && require('./s6_stale_s4').guard({ m, basedOn, id, force: f['force-stale-s4'], die }); if (staleS4) rec.staleS4 = staleS4;
     if (f.note) rec.note = String(f.note);
     sx.runs = sx.runs.filter(r => r.id !== id); // replace if re-committing same dir
     sx.runs.push(rec);

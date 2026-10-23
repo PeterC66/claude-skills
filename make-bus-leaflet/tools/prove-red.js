@@ -2356,8 +2356,8 @@ const MUTATIONS = [
 
   { suite: 'stage_s6_stale_s4.test.js', file: 'stage.js',
     what: '--force-stale-s4 commits without writing staleS4, so the manifest no longer says what the override recorded',
-    find: "    if (staleS4) rec.staleS4 = staleS4;\n",
-    to: "" },
+    find: " if (staleS4) rec.staleS4 = staleS4;\n",
+    to: "\n" },
 
   /* The S5 payload guard (High Wycombe Aldi v1.43, 2026-10-13), both ways it can be undone. */
   { suite: 'stage_s5_config.test.js', file: 's5_payload.js',

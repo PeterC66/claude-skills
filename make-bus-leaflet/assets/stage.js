@@ -38,7 +38,7 @@
  *         gen_internal.js / gen_external.js, which the portal re-draws it from
  *         (--force-nogen overrides; buses-data OA-318),
  *         and, for S6, refuses a redteam.json with no redteam-source.json decision
- *         beside it, or one that says WAIT (--force-decision overrides; OA-427),
+ *         beside it, or one that says WAIT (--force-decision overrides; OA-427), or S2/S3 its S4 lacks (s6_stale_s4.js)
  *         and, for S5, refuses a routes.json that differs (bar "version") from the
  *         S4 it renders (--force-stale-config; OA-318), or lacks a file of it (s5_payload.js)
  *   stamps [runDir]                   write BOTH S4 provenance stamps into that
@@ -738,6 +738,7 @@ function main() {
       if (problem) console.log(`  WARNING: committing an S6 whose red-team answer has no decision (--force-decision): ${problem}`);
     }
 
+
     /* Guard (buses-data OA-318 item 3): an S5 must carry the CONFIG of the S4 it
      * renders. The portal stores a payload's routes.json and re-draws from it, so an
      * S5 holding sheets from one S4 beside the routes.json of an EARLIER one publishes
@@ -1073,6 +1074,7 @@ function main() {
       }
     }
     if (Object.keys(basedOn).length) rec.basedOn = basedOn;
+    const staleS4 = st === 'S6' && require('./s6_stale_s4').guard({ m, basedOn, id, force: f['force-stale-s4'], die }); if (staleS4) rec.staleS4 = staleS4;
     if (f.note) rec.note = String(f.note);
     sx.runs = sx.runs.filter(r => r.id !== id); // replace if re-committing same dir
     sx.runs.push(rec);

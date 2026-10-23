@@ -2343,6 +2343,22 @@ const MUTATIONS = [
     find: "          try { const j = JSON.parse(t); delete j.version; return JSON.stringify(j); } catch (e) { return t; } };",
     to: "          try { const j = JSON.parse(t); return JSON.stringify(j); } catch (e) { return t; } };" },
 
+  /* buses-data 60358500. The S6 stale-S4 guard, the three ways it can be undone. */
+  { suite: 'stage_s6_stale_s4.test.js', file: 's6_stale_s4.js',
+    what: 'an S6 verifying an S2 the latest S4 was not drawn from commits, and stale_inputs.test.js goes red on the push (St Ives, 60358500)',
+    find: "  if (!moved.length) return null;\n",
+    to: "  return null;\n" },
+
+  { suite: 'stage_s6_stale_s4.test.js', file: 's6_stale_s4.js',
+    what: 'the S6\'s own --based-on is ignored, so an S6 that names the S4\'s inputs is refused for a newer S2 it never verified',
+    find: "  for (const s of ['S2', 'S3']) if (basedOn[s] && view.stages[s]) view.stages[s] = { ...view.stages[s], latest: basedOn[s] };\n",
+    to: "" },
+
+  { suite: 'stage_s6_stale_s4.test.js', file: 'stage.js',
+    what: '--force-stale-s4 commits without writing staleS4, so the manifest no longer says what the override recorded',
+    find: " if (staleS4) rec.staleS4 = staleS4;\n",
+    to: "\n" },
+
   /* The S5 payload guard (High Wycombe Aldi v1.43, 2026-10-13), both ways it can be undone. */
   { suite: 'stage_s5_config.test.js', file: 's5_payload.js',
     what: 'an S5 holding only the sheets commits, so deliver ships a payload the host verify fails on (ENOENT atco2name.json)',

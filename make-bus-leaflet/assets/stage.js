@@ -39,6 +39,9 @@
  *         (--force-nogen overrides; buses-data OA-318),
  *         and, for S6, refuses a redteam.json with no redteam-source.json decision
  *         beside it, or one that says WAIT (--force-decision overrides; OA-427),
+ *         or whose --based-on S2/S3 (else the latest) differs from what the latest S4
+ *         was drawn from, per gate_lib's staleInputs() — rebuild S4/S5 first
+ *         (--force-stale-s4 "<why>" overrides and records `staleS4`; buses-data 60358500),
  *         and, for S5, refuses a routes.json that differs (bar "version") from the
  *         S4 it renders (--force-stale-config; OA-318), or lacks a file of it (s5_payload.js)
  *   stamps [runDir]                   write BOTH S4 provenance stamps into that
@@ -738,6 +741,45 @@ function main() {
       if (problem) console.log(`  WARNING: committing an S6 whose red-team answer has no decision (--force-decision): ${problem}`);
     }
 
+    /* Guard: an S6 must verify the S2 and S3 the latest S4 was DRAWN from. buses-data
+     * 60358500 re-cut St Ives's S2 and committed an S6 against it, leaving S4 v7.1 —
+     * basedOn S2 2026-07-04_0133 — standing because the ink would not move. The ink did
+     * not, but the manifest then said the published sheets came from an S2 the S6 no
+     * longer verified; gates.yml went red on stale_inputs.test.js (run 39879913992) and
+     * 8a8bddae cleared it with a v8.0 rebuild that should have come before the S6.
+     *
+     * NOT A NEW COMPARISON. staleInputs() in gate_lib.js already asks "has S2/S3 moved
+     * since the latest S4?" of a manifest; this hands it the S6's view of one — S2/S3
+     * `latest` replaced by the ids the S6 names in --based-on, or left as they are when
+     * it names none, which is what an S6 audits by default. An S6 with no S4 to compare
+     * is not this guard's business, and staleInputs() returns [] for it.
+     *
+     * The override takes a reason and RECORDS it: the run record carries `staleS4`, so
+     * the manifest says in as many words what this S6 verified and what the sheets were
+     * drawn from, rather than leaving the gap for stale_inputs.test.js to find. */
+    let staleS4 = null;
+    if (st === 'S6') {
+      const { staleInputs } = require('./gate_lib');
+      const view = { stages: { ...m.stages } };
+      for (const s of ['S2', 'S3']) if (basedOn[s] && view.stages[s]) view.stages[s] = { ...view.stages[s], latest: basedOn[s] };
+      const moved = staleInputs(view);
+      if (moved.length) {
+        const s4Id = m.stages.S4.latest;
+        const say = moved.map(x => `${x.stage} ${x.now} (S4 ${s4Id} was drawn from ${x.was || 'an earlier ' + x.stage}, by ${x.how})`).join('; ');
+        if (!f['force-stale-s4'])
+          die(`S6 run ${id} cannot be committed: it verifies inputs the latest S4 was not drawn from — ${say}.\n`
+            + `  The manifest would then say the published sheets came from inputs this S6 no longer\n`
+            + `  verified, and stale_inputs.test.js goes red on every push (buses-data 60358500).\n`
+            + `  Rebuild S4 and S5 from these inputs first — new S4, pull S2 and S3, build_s4.js,\n`
+            + `  commit S4 --based-on "S2=…;S3=…", then S5 — and commit this S6 against the new S4.\n`
+            + `  Override with --force-stale-s4 "<why>" only if the S4 is deliberately left standing;\n`
+            + `  the reason and the moved inputs are written into this run's record as "staleS4".`);
+        staleS4 = { s4: s4Id, moved, why: typeof f['force-stale-s4'] === 'string' ? f['force-stale-s4'] : null };
+        console.log(`  WARNING: recorded S6 ${id} as verifying ${say}, with staleS4 on its run record`
+          + (staleS4.why ? ` — why: ${staleS4.why}` : ' and no reason given') + ' (--force-stale-s4)');
+      }
+    }
+
     /* Guard (buses-data OA-318 item 3): an S5 must carry the CONFIG of the S4 it
      * renders. The portal stores a payload's routes.json and re-draws from it, so an
      * S5 holding sheets from one S4 beside the routes.json of an EARLIER one publishes
@@ -1073,6 +1115,7 @@ function main() {
       }
     }
     if (Object.keys(basedOn).length) rec.basedOn = basedOn;
+    if (staleS4) rec.staleS4 = staleS4;
     if (f.note) rec.note = String(f.note);
     sx.runs = sx.runs.filter(r => r.id !== id); // replace if re-committing same dir
     sx.runs.push(rec);
